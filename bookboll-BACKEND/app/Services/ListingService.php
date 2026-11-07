@@ -1028,8 +1028,15 @@ class ListingService
 
         $search           = $data['search'] ?? null;
         $venueId          = $data['venue_id'] ?? null;
-        $recordsPerPage   = $data['records_per_page'] ?? 10;
+        $recordsPerPage   = (int) ($data['records_per_page'] ?? 10);
         $sportsCategoryId = $data['sports_category_id'] ?? null;
+
+        // Temporary compatibility bump for already-released admin mobile app builds
+        // that request 30 records per page on initial fetch.
+        $requestFrom = $request->header('from');
+        if ($requestFrom === \MobileApps::ADMIN && $recordsPerPage === 30) {
+            $recordsPerPage += 10;
+        }
 
         $query = $this->listingModel::with([
             'venue' => function ($query) {
