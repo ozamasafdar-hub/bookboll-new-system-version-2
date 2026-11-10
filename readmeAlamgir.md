@@ -50,6 +50,7 @@ Paths below are relative to this repository. The rule inventory provides test tr
 | Historical missing fee / original quote restoration | `bookboll-BACKEND/app/Services/HistoricalOwnedFeeReconciliation.php` |
 | Three owner-confirmed retained deposits | `bookboll-BACKEND/app/Services/HistoricalRetainedDepositReconciliation.php` |
 | Dashboard and transfer presentation | `bookboll-new-system/admin/src/lib/paymentReport.js`; `src/components/VenueTransfer.vue` under the admin app |
+| Connected details, Stripe receipts and full refund operations | `bookboll-BACKEND/app/Services/PaymentDetailService.php`, `PaymentRefundService.php`, `StripeRefundGateway.php`; `app/Support/PaymentRefundAccess.php`; admin `src/components/PaymentDetails.vue` |
 
 Existing commands, run from `bookboll-BACKEND`, are `bookings:reconcile-creators`, `payments:reconcile-owned-history`, and `payments:reconcile-retained-deposits`. They default to analysis and require `--apply` for guarded workspace writes. Their existing preview-specific eligibility makes them insufficient as a complete production planner. `payments:prepare-preview` is **not** a dry run: it mutates copied data, creates a preview administrator and deletes copied access tokens. Never use it or the snapshot-import startup script on production.
 
@@ -64,6 +65,7 @@ Schema changes and data corrections are separate. Review all pending migrations 
 - `2026_11_10_000002_create_payment_allocations_table.php`
 - `2026_11_10_000004_record_booking_creation_provenance.php`
 - `2026_11_11_000001_create_payment_allocation_corrections_table.php`
+- `2026_11_12_000001_create_payment_refunds_table.php`
 
 These are in `bookboll-BACKEND/database/migrations`. The intervening workspace-access migration is preview infrastructure, not production authorization policy. Do not run `migrate:fresh`, import the SQL snapshot, replace users/tokens or drop audit tables during cutover. Schema migration alone does not reconcile historical data.
 
@@ -76,6 +78,8 @@ Search, multi-select status/method/category/channel/currency/source/location/bus
 Historical operator/recipient, quote, currency and receipt links are server-owned snapshots. Current venue transfer, plan, commission or staff-role changes must not silently rewrite them. Provider historical ledger access must not expose another business's current booking details.
 
 ## Tests and remaining release work
+
+**New payment details/refund workflow:** read [the refund implementation and deployment contract](docs/payments/REFUNDS_AND_PAYMENT_DETAILS.md). Full original Stripe refunds require platform `admin` / `super_admin`; provider identities never qualify. Confirmed refunds update all linked allocations together. Railway keeps real money movement disabled. Legacy provider-wallet credits without exact receipt/reversal links are explicitly blocked pending wallet reversal implementation; partial refunds and externally initiated refunds are not covered by this workflow.
 
 Use a disposable `bookboll_test` database, never production, for Laravel integration tests. The inventory links the relevant tests for classification, creation evidence, saved quotes, transfers, permissions, report totals and historical corrections. Also run `php tests/payment-report-rules.php`, the admin tests and the admin production build. Archived test counts are evidence from earlier runs, not certification of a future production release.
 

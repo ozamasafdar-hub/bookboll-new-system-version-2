@@ -656,6 +656,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::post('payments/generate-link', [PaymentController::class, 'generatePaymentLink'])->name('payments.generate-link');
             Route::post('payments/mark-booking-paid', [PaymentController::class, 'markBookingAsPaid'])->name('payments.mark-booking-paid');
             Route::get('payments/dashboard', [PaymentController::class, 'dashboard'])->name('payments.dashboard');
+            Route::get('payments/{id}/details', [\App\Http\Controllers\Admin\PaymentDetailController::class, 'show'])->whereNumber('id');
+            Route::get('payments/{id}/refund-preview', [\App\Http\Controllers\Admin\PaymentDetailController::class, 'preview'])->whereNumber('id');
+            Route::post('payments/{id}/refund', [\App\Http\Controllers\Admin\PaymentDetailController::class, 'refund'])->whereNumber('id')->middleware('throttle:10,1');
+            Route::post('payments/{id}/refund-refresh', [\App\Http\Controllers\Admin\PaymentDetailController::class, 'refresh'])->whereNumber('id')->middleware('throttle:20,1');
             Route::get('payments/export', [PaymentController::class, 'export'])->name('payments.export');
             Route::post('payments/{id}/mark-received', [PaymentController::class, 'markPaymentAsReceived'])->name('payments.mark-received');
             Route::get('payments/{id}/invoice', [PaymentController::class, 'downloadInvoice'])->name('payments.invoice');

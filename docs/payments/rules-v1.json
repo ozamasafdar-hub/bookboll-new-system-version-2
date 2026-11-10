@@ -12,6 +12,11 @@
   },
   "path_base": "repository_root",
   "implementation_note": "Linked code and tests provide traceability, not proof that every production writer or scenario is verified. Existing apply commands are guarded to the Railway workspace. Production must validate a fresh source and exact cohorts.",
+  "related_workflows": {
+    "full_refunds_and_connected_details": "docs/payments/REFUNDS_AND_PAYMENT_DETAILS.md",
+    "refund_tests": ["bookboll-BACKEND/tests/Feature/PaymentDetailsAndRefundTest.php", "bookboll-BACKEND/tests/Feature/StripeRefundGatewayTest.php"],
+    "refund_limits": "Full original charge only; platform admin/super_admin only; no provider refund access. Real Stripe disabled in Railway. Legacy wallet credits without exact receipt/reversal evidence, partial/external refunds and refund-date cashflow remain gated or unsupported."
+  },
   "rule_precedence": [
     "Preserve original facts and resolve creator evidence before historical provider collection assertions.",
     "Resolve operator and frozen historical ownership independently of the creator's employer or current venue assignment.",

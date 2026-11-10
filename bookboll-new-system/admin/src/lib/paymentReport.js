@@ -15,6 +15,7 @@ export const money = (amount, currency) => {
 const localDate = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 export function periodDates(period, now = new Date()) {
   if (period === 'all') return ['', '']
+  if (period === 'last_month') return [localDate(new Date(now.getFullYear(), now.getMonth()-1, 1)), localDate(new Date(now.getFullYear(), now.getMonth(), 0))]
   const from = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   if (period === 'month') from.setDate(1)
   if (period === '7') from.setDate(from.getDate()-6)

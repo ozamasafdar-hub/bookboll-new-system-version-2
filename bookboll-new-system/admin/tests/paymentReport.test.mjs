@@ -11,6 +11,9 @@ test('calendar presets are inclusive and cross month boundaries', () => {
   assert.deepEqual(periodDates('7',new Date(2026,10,3)),['2026-10-28','2026-11-03'])
   assert.deepEqual(periodDates('month',new Date(2026,10,3)),['2026-11-01','2026-11-03'])
   assert.deepEqual(periodDates('all'),['',''])
+  assert.deepEqual(periodDates('last_month',new Date(2026,0,14)),['2025-12-01','2025-12-31'])
+  assert.deepEqual(periodDates('last_month',new Date(2024,2,1)),['2024-02-01','2024-02-29'])
+  assert.deepEqual(periodDates('last_month',new Date(2026,10,11)),['2026-10-01','2026-10-31'])
 })
 test('filters preserve zero and send all multi-select values', () => {
   assert.deepEqual(queryFilters({amount_min:0,status:['paid','pending'],method:[],search:''}),{amount_min:0,status:'paid,pending'})

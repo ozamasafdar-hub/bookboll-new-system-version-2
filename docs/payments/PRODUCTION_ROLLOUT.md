@@ -108,6 +108,8 @@ Run Laravel regression tests against a disposable database configured for tests.
 
 Before enabling real payments, verify Stripe Connect in **test mode** with processor evidence, idempotent webhooks and correct provider payout eligibility. Do not use live charges for rehearsal. Existing wallet flags do not establish payout completion. Verify membership renewal/manual paths, any legacy current-rate settlement fallback, and remaining booking due/reprice endpoints. Implement and validate partial refunds, dispute/chargeback and refund-date adjustments before claiming support; otherwise keep the unsupported flows/report claims explicitly gated. Resolve these release gaps separately from historical correction.
 
+The new [full-refund and connected-details workflow](REFUNDS_AND_PAYMENT_DETAILS.md) includes durable processor operation tracking and admin-only authorization. It still requires actual Stripe test-mode acceptance. Legacy wallet credits without exact receipt links are blocked pending an audited wallet/transfer reversal implementation; never bypass that guard during cutover. Configure the documented signed refund events and shared locks, and keep the Railway preview guard enabled.
+
 ## 5. Production cutover after editing is finished
 
 1. Pin the tested release and approve the reviewed historical plan/mapping. Rehearsal is against a recent live copy; Railway totals are only a reference, never an expected production balance.

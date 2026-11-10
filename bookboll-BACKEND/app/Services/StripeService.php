@@ -168,6 +168,11 @@ class StripeService
     {
         $type = $event->type;
 
+        if (in_array($type, ['charge.refunded', 'refund.created', 'refund.updated', 'refund.failed'], true)) {
+            app(PaymentRefundService::class)->webhook($event);
+            return;
+        }
+
         // Membership subscriptions are billed by Stripe; bookings are one-off payments.
         $membership = app(MembershipBillingService::class);
         // Providers also pay US: Premium plans and the one-time custom-domain fee.

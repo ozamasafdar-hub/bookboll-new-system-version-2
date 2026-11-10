@@ -62,6 +62,11 @@ class Payment extends Model
         return $this->hasMany(PaymentAllocation::class);
     }
 
+    public function paymentRefund()
+    {
+        return $this->belongsTo(PaymentRefund::class);
+    }
+
     public function markedBy()
     {
         return $this->belongsTo(User::class, 'marked_paid_by');

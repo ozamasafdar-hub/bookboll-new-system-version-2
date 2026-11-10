@@ -10,11 +10,11 @@ use Illuminate\Support\Str;
 final class PaymentReportCache
 {
     private const TABLES = ['payments','payment_allocations','bookings','venues','listings','users',
-        'businesses','business_memberships','class_subscriptions','class_programs','model_has_roles','user_venue'];
+        'businesses','business_memberships','class_subscriptions','class_programs','model_has_roles','user_venue','payment_refunds'];
 
     private static function prefix(): string
     {
-        return 'payment-report-v6:'.hash('sha256', DB::connection()->getDatabaseName());
+        return 'payment-report-v7:'.hash('sha256', DB::connection()->getDatabaseName());
     }
 
     public static function version(): string

@@ -15,6 +15,29 @@ use Illuminate\Http\Request;
 /** Recipient-based report over recorded amounts; does not mutate old payments. */
 final class PaymentReportService
 {
+    /** Shared ledger scope for list, connected transactions and document reads. */
+    public function authorizedQuery($actor)
+    {
+        $platform = AccessScope::isPlatform($actor);
+        $businessId = $platform ? null : AccessScope::businessId($actor);
+        $venueIds = AccessScope::allowedVenueIds($actor);
+        $query = Payment::query();
+        if ($venueIds !== null) {
+            $programIds = AccessScope::scopedProgramIds($actor, $venueIds);
+            $historicalOwner = !$platform && $businessId && $actor->hasRole('provider_admin');
+            $query->where(function ($q) use ($venueIds, $programIds, $historicalOwner, $businessId) {
+                $q->whereHas('booking', fn ($b) => $b->whereIn('venue_id', $venueIds))
+                    ->orWhereHas('subscription', fn ($s) => $s->whereIn('program_id', $programIds));
+                if ($historicalOwner) $q->orWhere('financial_context->business_id', $businessId);
+            });
+        }
+        if (!$platform && \Illuminate\Support\Facades\Schema::hasColumn('payments', 'financial_context')) {
+            $query->where(fn ($q) => $q->whereNull('financial_context')
+                ->orWhere('financial_context->business_id', $businessId ?? -1));
+        }
+        return $query;
+    }
+
     public function dashboard(Request $request)
     {
         $request->validate([
@@ -29,25 +52,9 @@ final class PaymentReportService
         $actor = $request->user();
         $platform = AccessScope::isPlatform($actor);
         $businessId = $platform ? null : AccessScope::businessId($actor);
-        $query = Payment::query();
+        $query = $this->authorizedQuery($actor);
         $venueIds = AccessScope::allowedVenueIds($actor);
-        // Owners retain their own frozen ledger after a venue changes hands.
-        // Staff remain narrowed to their currently accessible venues.
-        $historicalOwner = !$platform && $businessId && $actor->hasRole('provider_admin');
-        if ($venueIds !== null) {
-            $programIds = AccessScope::scopedProgramIds($actor, $venueIds);
-            $query->where(function ($q) use ($venueIds, $programIds, $historicalOwner, $businessId) {
-                $q->whereHas('booking', fn ($b) => $b->whereIn('venue_id', $venueIds))
-                    ->orWhereHas('subscription', fn ($s) => $s->whereIn('program_id', $programIds));
-                if ($historicalOwner) $q->orWhere('financial_context->business_id', $businessId);
-            });
-        }
-        // A transferred venue must not expose the old business's frozen ledger.
-        if (!$platform && \Illuminate\Support\Facades\Schema::hasColumn('payments', 'financial_context')) {
-            $query->where(fn ($q) => $q->whereNull('financial_context')
-                ->orWhere('financial_context->business_id', $businessId ?? -1));
-        }
-        $query->with(['booking.venue', 'booking.listing', 'booking.user', 'subscription.program.venue', 'user']);
+        $query->with(['booking.venue', 'booking.listing', 'booking.user', 'subscription.program.venue', 'user', 'paymentRefund']);
         $hasAllocations = \Illuminate\Support\Facades\Schema::hasTable('payment_allocations');
         if ($hasAllocations) $query->with('ownedAllocations');
         $sort = $request->input('sort', 'date');
@@ -64,7 +71,7 @@ final class PaymentReportService
         // Siblings are loaded BEFORE any payment filter so a filtered-out receipt
         // cannot make its fee/share rows look like additional receipts.
         // Scope before caching. A permission or ownership change selects a new key.
-        $scope = hash('sha256', json_encode([$actor->id, $platform, $businessId, $venueIds, $programIds ?? [], $query->toSql(), $query->getBindings(), config('preview.workspace')]));
+        $scope = hash('sha256', json_encode([$actor->id, $platform, $businessId, $venueIds, $query->toSql(), $query->getBindings(), config('preview.workspace')]));
         $rows = PaymentReportCache::remember($scope, 'rows', function () use ($query, $hasAllocations) {
             $rows = [];
             $query->chunkById(1000, function ($batch) use (&$rows, $hasAllocations) {
@@ -94,7 +101,12 @@ final class PaymentReportService
             });
             return $rows;
         }, $request->boolean('refresh'));
+        $mayRefund = \App\Support\PaymentRefundAccess::allows($actor);
         foreach ($rows as $row) {
+            $row['can_request_refund'] = $mayRefund
+                && $row['method'] === 'online' && $row['status'] === 'paid'
+                && empty($row['refund_status'])
+                && (!empty($row['charge_id']) || !empty($row['payment_intent_id']) || !empty($row['source_receipt_ids']));
             $row['can_view_booking'] = $venueIds === null || in_array((int)$row['venue_id'], $venueIds, true);
             $row['can_collect'] = $row['can_collect'] && $row['can_view_booking'];
             if ($row['currency']) $currencies[$row['currency']] = true;
@@ -109,20 +121,39 @@ final class PaymentReportService
         uasort($venues, fn ($a, $b) => strcasecmp($a['label'], $b['label']));
         return sendSuccess('Payment allocations fetched', [
             'report_version' => 2, 'perspective' => $platform ? 'platform' : 'provider',
-            'payments' => ['data' => $pageRows->rows(), 'total' => $matched, 'current_page' => $page, 'per_page' => $perPage],
+            'payments' => ['data' => $this->withDocuments($actor, $pageRows->rows()), 'total' => $matched, 'current_page' => $page, 'per_page' => $perPage],
             'summary' => $totals->result(), 'review_count' => $totals->reviewCount,
             'fee_split_count' => $totals->feeSplitCount, 'fee_split_statuses' => $totals->feeSplitStatuses,
             'filter_options' => ['currencies' => array_keys($currencies), 'venues' => array_values($venues), 'businesses' => array_values($businesses)],
         ]);
     }
 
-    private function raw(Payment $p): array
+    /** Resolve documents from explicit receipt links, only for this authorized page. */
+    public function withDocuments($actor, array $rows): array
+    {
+        $ids = collect($rows)->flatMap(fn ($r) => count($r['source_receipt_ids'] ?? []) === 1 ? $r['source_receipt_ids'] : [])->unique();
+        if ($ids->isEmpty()) return $rows;
+        $sources = $this->authorizedQuery($actor)->whereIn('id', $ids)->with('paymentRefund')->get()->keyBy('id');
+        foreach ($rows as &$row) {
+            $links = $row['source_receipt_ids'] ?? [];
+            $source = count($links) === 1 ? $sources->get((int)$links[0]) : null;
+            if (!$source) continue;
+            $row['stripe_receipt_url'] ??= StripeDocumentLink::sanitize($source->stripe_receipt_url);
+            $row['stripe_invoice_url'] ??= StripeDocumentLink::sanitize($source->stripe_invoice_url);
+            $row['stripe_refund_receipt_url'] ??= StripeDocumentLink::sanitize($source->paymentRefund?->receipt_url);
+            $row['refund_status'] ??= $source->paymentRefund?->status;
+            if ($row['refund_status']) $row['can_request_refund'] = false;
+        }
+        return $rows;
+    }
+
+    public function raw(Payment $p): array
     {
         return array_merge($p->getAttributes(), ['financial_context' => $p->financial_context ?? [], 'currency' => $p->currency ?: '',
             'owned_allocations'=>$p->relationLoaded('ownedAllocations') ? $p->ownedAllocations->toArray() : []]);
     }
 
-    private function describe(array $row, Payment $payment): array
+    public function describe(array $row, Payment $payment): array
     {
         $b = $payment->booking;
         $sub = $payment->subscription;
@@ -145,6 +176,8 @@ final class PaymentReportService
                 : (($b?->origin === 'customer_game' || $payment->source_type === 'hosted_game') ? 'event' : 'venue'),
             'stripe_receipt_url' => StripeDocumentLink::sanitize($payment->stripe_receipt_url),
             'stripe_invoice_url' => StripeDocumentLink::sanitize($payment->stripe_invoice_url),
+            'refund_status' => $payment->paymentRefund?->status,
+            'stripe_refund_receipt_url' => StripeDocumentLink::sanitize($payment->paymentRefund?->receipt_url),
             'can_collect' => (!config('preview.enabled') || config('preview.workspace')) && $row['status'] === 'pending' && $row['category'] !== 'unclassified'
                 && $payment->booking_id && $payment->method !== 'online',
         ]);
