@@ -26,27 +26,30 @@
 html.adm-shell { color-scheme: light; background: var(--bg); }
 html.adm-dark.adm-shell {
   color-scheme: dark;
-  --bg: #101b23;
-  --surface: #192832;
-  --card: #192832;
-  --surface-hover: #213540;
-  --text: #edf4f6;
-  --text-secondary: #c6d6dd;
-  --text-muted: #a4bac5;
-  --text-light: #91aab7;
-  --border: #2d434f;
-  --border-strong: #496473;
-  --primary-ink: #76dfcb;
-  --primary-soft: #173d3b;
-  --primary-border: #32675d;
-  --positive-ink: #83deb0; --positive-bg: #173c2d; --positive-border: #326b4b;
-  --warning-ink: #f1cb83; --warning-bg: #3b3120; --warning-border: #705c34;
-  --danger-ink: #f5a5ad; --danger-bg: #402830; --danger-border: #774451;
-  --info-ink: #a5c6ff; --info-bg: #23394f; --info-border: #426387;
-  --purple-ink: #d1b7ff; --purple-bg: #332d49; --purple-border: #62517d;
-  --shadow-sm: 0 1px 2px #0002;
-  --shadow: 0 4px 16px #0002;
-  --shadow-lg: 0 16px 48px #0005;
+  /* Match the marketplace's navy canvas, slate surfaces and semantic colours.
+     Admin --bg is its page canvas; raised controls use --bg-subtle. */
+  --bg: #0d1421;
+  --surface: #162132;
+  --card: #162132;
+  --surface-hover: #1e2b3e;
+  --bg-subtle: #1e2b3e;
+  --text: #f1f5fb;
+  --text-secondary: #c4cfde;
+  --text-muted: #a6b5ca;
+  --text-light: #91a4be;
+  --border: #2d3e55;
+  --border-strong: #4a5e79;
+  --primary-ink: #9bc7ff;
+  --primary-soft: #1a2e4d;
+  --primary-border: #365982;
+  --positive-ink: #7cdbaf; --positive-bg: #14362f; --positive-border: #2a6656;
+  --warning-ink: #f4c478; --warning-bg: #362b1b; --warning-border: #755933;
+  --danger-ink: #ffaaaa; --danger-bg: #3b222b; --danger-border: #794252;
+  --info-ink: #9bc7ff; --info-bg: #1a2e4d; --info-border: #365982;
+  --purple-ink: #c4b9ff; --purple-bg: #2b2746; --purple-border: #58517c;
+  --shadow-sm: 0 1px 2px #00000014;
+  --shadow: 0 3px 12px #0000001a;
+  --shadow-lg: 0 16px 48px #00000040;
 }
 #app .app { color: var(--text); }
 #app .app :is(button, a):focus-visible { outline: 2px solid var(--primary-ink); outline-offset: 3px; }
@@ -60,7 +63,7 @@ html.adm-dark.adm-shell {
 #app .app .page-subtitle { line-height: 1.6; max-width: 720px; }
 #app .app .btn { min-height: 42px; border-radius: 9px; justify-content: center; }
 #app .app .btn-sm { min-height: 34px; }
-#app .app th { text-transform: none; font-size: 12.5px; letter-spacing: 0; padding-block: 13px; background: var(--bg); }
+#app .app th { text-transform: none; font-size: 12.5px; letter-spacing: 0; padding-block: 13px; background: var(--bg-subtle); }
 #app .app td { padding-block: 15px; }
 #app .app tbody tr:hover { background: var(--surface-hover); }
 #app .app .table-wrap { border-radius: 12px; border: 1px solid var(--border); background: var(--surface); }

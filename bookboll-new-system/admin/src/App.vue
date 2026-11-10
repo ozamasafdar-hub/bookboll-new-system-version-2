@@ -341,7 +341,7 @@ const initials = computed(() => {
 </template>
 
 <style>
-.payments-preview-banner { padding: 9px 20px; background: #fff4d6; color: #684a12; border-bottom: 1px solid #e9d29a; font-size: 12px; text-align: center; line-height: 1.4; position: relative; z-index: 100; }
+.payments-preview-banner { padding: 9px 20px; background: var(--warning-bg, #fff4d6); color: var(--warning-ink, #684a12); border-bottom: 1px solid var(--warning-border, #e9d29a); font-size: 12px; text-align: center; line-height: 1.4; position: relative; z-index: 100; }
 </style>
 
 
