@@ -23,7 +23,7 @@ class SyncWorkspaceMedia extends Command
             'class_programs'=>['photo_url','images'], 'communities'=>['cover_image','images','avatar_image'],
             'posts'=>['featured_image'], 'users'=>['image'], 'settings'=>['value'],
             'sports_categories'=>['image','icon'], 'sports_types'=>['image','icon'],
-            'uploads'=>['path'],
+            'uploads'=>['path'], 'assets'=>['path'],
         ];
         $paths = [];
         $scan = function ($value) use (&$scan, &$paths) {
