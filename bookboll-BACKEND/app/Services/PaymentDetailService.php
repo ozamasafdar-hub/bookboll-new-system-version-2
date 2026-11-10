@@ -22,13 +22,33 @@ final class PaymentDetailService
     public function details($actor, int $id, ?string $rowId = null): array
     {
         $selected = $this->find($actor, $id);
-        $related = $this->report->authorizedQuery($actor)->where(function ($q) use ($selected) {
+        $anchor = $selected;
+        if (!$selected->charge_id && !$selected->payment_intent_id && ($selected->booking_id || $selected->subscription_id)) {
+            $siblings = $selected->booking_id ? Payment::where('booking_id', $selected->booking_id)->with('ownedAllocations')->get()
+                : Payment::where('subscription_id', $selected->subscription_id)->get();
+            $booking = $selected->booking;
+            $facts = $booking ? array_merge($booking->getAttributes(), ['financial_context'=>$booking->financial_context ?? [], 'creation_context'=>$booking->creation_context ?? []]) : [];
+            $classified = collect(PaymentReportRules::rows($siblings->map(fn ($p) => $this->report->raw($p))->all(), $facts))
+                ->first(fn ($r) => (int)($r['source_payment_id'] ?? $r['id']) === $id);
+            $links = $classified['source_receipt_ids'] ?? [];
+            if (count($links) === 1) $anchor = $this->report->authorizedQuery($actor)->with('paymentRefund')->find((int)$links[0]) ?? $selected;
+        }
+        $related = $this->report->authorizedQuery($actor)->where(function ($q) use ($selected, $anchor) {
             $q->where('id', $selected->id);
             if ($selected->booking_id) $q->orWhere('booking_id', $selected->booking_id);
             if ($selected->subscription_id) $q->orWhere('subscription_id', $selected->subscription_id);
-            if ($selected->charge_id) $q->orWhere('charge_id', $selected->charge_id);
-            if ($selected->payment_intent_id) $q->orWhere('payment_intent_id', $selected->payment_intent_id);
+            if ($anchor->charge_id) $q->orWhere('charge_id', $anchor->charge_id);
+            if ($anchor->payment_intent_id) $q->orWhere('payment_intent_id', $anchor->payment_intent_id);
         })->with(['booking.venue','booking.listing','booking.user','subscription.program.venue','user','ownedAllocations','paymentRefund'])->get();
+        // A shared charge can have fee/share children without Stripe IDs. Include
+        // those bookings' authorized siblings as well as their gross receipts.
+        if ($related->pluck('booking_id')->filter()->unique()->count() > 1
+            || $related->pluck('subscription_id')->filter()->unique()->count() > 1) {
+            $related = $this->report->authorizedQuery($actor)->where(fn ($q) => $q->whereIn('id', $related->modelKeys())
+                ->orWhereIn('booking_id', $related->pluck('booking_id')->filter()->unique())
+                ->orWhereIn('subscription_id', $related->pluck('subscription_id')->filter()->unique()))
+                ->with(['booking.venue','booking.listing','booking.user','subscription.program.venue','user','ownedAllocations','paymentRefund'])->get();
+        }
         $rows = [];
         $venueIds = AccessScope::allowedVenueIds($actor);
         foreach ($related->groupBy(fn ($p) => $p->booking_id ? 'b'.$p->booking_id : ($p->subscription_id ? 's'.$p->subscription_id : 'p'.$p->id)) as $group) {
@@ -44,18 +64,16 @@ final class PaymentDetailService
                 $row['can_view_booking'] = $venueIds === null || in_array((int)$row['venue_id'], $venueIds, true);
                 $row['can_collect'] = $row['can_collect'] && $row['can_view_booking'];
                 $row['relationship'] = $payment->id === $selected->id ? 'Same payment'
-                    : (($selected->charge_id && $payment->charge_id === $selected->charge_id) ? 'Same Stripe payment'
-                        : ($payment->booking_id ? 'Same booking' : 'Same membership'));
+                    : ((($anchor->charge_id && $payment->charge_id === $anchor->charge_id)
+                        || ($anchor->payment_intent_id && $payment->payment_intent_id === $anchor->payment_intent_id)) ? 'Same Stripe payment'
+                        : ($payment->booking_id ? ($payment->booking_id === $selected->booking_id ? 'Same booking' : 'Connected booking') : 'Same membership'));
                 $rows[] = $row;
             }
         }
         $rows = $this->report->withDocuments($actor, $rows);
         $current = collect($rows)->first(fn ($r) => (string)$r['id'] === (string)($rowId ?? $id));
         abort_unless($current && (int)($current['source_payment_id'] ?? $current['id']) === $id, 404);
-        $source = $selected;
-        if (!$source->charge_id && !$source->payment_intent_id && count($current['source_receipt_ids'] ?? []) === 1) {
-            $source = $this->find($actor, (int)$current['source_receipt_ids'][0]);
-        }
+        $source = $anchor;
         $refund = $source->paymentRefund;
         foreach ($rows as &$row) {
             if ((int)($row['source_payment_id'] ?? $row['id']) === $source->id

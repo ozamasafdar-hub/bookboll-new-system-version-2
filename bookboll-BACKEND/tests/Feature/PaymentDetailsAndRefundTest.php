@@ -197,6 +197,17 @@ it('inherits the original Stripe receipt on external allocation rows and refunds
     $this->getJson('/api/admin/payments/dashboard?report_version=2')->assertOk()
         ->assertJsonPath('data.payments.total',2)->assertJsonPath('data.summary.0.bookboll_received',0)
         ->assertJsonPath('data.payments.data.0.stripe_refund_receipt_url','https://pay.stripe.com/receipts/fixture');
+    // Even when opened via a child without Stripe IDs, reveal another booking
+    // settled by this charge and its separately stored fee/share records.
+    $otherBooking = $this->booking->replicate(); $otherBooking->uuid = (string)\Illuminate\Support\Str::uuid();
+    $otherBooking->booking_id = 'BK-OTHER-CHARGE'; $otherBooking->saveQuietly();
+    $otherRoot = $this->payment->replicate(); $otherRoot->booking_id = $otherBooking->id; $otherRoot->payment_id = 'OTHER-ROOT'; $otherRoot->saveQuietly();
+    foreach ($children as $child) {
+        $copy = $child->replicate(); $copy->booking_id = $otherBooking->id; $copy->payment_id = 'OTHER-'.$child->type;
+        $copy->financial_context = $context + ['receipt_ids'=>[$otherRoot->id]]; $copy->saveQuietly();
+    }
+    $this->getJson('/api/admin/payments/'.$children->first()->id.'/details')->assertOk()
+        ->assertJsonCount(5,'data.connected_transactions');
 })->with(['explicit receipt links'=>[true], 'conserving legacy pair'=>[false]]);
 
 it('reviews and refunds all bookings sharing one Stripe charge as one operation', function () {
