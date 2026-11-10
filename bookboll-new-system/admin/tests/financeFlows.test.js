@@ -23,7 +23,7 @@ const options={capabilities:{reports:true,marketing_costs:true},currencies:['QAR
 const preview={preview_token:'test',expires_at:'2099-01-01T00:00:00Z',business_id:20,effective_from:'2026-10-15',history_mode:'legacy_deposit_fee',eligible_count:1,pending_arrival_count:1,excluded_count:0,landlord_obligation_count:0,totals:[{currency:'QAR',deposit_to_fee:'20',provider_cash:'80',earnings_delta:'0'}],warnings:[],blockers:[]}
 
 test('legacy transfer cannot commit without acknowledgement, and edits invalidate reviewed amounts',async t=>{
-  const {state:s,requests,events}=setup(t,'VenueTransfer',{venueId:1,venueName:'Example'},async(path)=>path.endsWith('/transfer-options')?{ok:true,data:{can_transfer:true,businesses:[]}}:path.endsWith('/transfer-preview')?{ok:true,data:preview}:{ok:true,data:{transfer:{id:1},venue:{id:1,business_id:20}}})
+  const {state:s,requests,events}=setup(t,'VenueTransfer',{venueId:1,venueName:'Example'},async(path)=>path.endsWith('/transfer-options')?{ok:true,data:{can_transfer:true,reconciliation_version:3,businesses:[]}}:path.endsWith('/transfer-preview')?{ok:true,data:preview}:{ok:true,data:{transfer:{id:1},venue:{id:1,business_id:20}}})
   await vue.nextTick();Object.assign(s.form.value,{business_id:20,effective_from:'2026-10-15',history_mode:'legacy_deposit_fee',from_date:'2025-01-01',to_date:'2026-10-14'})
   await s.review();await s.commit()
   assert.equal(requests.filter(r=>r.path.endsWith('/transfers')).length,0)

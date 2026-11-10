@@ -632,7 +632,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::post('bookings/dashboard-payment-link', [BookingController::class, 'dashboardPaymentLink'])->name('bookings.dashboard.payment-link');
             Route::get('bookings/{id}/crm', [BookingController::class, 'crm'])->name('bookings.crm');
             Route::put('bookings/{id}/dashboard', [BookingController::class, 'dashboardUpdate'])->name('bookings.dashboard.update');
-            Route::put('bookings/{id}/payments/{paymentId}/collect', [BookingController::class, 'dashboardCollect'])->name('bookings.dashboard.collect');
+            Route::put('bookings/{id}/payments/{paymentId}/collect', [BookingController::class, 'dashboardCollect'])->middleware('capability:accept_payments')->name('bookings.dashboard.collect');
             Route::get('bookings/list', [BookingController::class, 'mobileBookingsList'])->name('bookings.list');
             Route::get('bookings/filter-options', [BookingController::class, 'mobileBookingsFilterOptions'])->name('bookings.filter-options');
 

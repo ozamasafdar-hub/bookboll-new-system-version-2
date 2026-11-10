@@ -30,7 +30,13 @@ const props = defineProps({
 const emit = defineEmits(['close', 'transferred'])
 
 const options = ref(null)
-const form = ref({ business_id: '', effective_from: '', history_mode: 'preserve', from_date: '', to_date: '' })
+const today = new Date()
+const todayKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
+const form = ref({ business_id: '', effective_from: todayKey, history_mode: 'preserve', from_date: '', to_date: '' })
+const businessSearch = ref('')
+const businessOptions = computed(() => (options.value?.businesses || []).filter(b =>
+  String(b.id) === String(form.value.business_id) || b.name.toLowerCase().includes(businessSearch.value.trim().toLowerCase())))
+const impactRows = [['bookboll_received','Bookboll received'], ['platform_fees','Of which: platform fees'], ['provider_received','Provider received'], ['provider_pending','Provider still to collect']]
 const preview = ref(null)
 const agreed = ref(false)
 const busy = ref(false)
@@ -112,7 +118,7 @@ const effects = computed(() => {
 
   rows.push(
     { tone: 'no', text: 'No money is moved. No wallet is credited and no payout is created.' },
-    { tone: 'warn', text: 'Landlord agreements on this venue stay in force — rent is neither cancelled nor paid.' },
+    { tone: 'warn', text: 'Review landlord agreement end dates separately. This transfer does not settle or end them.' },
   )
 
   return rows
@@ -123,13 +129,13 @@ const reviewStats = computed(() => {
   const p = preview.value
   if (!p) return []
 
-  const landlord = { label: 'Landlord agreements still in force', value: count(p.landlord_obligation_count), tone: p.landlord_obligation_count > 0 ? 'warn' : '' }
+  const landlord = { label: 'Recorded landlord agreements', value: count(p.landlord_obligation_count), tone: p.landlord_obligation_count > 0 ? 'warn' : '' }
   if (form.value.history_mode === 'preserve') return [landlord]
 
   return [
     { label: 'Deposits re-labelled as Bookboll fees', value: count(p.eligible_count), tone: 'go' },
     { label: 'Arrival balances closed as provider cash', value: count(p.pending_arrival_count), tone: 'info' },
-    { label: 'Excluded — needs review', value: count(p.excluded_count), tone: p.excluded_count > 0 ? 'warn' : '' },
+    { label: 'Excluded · kept unchanged', value: count(p.excluded_count), tone: p.excluded_count > 0 ? 'warn' : '' },
     landlord,
   ]
 })
@@ -159,7 +165,7 @@ async function review() {
     error.value = dateRangeError(form.value.from_date, form.value.to_date)
     if (!error.value && form.value.to_date >= form.value.effective_from) error.value = 'Legacy history must end before the transfer date.'
   }
-  if (isLegacy.value && options.value?.reconciliation_version !== 2) error.value = 'This server needs the updated payment reconciliation before legacy history can be changed.'
+  if (isLegacy.value && options.value?.reconciliation_version !== 3) error.value = 'This server needs the updated payment reconciliation before legacy history can be changed.'
   if (error.value || busy.value || !options.value?.can_transfer) return
 
   busy.value = true
@@ -228,6 +234,7 @@ load()
       </div>
 
       <div class="modal-body">
+        <ol class="vt-steps" aria-label="Transfer progress"><li :aria-current="!preview ? 'step' : undefined" :class="{active:!preview}"><span>1</span> Business & history</li><li :aria-current="preview ? 'step' : undefined" :class="{active:preview}"><span>2</span> Review & confirm</li></ol>
         <!-- The move itself, before any of its settings: who hands over to whom. -->
         <div class="vt-move">
           <div class="vt-party">
@@ -252,19 +259,19 @@ load()
           <div class="fin-form-grid">
             <label class="fin-field fin-wide">
               Destination business *
+              <input v-model="businessSearch" type="search" placeholder="Find a business…" aria-label="Find destination business" />
               <select v-model="form.business_id">
                 <option value="">Choose a business</option>
-                <option v-for="item in options?.businesses || []" :key="item.id" :value="item.id">
+                <option v-for="item in businessOptions" :key="item.id" :value="item.id">
                   {{ item.name }}{{ item.owner_user_id ? '' : ' · owner not assigned' }}
                 </option>
               </select>
             </label>
             <label class="fin-field fin-wide">
-              Transfer effective from *
+              Recorded handover date *
               <input v-model="form.effective_from" type="date" />
               <small class="fin-help">
-                Recorded as the handover date and used as the cut-off below. The venue itself
-                moves as soon as you confirm, not on this date.
+                Access moves immediately when you confirm. This date records the handover and sets the history cut-off.
               </small>
             </label>
           </div>
@@ -274,18 +281,19 @@ load()
             <input v-model="form.history_mode" type="radio" value="preserve" />
             <span>
               <strong>Keep history unchanged</strong>
-              <small>Only future activity uses the new business. Existing fees, receipts and landlord obligations stay as recorded.</small>
+              <small>Move the venue. Leave all past payment amounts and recipients as recorded.</small>
             </span>
           </label>
           <label class="fin-choice">
             <input v-model="form.history_mode" type="radio" value="legacy_deposit_fee" />
             <span>
               <strong>Reconcile legacy provider bookings</strong>
-              <small>Paid online deposits become Bookboll fees. Reviewed arrival balances become provider cash. Full online payments are never converted to cash; manual bookings remain entirely provider revenue.</small>
+              <small>Correct past bookings that actually belonged to this provider. Review the exact money changes before applying.</small>
             </span>
           </label>
 
           <div v-if="isLegacy" class="vt-history">
+            <p class="fin-notice">Staff-added bookings have no platform fee. Their unpaid balances stay pending for the provider to collect.</p>
             <div class="fin-form-grid">
               <label class="fin-field">History from *<input v-model="form.from_date" type="date" /></label>
               <label class="fin-field">History to *<input v-model="form.to_date" type="date" /></label>
@@ -297,7 +305,7 @@ load()
 
           <!-- The two periods side by side. The whole rule this dialog enforces
                is that they cannot touch, which is far easier to see than read. -->
-          <div class="vt-timeline" :class="{ 'vt-timeline-bad': dateIssue }">
+          <div v-if="isLegacy" class="vt-timeline" :class="{ 'vt-timeline-bad': dateIssue }">
             <div v-if="isLegacy" class="vt-seg vt-seg-past">
               <span class="vt-seg-role"><CalendarClock :size="13" aria-hidden="true" />Reconciled history</span>
               <strong>{{ fmtDate(form.from_date) }} → {{ fmtDate(form.to_date) }}</strong>
@@ -313,15 +321,15 @@ load()
 
             <div class="vt-seg vt-seg-future">
               <span class="vt-seg-role"><Building2 :size="13" aria-hidden="true" />{{ destinationName || 'New business' }} operates</span>
-              <strong>From {{ fmtDate(form.effective_from) }}</strong>
-              <small>All new bookings and fees</small>
+              <strong>Immediately on confirmation</strong>
+              <small>Handover recorded: {{ fmtDate(form.effective_from) }}</small>
             </div>
           </div>
           <p v-if="dateIssue" class="fin-error vt-inline-error">{{ dateIssue }}</p>
 
           <!-- What confirming would actually do. -->
-          <div class="vt-effects">
-            <div class="fin-eyebrow">What this will do</div>
+          <details class="vt-effects">
+            <summary>Payment rules & landlord agreements</summary>
             <ul>
               <li v-for="row in effects" :key="row.text" :class="`vt-fx-${row.tone}`">
                 <Check v-if="row.tone === 'go'" :size="15" aria-hidden="true" />
@@ -330,7 +338,7 @@ load()
                 <span>{{ row.text }}</span>
               </li>
             </ul>
-          </div>
+          </details>
 
           <p v-if="isLegacy" class="fin-notice vt-legal">
             <Info :size="15" aria-hidden="true" />
@@ -367,9 +375,18 @@ load()
             <div class="vt-money-head"><strong>{{ total.currency }}</strong></div>
             <div class="fin-row"><span>Paid deposits → Bookboll fee</span><strong>{{ money(total.deposit_to_fee, total.currency) }}</strong></div>
             <div class="fin-row"><span>Arrival cash → collected directly by provider</span><strong>{{ money(total.provider_cash, total.currency) }}</strong></div>
-            <div class="fin-row"><span>Recorded platform fee amount</span><strong>{{ money(total.earnings_delta, total.currency) }}</strong></div>
+            <div v-if="total.provider_pending" class="fin-row"><span>Staff booking balances → stay pending</span><strong>{{ money(total.provider_pending, total.currency) }}</strong></div>
             <div v-if="total.provider_already_paid" class="fin-row"><span>Already collected → provider revenue</span><strong>{{ money(total.provider_already_paid, total.currency) }}</strong></div><p class="fin-help vt-money-note">Deposits are existing receipts, not new earnings. This records the provider’s own cash collection. Bookboll owes no payout for these arrival balances.</p>
           </div>
+
+          <section v-for="impact in preview.report_impact || []" :key="impact.currency" class="vt-money fin-panel">
+            <h3 class="vt-h3">Report impact · {{ impact.currency }}</h3>
+            <p class="fin-help">Payments for the selected booking dates, including records kept unchanged.</p>
+            <table class="vt-impact"><thead><tr><th>Metric</th><th>Before</th><th>After</th></tr></thead><tbody>
+              <tr v-for="[key,label] in impactRows" :key="key"><th>{{ label }}</th><td>{{ money(impact.before[key] ?? 0,impact.currency) }}</td><td>{{ money(impact.after[key] ?? 0,impact.currency) }}</td></tr>
+            </tbody></table>
+            <p class="fin-help">Platform fees are included in Bookboll received. Reclassifying a deposit does not create another receipt.</p>
+          </section>
 
           <details v-if="preview.payment_changes?.length" class="fin-panel">
             <summary>Review individual payment changes (first {{ preview.payment_changes.length }})</summary>
@@ -378,11 +395,11 @@ load()
                 <td>#{{ change.payment_id }}<small>Booking #{{ change.booking_id }}</small></td>
                 <td>{{ change.type }} · {{ change.method }} · {{ change.status }}</td>
                 <td>{{ money(change.amount, change.currency) }}</td>
-                <td>{{ change.action === 'deposit_to_fee' ? 'Bookboll platform fee' : change.action === 'provider_direct_cash' ? 'Provider collected cash' : 'Provider revenue (already paid)' }}</td>
+                <td>{{ change.action === 'deposit_to_fee' ? 'Bookboll platform fee' : change.action === 'provider_direct_cash' ? 'Provider collected cash' : change.action === 'provider_pending' ? 'Provider balance · stays pending' : 'Provider revenue (already paid)' }}</td>
               </tr></tbody>
             </table></div>
           </details>
-          <p v-for="warning in preview.warnings || []" :key="warning" class="fin-notice">{{ warning }}</p>
+          <details v-if="preview.warnings?.length" class="vt-effects"><summary>Exclusions & notes ({{ preview.warnings.length }})</summary><p v-for="warning in preview.warnings" :key="warning" class="fin-help">{{ warning }}</p></details>
           <p v-for="blocker in preview.blockers || []" :key="blocker" class="fin-error">{{ blocker }}</p>
 
           <p class="fin-help">
@@ -404,7 +421,7 @@ load()
       <div class="modal-footer">
         <button class="btn btn-secondary" :disabled="busy" @click="emit('close')">Cancel</button>
         <button v-if="preview" class="btn btn-secondary" :disabled="busy" @click="preview = null; agreed = false">Back to details</button>
-        <button class="btn btn-secondary" :disabled="busy || !options?.can_transfer" @click="review">
+        <button :class="['btn', preview ? 'btn-secondary' : 'btn-primary']" :disabled="busy || !options?.can_transfer" @click="review">
           {{ busy ? 'Working…' : preview ? 'Refresh review' : 'Review transfer' }}
         </button>
         <button v-if="preview" class="btn btn-primary" :disabled="busy || !agreed || !previewReady(preview)" @click="commit">
@@ -422,6 +439,16 @@ load()
  * panel ends up light-coloured in dark mode with light text on top of it. */
 .vt-dialog { width: min(760px, calc(100vw - 24px)); max-width: 760px; }
 .vt-fieldset { border: 0; padding: 0; margin: 0; }
+.vt-steps { display:flex; list-style:none; padding:0; margin:0 0 20px; gap:20px; font-size:13px; color:var(--text-muted); }
+.vt-steps li { display:flex; align-items:center; gap:8px; }
+.vt-steps span { display:grid; place-items:center; width:25px; height:25px; border:1px solid var(--border); border-radius:50%; }
+.vt-steps .active { color:var(--primary-ink); font-weight:700; }
+.vt-steps .active span { background:var(--primary-soft); border-color:var(--primary-border); }
+.vt-effects summary { cursor:pointer; font-size:13px; font-weight:600; color:var(--text); }
+.vt-effects[open] summary { margin-bottom:12px; }
+.vt-impact { width:100%; margin:12px 0; border-collapse:collapse; font-size:13px; }
+.vt-impact th, .vt-impact td { padding:10px 4px; border-bottom:1px solid var(--border); text-align:right; font-variant-numeric:tabular-nums; }
+.vt-impact th:first-child { text-align:left; font-weight:500; }
 .vt-h3 { font-size: 15px; margin: 0 0 4px; color: var(--text); }
 
 /* ── the move ─────────────────────────────────────────────────────────── */

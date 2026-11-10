@@ -634,7 +634,7 @@ const amountAfterDiscount = computed(() => {
   return Math.max(0, totalPending.value - discountAmount.value)
 })
 const paidSoFar = computed(() =>
-  payments.value.filter(p => p.status === 'paid').reduce((s, p) => s + Number(p.amount || 0), 0))
+  booking.value?.recorded_payment_summary ? booking.value.recorded_payment_summary.paid : payments.value.filter(p => p.status === 'paid').reduce((s, p) => s + Number(p.amount || 0), 0))
 
 // ── Pay by QR: the customer scans and pays the balance online ─────────────────
 // Available only when online money has somewhere to go: a Bookboll-run venue
@@ -1141,15 +1141,15 @@ function sendConfirmationEmail() {
                    the old duplicate "Collect Full Amount" button is gone. -->
               <div class="bdm-summary-row">
                 <span>Paid so far</span>
-                <span>{{ currency }} {{ paidSoFar.toLocaleString(undefined, { minimumFractionDigits: 2 }) }}</span>
+                <span>{{ paidSoFar == null ? 'Needs review' : currency + ' ' + paidSoFar.toLocaleString(undefined, { minimumFractionDigits: 2 }) }}</span>
               </div>
               <div v-if="totalPending > 0" class="bdm-summary-row due-row">
                 <span>Balance due</span>
                 <span>{{ currency }} {{ amountAfterDiscount.toLocaleString(undefined, { minimumFractionDigits: 2 }) }}</span>
               </div>
               <div class="bdm-summary-row">
-                <span>Payment Status</span>
-                <span class="bdm-status-chip" :class="statusClass(booking.payment_status)">{{ booking.payment_status }}</span>
+                <span>Recorded payment status</span>
+                <span class="bdm-status-chip" :class="statusClass(booking.recorded_payment_summary?.status || booking.payment_status)">{{ booking.recorded_payment_summary?.status || booking.payment_status }}</span>
               </div>
             </div>
 

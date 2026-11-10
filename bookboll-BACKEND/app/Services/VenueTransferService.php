@@ -11,6 +11,8 @@ use App\Support\AccessScope;
 use App\Support\LegacyReconciliation as Legacy;
 use App\Support\Money;
 use App\Support\PaymentRecipient;
+use App\Support\PaymentReportRules;
+use App\Support\PaymentReportTotals;
 use App\Support\TransferPaymentContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -51,7 +53,7 @@ class VenueTransferService
 
         return sendSuccess('Transfer options', [
             'contract_version' => self::CONTRACT_VERSION,
-            'reconciliation_version' => 2,
+            'reconciliation_version' => 3,
             'can_transfer'     => $this->canTransfer($actor),
             // Ownerless businesses are eligible destinations: an unclaimed
             // business is a valid operator, just one nobody has logged into.
@@ -117,7 +119,7 @@ class VenueTransferService
 
         return sendSuccess('Transfer preview', [
             'contract_version' => self::CONTRACT_VERSION,
-            'reconciliation_version' => 2,
+            'reconciliation_version' => 3,
             'preview_token'    => $row->token,
             'expires_at'       => \Carbon\Carbon::parse($row->expires_at)->utc()->toIso8601String(),
             'business_id'      => (string) $destination->id,
@@ -132,6 +134,7 @@ class VenueTransferService
             'warnings' => $assessment['warnings'],
             'blockers' => $assessment['blockers'],
             'payment_changes' => $assessment['payment_changes'],
+            'report_impact' => $assessment['report_impact'],
         ]);
     }
 
@@ -152,6 +155,7 @@ class VenueTransferService
         $pendingArrival = 0;
         $excluded = 0;
         $paymentChanges = [];
+        $reportImpact = [];
 
         if (! $destination) {
             $blockers[] = 'That business no longer exists.';
@@ -164,7 +168,7 @@ class VenueTransferService
         $landlordCount = VenueOperatingAgreement::where('venue_id', $venue->id)
             ->whereIn('deal_type', ['fixed_rent', 'revenue_share'])->count();
         if ($landlordCount > 0) {
-            $warnings[] = "{$landlordCount} landlord agreement(s) remain in force; this transfer neither cancels rent nor pays it.";
+            $warnings[] = "{$landlordCount} recorded landlord agreement(s). Review their end dates separately; this transfer does not settle or end agreements.";
         }
 
         if ($data['history_mode'] === 'legacy_deposit_fee') {
@@ -177,14 +181,14 @@ class VenueTransferService
             } elseif ($data['from_date'] > $data['to_date']) {
                 $blockers[] = 'The historical range is inverted.';
             } else {
-                [$eligible, $pendingArrival, $excluded, $totals, $paymentIds, $exclusionReasons, $paymentChanges]
-                    = $this->scanHistory($venue, $data['from_date'], $data['to_date']);
+                [$eligible, $pendingArrival, $excluded, $totals, $paymentIds, $exclusionReasons, $paymentChanges, $reportImpact]
+                    = $this->scanHistory($venue, $data['from_date'], $data['to_date'], $destination);
 
                 foreach ($exclusionReasons as $reason => $n) {
                     $warnings[] = "{$n} excluded — {$reason}";
                 }
 
-                if ($eligible === 0 && $pendingArrival === 0) {
+                if (!$paymentIds) {
                     $warnings[] = 'Nothing in this range can be reconciled.';
                 }
                 if ($pendingArrival > 0) {
@@ -205,6 +209,7 @@ class VenueTransferService
             'blockers'    => array_values($blockers),
             'payment_ids' => $paymentIds,
             'payment_changes' => $paymentChanges,
+            'report_impact' => $reportImpact,
             'state_hash'  => $this->stateHash($venue, $paymentIds),
         ];
     }
@@ -217,7 +222,7 @@ class VenueTransferService
      *
      * @return array{0:int,1:int,2:int,3:array,4:array,5:array}
      */
-    protected function scanHistory(Venue $venue, string $from, string $to): array
+    protected function scanHistory(Venue $venue, string $from, string $to, Business $destination): array
     {
         $bookings = Booking::query()
             ->where('venue_id', $venue->id)
@@ -226,11 +231,12 @@ class VenueTransferService
             ->keyBy('id');
 
         if ($bookings->isEmpty()) {
-            return [0, 0, 0, [], [], [], []];
+            return [0, 0, 0, [], [], [], [], []];
         }
 
         $payments = Payment::query()
             ->whereIn('booking_id', $bookings->keys())
+            ->with('ownedAllocations')
             ->get();
 
         $eligible = 0;
@@ -262,7 +268,7 @@ class VenueTransferService
 
             $currency = strtoupper((string) $p->currency);
             $minor = Money::toMinor((float) $p->amount, $currency);
-            $byCurrency[$currency] ??= ['deposit_to_fee' => 0, 'provider_cash' => 0, 'provider_already_paid' => 0, 'earnings_delta' => 0];
+            $byCurrency[$currency] ??= ['deposit_to_fee' => 0, 'provider_cash' => 0, 'provider_already_paid' => 0, 'provider_pending'=>0, 'earnings_delta' => 0];
 
             if ($kind === Legacy::KIND_DEPOSIT_TO_FEE) {
                 $eligible++;
@@ -273,6 +279,8 @@ class VenueTransferService
                 $pendingArrival++;
                 // Never Bookboll's, so it does not move earnings at all.
                 $byCurrency[$currency]['provider_cash'] += $minor;
+            } elseif ($kind === Legacy::KIND_PROVIDER_PENDING) {
+                $byCurrency[$currency]['provider_pending'] += $minor;
             } else {
                 $byCurrency[$currency]['provider_already_paid'] += $minor;
             }
@@ -294,11 +302,35 @@ class VenueTransferService
                 'deposit_to_fee' => Money::toMajor($sums['deposit_to_fee'], $code),
                 'provider_cash'  => Money::toMajor($sums['provider_cash'], $code),
                 'provider_already_paid' => Money::toMajor($sums['provider_already_paid'], $code),
+                'provider_pending' => Money::toMajor($sums['provider_pending'], $code),
                 'earnings_delta' => Money::toMajor($sums['earnings_delta'], $code),
             ];
         }
 
-        return [$eligible, $pendingArrival, $excluded, $totals, $ids, $reasons, $changes];
+        $beforeTotals = new PaymentReportTotals;
+        $afterTotals = new PaymentReportTotals;
+        foreach ($payments->groupBy('booking_id') as $bookingId => $group) {
+            $booking = $bookings[$bookingId];
+            $bookingData = array_merge($booking->getAttributes(), ['financial_context'=>$booking->financial_context ?? []]);
+            $before = []; $after = [];
+            foreach ($group as $payment) {
+                $raw = array_merge($payment->getAttributes(), ['financial_context'=>$payment->financial_context ?? [],
+                    'owned_allocations'=>$payment->ownedAllocations->toArray()]);
+                $before[] = $raw;
+                if (in_array($payment->id, $ids, true)) {
+                    $raw = array_merge($raw, $this->correction($payment, $booking, $destination, 'preview', Legacy::kindFor($payment, $booking)), ['owned_allocations'=>[]]);
+                }
+                $after[] = $raw;
+            }
+            foreach (PaymentReportRules::rows($before, $bookingData) as $row) $beforeTotals->add($row);
+            foreach (PaymentReportRules::rows($after, $bookingData) as $row) $afterTotals->add($row);
+        }
+        $before = collect($beforeTotals->result())->keyBy('currency');
+        $after = collect($afterTotals->result())->keyBy('currency');
+        $impact = $before->keys()->merge($after->keys())->unique()->sort()->map(fn ($currency) => [
+            'currency'=>$currency, 'before'=>$before[$currency] ?? [], 'after'=>$after[$currency] ?? [],
+        ])->values()->all();
+        return [$eligible, $pendingArrival, $excluded, $totals, $ids, $reasons, $changes, $impact];
     }
 
     /* ──────────────────────────────── commit ─────────────────────────────── */
@@ -445,10 +477,17 @@ class VenueTransferService
             return;
         }
 
-        $payments = Payment::whereIn('id', $paymentIds)->lockForUpdate()->get();
+        $payments = Payment::whereIn('id', $paymentIds)->with(['booking', 'ownedAllocations'])->lockForUpdate()->get();
+        $bookingContexts = [];
+        // Freeze every excluded sibling BEFORE changing the booking fallback.
+        // Otherwise an untouched full-online/refunded record could silently move.
+        foreach ($payments->pluck('booking')->unique('id') as $booking) {
+            Payment::where('booking_id', $booking->id)->whereNotIn('id', $paymentIds)
+                ->whereNull('financial_context')->update(['financial_context'=>json_encode($booking->financial_context ?? [])]);
+        }
 
         foreach ($payments as $p) {
-            $booking = Booking::findOrFail($p->booking_id);
+            $booking = $p->booking;
             $kind = Legacy::kindFor($p, $booking);
             if (! $kind) {
                 continue;
@@ -456,45 +495,14 @@ class VenueTransferService
 
             $before = $p->getAttributes();
             $before['booking_financial_context'] = $booking->financial_context;
-            $before['internal_allocations'] = $p->ownedAllocations()->get()->toArray();
-            $context = TransferPaymentContext::make($booking, $destination, $batch, $kind);
-            $p->financial_context = $context;
-            $booking->forceFill(['financial_context'=>array_merge($context,['reconciliation_kind'=>null])])->saveQuietly();
-
-            if ($kind === Legacy::KIND_DEPOSIT_TO_FEE) {
-                // The gross receipt, processor reference, date, currency and
-                // actor are untouched — only what it is CALLED changes.
-                $p->forceFill([
-                    'type'      => \PaymentType::BOOKING_COMMISSION,
-                    'recipient' => '@bookboll',
-                    'reconciliation_batch_id' => $batch,
-                ])->save();
-            } elseif ($kind === Legacy::KIND_PROVIDER_CASH) {
-                $p->forceFill([
-                    'status' => \PaymentStatus::PAID,
-                    'method' => \PaymentMethod::CASH,
-                    // Who actually took it, said explicitly rather than implied
-                    // by a recipient label. This id — not the label below — is
-                    // what stops a second reconciliation claiming the same row.
-                    'collection_method'       => Legacy::KIND_PROVIDER_CASH,
-                    'collected_by_business_id' => $destination->id,
-                    // And said in the label too, because the payments dashboard
-                    // reads `recipient IS NULL` as Bookboll's own money. Correct
-                    // while the venue was Bookboll's; wrong from this moment on,
-                    // so leaving it blank would report the provider's cash as
-                    // platform revenue for every venue that ever transfers.
-                    'recipient'               => PaymentRecipient::forBusiness($destination),
-                    'reconciliation_batch_id' => $batch,
-                    'paid_at'                 => $p->paid_at ?: ($p->date ?: $booking->date),
-                ])->save();
-            } else {
-                $p->forceFill([
-                    'recipient'=>PaymentRecipient::forBusiness($destination),
-                    'collection_method'=>Legacy::KIND_PROVIDER_RECEIPT,
-                    'collected_by_business_id'=>$destination->id,
-                    'reconciliation_batch_id'=>$batch,
-                ])->save();
-            }
+            $before['internal_allocations'] = $p->ownedAllocations->toArray();
+            $correction = $this->correction($p, $booking, $destination, $batch, $kind);
+            $context = $correction['financial_context'];
+            $p->forceFill($correction)->save();
+            // The old internal split survives in the audit, not as an active
+            // allocation on a provider receipt.
+            $p->ownedAllocations()->delete();
+            $bookingContexts[$booking->id] = array_merge($context,['reconciliation_kind'=>null]);
 
             DB::table('venue_transfer_allocations')->insert([
                 'transfer_id' => $transferId,
@@ -509,6 +517,23 @@ class VenueTransferService
                 'updated_at'  => now(),
             ]);
         }
+        foreach ($bookingContexts as $bookingId=>$context) {
+            $payments->firstWhere('booking_id', $bookingId)->booking->forceFill(['financial_context'=>$context])->saveQuietly();
+        }
+    }
+
+    /** Shared by the read-only preview and the audited commit. */
+    private function correction(Payment $p, Booking $booking, Business $destination, string $batch, string $kind): array
+    {
+        $values = ['financial_context'=>TransferPaymentContext::make($booking, $destination, $batch, $kind),
+            'reconciliation_batch_id'=>$batch];
+        if ($kind === Legacy::KIND_DEPOSIT_TO_FEE) return $values + ['type'=>\PaymentType::BOOKING_COMMISSION, 'recipient'=>'@bookboll'];
+        if ($kind === Legacy::KIND_PROVIDER_PENDING) return $values + ['recipient'=>PaymentRecipient::forBusiness($destination)];
+        $values += ['recipient'=>PaymentRecipient::forBusiness($destination), 'collection_method'=>$kind,
+            'collected_by_business_id'=>$destination->id];
+        if ($kind === Legacy::KIND_PROVIDER_CASH) $values += ['status'=>\PaymentStatus::PAID, 'method'=>\PaymentMethod::CASH,
+            'paid_at'=>(string)($p->paid_at ?: ($p->date ?: $booking->date))];
+        return $values;
     }
 
     protected function transferPayload(int $transferId, Venue $venue)
@@ -540,10 +565,12 @@ class VenueTransferService
     {
         sort($paymentIds);
 
-        $fingerprint = Payment::whereIn('id', $paymentIds)
+        $bookingIds = Payment::whereIn('id', $paymentIds)->select('booking_id');
+        $fingerprint = Payment::whereIn('booking_id', $bookingIds)
+            ->with(['booking', 'ownedAllocations'])
             ->orderBy('id')
             ->get()
-            ->map(fn ($p) => json_encode([$p->getAttributes(), $p->booking?->getAttributes()]))
+            ->map(fn ($p) => json_encode([$p->getAttributes(), $p->booking?->getAttributes(), $p->ownedAllocations->toArray()]))
             ->implode('|');
 
         return hash('sha256', json_encode([

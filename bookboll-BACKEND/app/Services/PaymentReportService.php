@@ -31,10 +31,16 @@ final class PaymentReportService
         $businessId = $platform ? null : AccessScope::businessId($actor);
         $query = Payment::query();
         $venueIds = AccessScope::allowedVenueIds($actor);
+        // Owners retain their own frozen ledger after a venue changes hands.
+        // Staff remain narrowed to their currently accessible venues.
+        $historicalOwner = !$platform && $businessId && $actor->hasRole('provider_admin');
         if ($venueIds !== null) {
             $programIds = AccessScope::scopedProgramIds($actor, $venueIds);
-            $query->where(fn ($q) => $q->whereHas('booking', fn ($b) => $b->whereIn('venue_id', $venueIds))
-                ->orWhereHas('subscription', fn ($s) => $s->whereIn('program_id', $programIds)));
+            $query->where(function ($q) use ($venueIds, $programIds, $historicalOwner, $businessId) {
+                $q->whereHas('booking', fn ($b) => $b->whereIn('venue_id', $venueIds))
+                    ->orWhereHas('subscription', fn ($s) => $s->whereIn('program_id', $programIds));
+                if ($historicalOwner) $q->orWhere('financial_context->business_id', $businessId);
+            });
         }
         // A transferred venue must not expose the old business's frozen ledger.
         if (!$platform && \Illuminate\Support\Facades\Schema::hasColumn('payments', 'financial_context')) {
@@ -89,6 +95,8 @@ final class PaymentReportService
             return $rows;
         }, $request->boolean('refresh'));
         foreach ($rows as $row) {
+            $row['can_view_booking'] = $venueIds === null || in_array((int)$row['venue_id'], $venueIds, true);
+            $row['can_collect'] = $row['can_collect'] && $row['can_view_booking'];
             if ($row['currency']) $currencies[$row['currency']] = true;
             if ($row['venue_id']) $venues[$row['venue_id']] = ['value' => (string) $row['venue_id'], 'label' => $row['venue_name']];
             if ($row['business_id']) $businesses[$row['business_id']] = ['value' => (string) $row['business_id'], 'label' => $row['business_name'] ?: $row['recipient_label']];

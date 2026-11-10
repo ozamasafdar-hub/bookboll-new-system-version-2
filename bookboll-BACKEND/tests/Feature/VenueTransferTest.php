@@ -36,12 +36,14 @@ function transferAdmin(): User
 
 function legacyVenue(): Venue
 {
-    return Venue::create([
+    $venue = Venue::create([
         'name' => 'Legacy Pitch', 'status' => Venue::ACTIVE,
         'maps_url' => 'https://maps.google.com/?q=0,0', 'operator_type' => 'bookboll',
         'owner_user_id' => null, 'currency_override' => 'QAR',
         'min_advance_booking' => 0, 'max_bookings_per_slot' => 1,
     ]);
+    $venue->forceFill(['operator_type'=>'bookboll'])->saveQuietly();
+    return $venue;
 }
 
 function destinationBusiness(): Business
@@ -103,7 +105,7 @@ it('never turns an unpaid online payment into provider cash', function () {
     $v=legacyVenue(); $b=legacyBooking($v);
     Payment::where('booking_id',$b->id)->where('type','remaining')->update(['type'=>'full','method'=>'online']);
     $res=previewTransfer(transferAdmin(),$v,destinationBusiness())->assertOk();
-    expect($res->json('data.reconciliation_version'))->toBe(2)
+    expect($res->json('data.reconciliation_version'))->toBe(3)
         ->and($res->json('data.pending_arrival_count'))->toBe(0)
         ->and((float)$res->json('data.totals.0.provider_cash'))->toBe(0.0);
 });
@@ -134,6 +136,70 @@ it('assigns already-paid manual receipts entirely to the provider', function () 
     $res=$this->getJson('/api/admin/payments/dashboard?report_version=2')->assertOk();
     expect((float)$res->json('data.summary.0.bookboll_received'))->toBe(0.0)
         ->and((float)$res->json('data.summary.0.provider_manual'))->toBe(100.0);
+});
+
+it('uses creation evidence over a stale marketplace origin during reconciliation', function () {
+    $a=transferAdmin(); $v=legacyVenue(); $d=destinationBusiness();
+    $b=legacyBooking($v,['origin'=>'bookboll_web']);
+    $b->forceFill(['creation_context'=>['channel'=>'admin']])->saveQuietly();
+    Payment::where('booking_id',$b->id)->update(['status'=>'paid']);
+    $review=previewTransfer($a,$v,$d)->assertOk();
+    expect((float)$review->json('data.totals.0.deposit_to_fee'))->toBe(0.0);
+    $this->postJson("/api/admin/venues/{$v->id}/transfers",[
+        'preview_token'=>$review->json('data.preview_token'),'idempotency_key'=>'creator-evidence',
+    ])->assertOk();
+    $this->getJson('/api/admin/payments/dashboard?report_version=2')->assertOk()
+        ->assertJsonPath('data.summary.0.platform_fees',0)
+        ->assertJsonPath('data.summary.0.provider_manual',100);
+});
+
+it('keeps unpaid staff bookings pending and transfers the full balance without a fee', function () {
+    $a=transferAdmin(); $v=legacyVenue(); $d=destinationBusiness();
+    $b=legacyBooking($v,['origin'=>'manual_admin']);
+    $pending=$b->payments()->where('type','remaining')->first();
+    $review=previewTransfer($a,$v,$d)->assertOk();
+    expect($review->json('data.pending_arrival_count'))->toBe(0)
+        ->and((float)$review->json('data.totals.0.provider_pending'))->toBe(80.0);
+    $this->postJson("/api/admin/venues/{$v->id}/transfers",[
+        'preview_token'=>$review->json('data.preview_token'),'idempotency_key'=>'manual-pending',
+    ])->assertOk();
+    expect($pending->fresh()->status)->toBe('pending')
+        ->and($pending->fresh()->paid_at)->toBeNull()
+        ->and($pending->fresh()->collected_by_business_id)->toBeNull();
+    $this->getJson('/api/admin/payments/dashboard?report_version=2')->assertOk()
+        ->assertJsonPath('data.summary.0.platform_fees',0)
+        ->assertJsonPath('data.summary.0.provider_received',20)
+        ->assertJsonPath('data.summary.0.provider_pending',80);
+});
+
+it('preserves excluded siblings and matches the preview to the resulting ledger', function () {
+    $a=transferAdmin(); $v=legacyVenue(); $d=destinationBusiness();
+    $b=legacyBooking($v,['origin'=>'bookboll_web']);
+    $b->forceFill(['financial_context'=>['operator'=>'bookboll','channel'=>'marketplace']])->saveQuietly();
+    $full=Payment::withoutEvents(fn()=>Payment::create(['booking_id'=>$b->id,'user_id'=>$b->user_id,'payment_id'=>'excluded-online',
+        'type'=>'full','method'=>'online','status'=>'paid','amount'=>100,'currency'=>'QAR']));
+    $review=previewTransfer($a,$v,$d)->assertOk();
+    $this->postJson("/api/admin/venues/{$v->id}/transfers",[
+        'preview_token'=>$review->json('data.preview_token'),'idempotency_key'=>'excluded-sibling','acknowledge_legacy_cash'=>true,
+    ])->assertOk();
+    expect($full->fresh()->financial_context['operator'])->toBe('bookboll');
+    $actual=$this->getJson('/api/admin/payments/dashboard?report_version=2')->assertOk()->json('data.summary.0');
+    foreach (['bookboll_received','platform_fees','owned_venue_received','owned_unallocated','provider_received','provider_pending'] as $key) {
+        expect((float)$actual[$key])->toBe((float)$review->json('data.report_impact.0.after.'.$key));
+    }
+    expect(Payment::where('booking_id',$b->id)->count())->toBe(3);
+});
+
+it('rejects a review if an excluded sibling changes after preview', function () {
+    $a=transferAdmin(); $v=legacyVenue(); $b=legacyBooking($v);
+    $full=Payment::withoutEvents(fn()=>Payment::create(['booking_id'=>$b->id,'user_id'=>$b->user_id,'payment_id'=>'excluded-change',
+        'type'=>'full','method'=>'online','status'=>'paid','amount'=>100,'currency'=>'QAR']));
+    $review=previewTransfer($a,$v,destinationBusiness());
+    $full->update(['amount'=>101]);
+    $this->postJson("/api/admin/venues/{$v->id}/transfers",[
+        'preview_token'=>$review->json('data.preview_token'),'idempotency_key'=>'stale-sibling','acknowledge_legacy_cash'=>true,
+    ])->assertStatus(409);
+    expect($v->fresh()->operator_type)->toBe('bookboll');
 });
 
 it('previews the deposit as fee and the arrival as provider cash, per currency', function () {
@@ -281,7 +347,7 @@ it('moves the venue and keeps landlord obligations in force', function () {
 
     $res = previewTransfer($a, $v, $d, ['history_mode' => 'preserve', 'from_date' => null, 'to_date' => null]);
     expect($res->json('data.landlord_obligation_count'))->toBe(1)
-        ->and(implode(' ', $res->json('data.warnings')))->toContain('neither cancels rent nor pays it');
+        ->and(implode(' ', $res->json('data.warnings')))->toContain('does not settle or end agreements');
 
     $this->actingAs($a)->postJson("/api/admin/venues/{$v->id}/transfers", [
         'preview_token' => $res->json('data.preview_token'), 'idempotency_key' => 'k4',

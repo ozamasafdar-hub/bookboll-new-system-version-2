@@ -6,7 +6,7 @@ export const paymentCategories = [
 export const channelOptions = [['marketplace', 'Bookboll marketplace'], ['site', 'Business website'], ['admin', 'Added by staff'], ['unknown', 'Not recorded']].map(([value, label]) => ({ value, label }))
 export const methodOptions = [['online', 'Online payment'], ['cash', 'Cash'], ['card', 'Card at venue'], ['cheque', 'Cheque'], ['wire_transfer', 'Bank transfer']].map(([value, label]) => ({ value, label }))
 export const statusOptions = [['paid', 'Paid'], ['pending', 'Pending'], ['refunded', 'Refunded'], ['cancelled', 'Cancelled'], ['on_hold', 'On hold'], ['available_for_payout', 'Available for payout']].map(([value, label]) => ({ value, label }))
-export const labelFor = (options, value) => options.find(x => x.value === value)?.label || value || 'Not recorded'
+export const labelFor = (options, value) => options.find(x => x.value === (options === methodOptions && value === 'credit_card' ? 'card' : value))?.label || value || 'Not recorded'
 export const money = (amount, currency) => {
   if (amount === null || amount === undefined || !Number.isFinite(Number(amount))) return '—'
   try { return new Intl.NumberFormat('en', { style: 'currency', currency, currencyDisplay: 'code' }).format(Number(amount)) }

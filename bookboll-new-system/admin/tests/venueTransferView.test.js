@@ -91,7 +91,7 @@ test('it never claims money will move, in either mode', async t => {
 
     assert.match(all, /No money is moved/, `${mode}: the costliest misreading of this screen`)
     assert.match(all, /no payout is created/i)
-    assert.match(all, /Landlord agreements .* stay in force/)
+    assert.match(all, /does not settle or end them/)
     assert.ok(s.effects.value.some(r => r.tone === 'no'), `${mode}: the "will not" lines must be marked as such`)
   }
 })
@@ -118,7 +118,7 @@ test('preserve mode promises the past is untouched, and claims nothing about it'
   // The server returns zeros here deliberately. Rendering them as "0 deposits
   // re-labelled" would present an assertion the transfer never made.
   s.preview.value = { eligible_count: 0, pending_arrival_count: 0, excluded_count: 0, landlord_obligation_count: 2, totals: [] }
-  assert.deepEqual(s.reviewStats.value.map(r => r.label), ['Landlord agreements still in force'])
+  assert.deepEqual(s.reviewStats.value.map(r => r.label), ['Recorded landlord agreements'])
   assert.equal(s.reviewStats.value[0].tone, 'warn', 'rent that survives the transfer is not a neutral fact')
 })
 

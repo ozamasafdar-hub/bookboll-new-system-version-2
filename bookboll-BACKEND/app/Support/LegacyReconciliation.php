@@ -22,6 +22,7 @@ class LegacyReconciliation
     public const KIND_DEPOSIT_TO_FEE  = 'deposit_to_fee';
     public const KIND_PROVIDER_CASH   = 'provider_direct_cash';
     public const KIND_PROVIDER_RECEIPT = 'provider_recorded_receipt';
+    public const KIND_PROVIDER_PENDING = 'provider_pending';
 
     /**
      * Why this payment cannot be reconciled, or null if it can.
@@ -94,11 +95,15 @@ class LegacyReconciliation
         $type   = (string) ($payment->type ?? '');
         $status = (string) ($payment->status ?? '');
         $online = ($payment->method ?? '') === 'online';
-        $manual = in_array($booking->origin ?? '', ['manual_admin', 'manual'], true);
+        $manual = PaymentReportRules::channel($booking instanceof \Illuminate\Database\Eloquent\Model
+            ? $booking->getAttributes() : (array) $booking) === 'admin';
 
         if ($type === 'deposit' && $status === 'paid' && $online && !$manual) {
             return self::KIND_DEPOSIT_TO_FEE;
         }
+
+        if ($manual && in_array($type, ['deposit','remaining','full','balance'], true)
+            && in_array($status, ['pending','unpaid'], true)) return self::KIND_PROVIDER_PENDING;
 
         if (in_array($type, ['remaining', 'full'], true)
             && !$online && in_array($payment->method ?? '', ['cash', 'card', 'credit_card'], true)

@@ -104,6 +104,74 @@ it('does not expand a provider scope through a requested foreign venue filter',f
     $this->getJson('/api/admin/payments/dashboard?report_version=2&location_id='.$this->ownVenue->id)->assertOk()->assertJsonPath('data.payments.total',0);
 });
 
+it('includes staff collections in the provider method breakdown without counting them twice',function(){
+    $b=reportFixtureBooking($this->externalVenue,$this->provider,'manual_admin');
+    foreach ([['cash',100],['credit_card',20],['wire_transfer',30],['online',40]] as [$method,$amount]) {
+        reportFixturePayment($b,'full',$amount,$method,'paid');
+    }
+    $res=$this->actingAs($this->provider)->getJson('/api/admin/payments/dashboard?report_version=2')->assertOk();
+    expect((float)$res->json('data.summary.0.provider_received'))->toBe(190.0)
+        ->and((float)$res->json('data.summary.0.provider_received_offline'))->toBe(150.0)
+        ->and((float)$res->json('data.summary.0.provider_received_online'))->toBe(40.0)
+        ->and((float)$res->json('data.summary.0.platform_fees'))->toBe(0.0);
+});
+
+it('keeps an owners frozen ledger visible after transfer without opening the current booking',function(){
+    $b=reportFixtureBooking($this->externalVenue,$this->provider,'manual_admin');
+    reportFixturePayment($b,'full',100,'cash','paid');
+    $this->externalVenue->forceFill(['operator_type'=>'bookboll','owner_user_id'=>null,'business_id'=>null])->save();
+    $this->actingAs($this->provider)->getJson('/api/admin/payments/dashboard?report_version=2')->assertOk()
+        ->assertJsonPath('data.payments.total',1)
+        ->assertJsonPath('data.payments.data.0.can_view_booking',false)
+        ->assertJsonPath('data.payments.data.0.can_collect',false);
+    $this->getJson('/api/admin/bookings/'.$b->id.'/crm')->assertForbidden();
+    $this->putJson('/api/admin/bookings/'.$b->id.'/dashboard',['notes'=>'unauthorized'])->assertForbidden();
+    $foreign=reportFixtureBooking($this->externalVenue,$this->platform,'manual_admin');
+    reportFixturePayment($foreign,'full',999,'cash','paid');
+    $this->getJson('/api/admin/payments/dashboard?report_version=2')->assertOk()->assertJsonPath('data.payments.total',1);
+});
+
+it('does not give a new venue owner the previous operators booking finances',function(){
+    $b=reportFixtureBooking($this->ownVenue,$this->platform,'manual_admin');
+    reportFixturePayment($b,'full',100,'cash','paid');
+    $this->ownVenue->forceFill(['business_id'=>$this->business->id,'owner_user_id'=>$this->provider->id,'operator_type'=>'provider'])->save();
+    $this->actingAs($this->provider)->getJson('/api/admin/bookings/'.$b->id.'/crm')->assertForbidden();
+});
+
+it('derives booking receipt totals without adding the online split twice',function(){
+    $b=reportFixtureBooking($this->externalVenue,$this->provider);
+    $root=reportFixturePayment($b,'full',100,'online','paid');
+    reportFixturePayment($b,'booking_commission',15,'online','paid');
+    reportFixturePayment($b,'booking_earning',85,'online','paid');
+    $this->actingAs($this->platform)->getJson('/api/admin/bookings/'.$b->id.'/crm')->assertOk()
+        ->assertJsonPath('data.booking.recorded_payment_summary.paid',100)
+        ->assertJsonPath('data.booking.recorded_payment_summary.status','Paid');
+    expect($b->fresh()->payment_status)->toBe('pending');
+});
+
+it('rejects foreign, online and already settled receipt collection requests',function(){
+    $b=reportFixtureBooking($this->ownVenue,$this->platform,'manual_admin');
+    $pending=reportFixturePayment($b,'full',100,'cash','pending');
+    $path='/api/admin/bookings/'.$b->id.'/payments/'.$pending->id.'/collect';
+    $this->actingAs($this->provider)->putJson($path,['method'=>'cash'])->assertForbidden();
+    $this->actingAs($this->platform)->putJson($path,['method'=>'online'])->assertStatus(422);
+    $pending->update(['method'=>'online']);
+    $this->putJson($path,['method'=>'cash'])->assertStatus(422);
+    $pending->update(['method'=>'cash','status'=>'refunded']);
+    $this->putJson($path,['method'=>'cash'])->assertStatus(422);
+    expect($pending->fresh()->status)->toBe('refunded');
+});
+
+it('records own-venue offline collection to Bookboll instead of a generic provider',function(){
+    $b=reportFixtureBooking($this->ownVenue,$this->platform,'manual_admin');
+    $p=reportFixturePayment($b,'full',100,'cash','pending');
+    $this->actingAs($this->platform)->putJson('/api/admin/bookings/'.$b->id.'/payments/'.$p->id.'/collect',['method'=>'cash'])->assertOk();
+    expect($p->fresh()->recipient)->toBe('@bookboll');
+    $this->getJson('/api/admin/payments/dashboard?report_version=2')->assertOk()
+        ->assertJsonPath('data.summary.0.bookboll_received',100)
+        ->assertJsonPath('data.summary.0.platform_fees',0);
+});
+
 it('captures recipient and preserves historical ownership after venue changes',function(){
     $booking = reportFixtureBooking($this->externalVenue,$this->provider);
     $p = Payment::create(['booking_id'=>$booking->id,'user_id'=>$booking->user_id,'type'=>'remaining','amount'=>85,'method'=>'cash','status'=>'pending','currency'=>'QAR','payment_id'=>'qa-snapshot']);

@@ -4810,12 +4810,15 @@ class BookingService
             return sendError('Booking not found', [], 404);
         }
 
+        if (!$this->mayAccessDashboardBooking($booking)) return sendError('This booking is outside your venue access.', [], 403);
+
         $lookups = $this->dashboardLookups();
 
         // One resolution for the booking and its payments, so a row can never
         // disagree with the total it belongs to.
         $payCur = $booking->venue ? $this->venueCurrency($booking->venue) : null;
         $mapped = $this->mapDashboardBooking($booking, $payCur ?: null);
+        $mapped['recorded_payment_summary'] = \App\Support\BookingPaymentSummary::fromBooking($booking);
 
         $customer = $booking->user ? [
             'id'              => (string) $booking->user->id,
@@ -4959,6 +4962,9 @@ class BookingService
         ]);
 
         $listing = Listing::with('resourceRequirements')->findOrFail($data['listing_id']);
+        $allowed = AccessScope::allowedVenueIds(auth()->user());
+        if (($allowed !== null && !in_array((int)$data['location_id'], $allowed, true))
+            || (int)$listing->venue_id !== (int)$data['location_id']) return sendError('The listing and venue must be within your access.', [], 403);
         $user    = $this->resolveDashboardCustomer($data['customer_id'] ?? null);
         $mapped  = $this->fromDashboardPaymentMethod($data['payment_method']);
         $total   = (float) ($data['total'] ?? 0);
@@ -5090,6 +5096,7 @@ class BookingService
     public function dashboardUpdate(Request $request, $id)
     {
         $booking = $this->bookingModel::findOrFail($id);
+        if (!$this->mayAccessDashboardBooking($booking)) return sendError('This booking is outside your venue access.', [], 403);
         $data = $request->validate([
             'location_id'    => 'sometimes|exists:venues,id',
             'listing_id'     => 'sometimes|exists:listings,id',
@@ -5106,9 +5113,13 @@ class BookingService
 
         $payload = [];
         if (array_key_exists('location_id', $data)) {
+            $allowed = AccessScope::allowedVenueIds(auth()->user());
+            if ($allowed !== null && !in_array((int)$data['location_id'], $allowed, true)) return sendError('The destination venue is outside your access.', [], 403);
             $payload['venue_id'] = $data['location_id'];
         }
         if (array_key_exists('listing_id', $data)) {
+            $listing = Listing::find($data['listing_id']);
+            if ((int)$listing?->venue_id !== (int)($data['location_id'] ?? $booking->venue_id)) return sendError('The listing must belong to the selected venue.', [], 422);
             $payload['listing_id'] = $data['listing_id'];
         }
         if (array_key_exists('customer_id', $data)) {
@@ -5189,7 +5200,7 @@ class BookingService
     public function dashboardCollect(Request $request, $id, $paymentId)
     {
         $data = $request->validate([
-            'method'       => 'required|string',
+            'method'       => 'required|in:cash,card,credit_card,cheque,wire,wire_transfer,paid_cash,paid_card,paid_cheque,paid_wire',
             'amount'       => 'nullable|numeric|min:0',
             'discount'     => 'nullable|numeric|min:0',
             'promocode_id' => 'nullable|exists:promocodes,id',
@@ -5199,18 +5210,33 @@ class BookingService
         if (! $booking) {
             return sendError('Booking not found', [], 404);
         }
+        if (!$this->mayAccessDashboardBooking($booking)) return sendError('This booking is outside your venue access.', [], 403);
 
         $payment = $booking->payments()->find($paymentId);
         if (! $payment) {
             return sendError('Payment not found', [], 404);
         }
+        if (!AccessScope::isPlatform(auth()->user())) {
+            $context = array_merge($booking->financial_context ?? [], $payment->financial_context ?? []);
+            if ((int)($context['business_id'] ?? 0) !== (int)(AccessScope::businessId(auth()->user()) ?? -1)) {
+                return sendError('This historical payment belongs to a different operator.', [], 403);
+            }
+        }
 
-        if ($payment->status === PaymentStatus::PAID) {
-            return sendError('This payment is already marked as paid.');
+        if (!in_array($payment->status, [PaymentStatus::PENDING, PaymentStatus::UNPAID], true)
+            || $payment->method === PaymentMethod::ONLINE || in_array($booking->status, ['cancelled'], true)) {
+            return sendError('Only an unpaid offline receipt on an active booking can be collected here.', [], 422);
         }
 
         try {
             DB::beginTransaction();
+
+            $booking = $this->bookingModel::whereKey($id)->lockForUpdate()->firstOrFail();
+            $payment = $booking->payments()->whereKey($paymentId)->lockForUpdate()->firstOrFail();
+            if (!in_array($payment->status, [PaymentStatus::PENDING, PaymentStatus::UNPAID], true)) {
+                DB::rollBack();
+                return sendError('This payment changed. Refresh the booking before collecting it.', [], 409);
+            }
 
             $discount = (float) ($data['discount'] ?? 0);
             if ($discount > 0) {
@@ -5236,7 +5262,9 @@ class BookingService
             $payment->date   = now()->format('Y-m-d');
             $payment->paid_at = now();
             $payment->marked_paid_by = auth()->id();
-            $payment->recipient = $payMethod === PaymentMethod::ONLINE ? '@bookboll' : 'provider';
+            $context = array_merge($booking->financial_context ?? [], $payment->financial_context ?? []);
+            $payment->recipient = ($context['operator'] ?? '') === 'bookboll' ? '@bookboll'
+                : ($context['provider_recipient'] ?? \App\Support\PaymentRecipient::forBusiness(\App\Models\Business::find($context['business_id'] ?? null)));
             $payment->save();
 
             $remaining = $booking->payments()
@@ -5602,6 +5630,17 @@ class BookingService
             'owner_user_id'     => $ownerId ? (string) $ownerId : null,
             'currency_override' => $v->currency_override ?: null,
         ];
+    }
+
+    private function mayAccessDashboardBooking(Booking $booking): bool
+    {
+        $allowed = AccessScope::allowedVenueIds(auth()->user());
+        if ($allowed !== null && !in_array((int)$booking->venue_id, $allowed, true)) return false;
+        if (!AccessScope::isPlatform(auth()->user()) && !empty($booking->financial_context)) {
+            return ($booking->financial_context['operator'] ?? '') === 'provider'
+                && (int)($booking->financial_context['business_id'] ?? 0) === (int)(AccessScope::businessId(auth()->user()) ?? -1);
+        }
+        return true;
     }
 
     protected function mapDashboardPayment(Payment $p, ?string $currencyFallback = null): array

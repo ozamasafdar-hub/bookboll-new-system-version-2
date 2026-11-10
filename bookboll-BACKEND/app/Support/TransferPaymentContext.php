@@ -11,7 +11,8 @@ final class TransferPaymentContext
     public static function make(Booking $booking, Business $business, string $batch, string $kind): array
     {
         $prior = $booking->financial_context ?? [];
-        $channel = $prior['channel'] ?? PaymentReportRules::channel($booking->getAttributes());
+        $channel = !empty($booking->creation_context) ? PaymentReportRules::channel($booking->getAttributes())
+            : ($prior['channel'] ?? PaymentReportRules::channel($booking->getAttributes()));
         return array_merge($prior, [
             'version'=>1, 'operator'=>'provider', 'business_id'=>$business->id,
             'business_name'=>$business->name, 'provider_recipient'=>PaymentRecipient::forBusiness($business),

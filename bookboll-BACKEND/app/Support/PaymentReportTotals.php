@@ -18,6 +18,7 @@ final class PaymentReportTotals
             'bookboll_received', 'platform_fees', 'marketplace_fees', 'site_fees', 'other_channel_fees',
             'event_fees', 'membership_fees', 'owned_online', 'owned_onsite', 'owned_pending',
             'provider_received', 'provider_online', 'provider_arrival', 'provider_manual', 'provider_pending',
+            'provider_received_online', 'provider_received_offline', 'provider_received_other',
             'provider_sales', 'refunded',
             'owned_platform_fees', 'external_booking_fees', 'owned_venue_received', 'owned_venue_pending', 'owned_platform_pending',
             'external_marketplace_fees', 'external_site_fees', 'owned_marketplace_fees', 'owned_site_fees',
@@ -40,7 +41,15 @@ final class PaymentReportTotals
         }
         if ($status !== 'paid') return;
         if ($row['recipient_kind'] === 'bookboll') $s['bookboll_received'] += $amount;
-        if ($row['recipient_kind'] === 'provider') $s['provider_received'] += $amount;
+        if ($row['recipient_kind'] === 'provider') {
+            $s['provider_received'] += $amount;
+            $methodBucket = match ($row['method'] ?? '') {
+                'online' => 'provider_received_online',
+                'cash', 'card', 'credit_card', 'cheque', 'wire_transfer' => 'provider_received_offline',
+                default => 'provider_received_other',
+            };
+            $s[$methodBucket] += $amount;
+        }
         if (array_key_exists($category, $s)) $s[$category] += $amount;
         if ($category === 'event_fee') $s['event_fees'] += $amount;
         if ($category === 'provider_membership_fee') $s['membership_fees'] += $amount;
