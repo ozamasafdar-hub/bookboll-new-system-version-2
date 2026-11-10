@@ -87,6 +87,13 @@ function previewTransfer(User $a, Venue $v, Business $d, array $over = [])
     ], $over));
 }
 
+it('blocks transferring a venue to its existing business', function () {
+    $d=destinationBusiness(); $v=legacyVenue();
+    $v->forceFill(['business_id'=>$d->id,'operator_type'=>'provider'])->saveQuietly();
+    $res=previewTransfer(transferAdmin(),$v,$d)->assertOk();
+    expect($res->json('data.blockers'))->toContain('This business already operates the venue.');
+});
+
 it('lists destinations including ownerless businesses', function () {
     $d = destinationBusiness();
 

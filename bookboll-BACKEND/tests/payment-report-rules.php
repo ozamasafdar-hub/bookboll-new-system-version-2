@@ -123,6 +123,10 @@ eq($review,1,'unknown ownership review');
 $frozen = Rules::rows([p(1,'deposit',7.5,'online','paid',context('provider','site',['fee_rate'=>7.5]))],context('bookboll','marketplace',['fee_rate'=>30]));
 eq($frozen[0]['category'],'provider_booking_fee','payment snapshot survives later venue transfer');
 eq($frozen[0]['fee_rate'],7.5,'payment rate survives later booking/settings changes');
+$reconciled = Rules::rows([p(1,'booking_commission',20,'online','paid',
+    ['reconciliation_batch_id'=>'reviewed-transfer'] + context('provider','marketplace',['reconciliation_kind'=>'deposit_to_fee','fee_rate'=>15]))]);
+eq($reconciled[0]['amount'],20,'reviewed legacy deposit remains the actual fee amount');
+eq($reconciled[0]['fee_rate'],null,'legacy deposit correction does not display an unrelated old quote percentage');
 $mixed = Rules::rows([p(1,'full',100,'cash'),p(2,'full',10.123,'cash','paid',['currency'=>'KWD']),p(3,'full',1000,'cash','paid',['currency'=>'JPY'])],context('bookboll','admin'));
 [$sum] = totals($mixed);
 eq(count($sum),3,'currencies never combined');

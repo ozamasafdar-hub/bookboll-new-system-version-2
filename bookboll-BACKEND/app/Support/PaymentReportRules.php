@@ -148,7 +148,8 @@ final class PaymentReportRules
                     : ($recipientKind === 'provider' ? ($context['business_name'] ?? ($recipient ?: 'External provider')) : 'Needs review'),
                 'business_id' => $context['business_id'] ?? null,
                 'operator' => $ownership, 'channel' => $channel,
-                'fee_rate' => $event ? ($context['event_fee_rate'] ?? null) : ($channel === 'admin' ? 0 : ($context['fee_rate'] ?? ($booking['commission_effective_pct'] ?? null))),
+                'fee_rate' => $event ? ($context['event_fee_rate'] ?? null) : ($channel === 'admin' ? 0 :
+                    (($context['reconciliation_kind'] ?? '') === 'deposit_to_fee' ? null : ($context['fee_rate'] ?? ($booking['commission_effective_pct'] ?? null)))),
                 'row_kind' => isset($receiptIds[$id]) ? 'receipt' : 'allocation',
                 'source_receipt_ids' => $childReceipts[$id] ?? [],
                 'review_reason' => $reason, 'snapshot_recorded' => !empty($context),

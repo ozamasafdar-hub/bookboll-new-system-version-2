@@ -93,6 +93,25 @@ it('summarizes the entire filtered set independently of pagination and excludes 
     expect((float)$filtered->json('data.summary.0.owned_pending'))->toBe(0.0);
 });
 
+it('separates confirmed Bookboll receipts with missing fee splits from unresolved recipients',function(){
+    $own=reportFixtureBooking($this->ownVenue,$this->platform);
+    $own->forceFill(['financial_context'=>['operator'=>'bookboll','channel'=>'marketplace','ownership_basis'=>'preview_owner_confirmed_2026_11_10']])->saveQuietly();
+    foreach ([['paid',100],['pending',40],['cancelled',30]] as [$status,$amount]) reportFixturePayment($own,'full',$amount,'online',$status);
+    $external=reportFixtureBooking($this->externalVenue,$this->provider);
+    reportFixturePayment($external,'full',10,'online','paid');
+    $all=$this->actingAs($this->platform)->getJson('/api/admin/payments/dashboard?report_version=2')->assertOk()
+        ->assertJsonPath('data.review_count',1)->assertJsonPath('data.fee_split_count',3)
+        ->assertJsonPath('data.fee_split_statuses.paid',1)->assertJsonPath('data.fee_split_statuses.cancelled',1);
+    expect((float)$all->json('data.summary.0.bookboll_received'))->toBe(100.0);
+    expect((float)$all->json('data.summary.0.owned_pending'))->toBe(40.0);
+    $this->getJson('/api/admin/payments/dashboard?report_version=2&scope=review')->assertOk()
+        ->assertJsonPath('data.payments.total',1)->assertJsonPath('data.fee_split_count',0)
+        ->assertJsonPath('data.payments.data.0.category','unclassified');
+    $this->getJson('/api/admin/payments/dashboard?report_version=2&scope=fee_split&status=paid')->assertOk()
+        ->assertJsonPath('data.payments.total',1)->assertJsonPath('data.review_count',0)
+        ->assertJsonPath('data.fee_split_count',1)->assertJsonPath('data.payments.data.0.recipient_kind','bookboll');
+});
+
 it('does not expand a provider scope through a requested foreign venue filter',function(){
     $own = reportFixtureBooking($this->ownVenue,$this->platform);
     reportFixturePayment($own,'full',100,'cash','paid');

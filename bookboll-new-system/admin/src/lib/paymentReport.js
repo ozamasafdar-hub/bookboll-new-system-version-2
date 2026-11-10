@@ -1,6 +1,6 @@
 export const paymentCategories = [
   ['provider_booking_fee', 'Provider booking fee'], ['owned_platform_fee', 'Platform fee · own venue'], ['provider_membership_fee', 'Provider membership fee'], ['event_fee', 'Event host fee'],
-  ['owned_online', 'Own venue share · online'], ['owned_onsite', 'Own venue share · on site'], ['owned_unallocated', 'Own venue receipt · split needs review'], ['provider_online', 'Provider · online share'],
+  ['owned_online', 'Own venue share · online'], ['owned_onsite', 'Own venue share · on site'], ['owned_unallocated', 'Bookboll receipt · fee split missing'], ['provider_online', 'Provider · online share'],
   ['provider_arrival', 'Provider · arrival payment'], ['provider_manual', 'Provider · manual booking'], ['unclassified', 'Needs review'],
 ].map(([value, label]) => ({ value, label }))
 export const channelOptions = [['marketplace', 'Bookboll marketplace'], ['site', 'Business website'], ['admin', 'Added by staff'], ['unknown', 'Not recorded']].map(([value, label]) => ({ value, label }))

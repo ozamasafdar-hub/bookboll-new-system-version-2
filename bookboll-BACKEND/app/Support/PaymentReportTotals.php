@@ -6,12 +6,17 @@ final class PaymentReportTotals
 {
     private array $currencies = [];
     public int $reviewCount = 0;
+    public int $feeSplitCount = 0;
+    public array $feeSplitStatuses = [];
 
     public function add(array $row): void
     {
         if ($row['row_kind'] === 'receipt') return;
         if ($row['category'] === 'unclassified') { $this->reviewCount++; return; }
-        if ($row['category'] === 'owned_unallocated') $this->reviewCount++;
+        if ($row['category'] === 'owned_unallocated') {
+            $this->feeSplitCount++;
+            $this->feeSplitStatuses[$row['status']] = ($this->feeSplitStatuses[$row['status']] ?? 0) + 1;
+        }
         $currency = $row['currency'];
         $amount = Money::toMinor($row['amount'], $currency);
         $this->currencies[$currency] ??= array_fill_keys([

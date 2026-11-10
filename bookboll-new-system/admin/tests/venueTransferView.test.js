@@ -128,7 +128,7 @@ test('a count the server did not send is shown as unknown, never as zero', async
   Object.assign(s.form.value, legacy)
   s.preview.value = { landlord_obligation_count: 0, totals: [] }
 
-  assert.deepEqual(s.reviewStats.value.map(r => r.value), ['—', '—', '—', '0'])
+  assert.deepEqual(s.reviewStats.value.map(r => r.value), ['—', '—', '—', '—', '0'])
 })
 
 // ── it has to survive dark mode ────────────────────────────────────────────

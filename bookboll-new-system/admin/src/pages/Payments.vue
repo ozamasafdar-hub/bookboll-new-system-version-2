@@ -22,6 +22,8 @@ const defaults = () => ({ search:'', currency:[], status:[], method:[], category
 const filters = reactive(defaults())
 const period = ref('all'), advanced = ref(false), page = ref(1), perPage = ref(25), total = ref(0), sort = ref('date'), sortDir = ref('desc')
 const rows = ref([]), summary = ref([]), options = ref({ currencies:[], venues:[], businesses:[] }), ready = ref(null), reviewCount = ref(0)
+const feeSplitCount = ref(0), feeSplitStatuses = ref({})
+const feeSplitStatusText = computed(() => Object.entries(feeSplitStatuses.value).map(([status,count]) => `${Number(count).toLocaleString()} ${labelFor(statusOptions,status).toLowerCase()}`).join(' · '))
 const loading = ref(false), error = ref(''), exporting = ref(false), selected = ref(null), bookingId = ref(null), collectId = ref(null)
 const invalid = computed(() => filterError(filters))
 const lastPage = computed(() => Math.max(1, Math.ceil(total.value / perPage.value)))
@@ -45,6 +47,8 @@ async function load(refresh = false) {
     total.value = Number(data.payments?.total ?? rows.value.length)
     summary.value = ready.value ? data.summary || [] : []
     reviewCount.value = ready.value ? data.review_count || 0 : 0
+    feeSplitCount.value = ready.value ? data.fee_split_count || 0 : 0
+    feeSplitStatuses.value = data.fee_split_statuses || {}
     options.value = { currencies:[], venues:[], businesses:[], ...data.filter_options }
   } catch (e) {
     if (id !== requestId) return
@@ -78,7 +82,7 @@ const breakdown = computed(() => platform.value ? [
   ['other_channel_fees','Booking fees · channel not recorded'], ['membership_fees','Provider membership fees'],
   ['event_fees','Event host fees'],
   ['owned_online','Own venue share · online'], ['owned_onsite','Own venue share · on site'],
-  ['owned_unallocated','Own venue receipts · split needs review'],
+  ['owned_unallocated','Bookboll receipts · historical fee split missing'],
 ] : [['provider_received_online','Online payments · your share'], ['provider_received_offline','Direct collections · your share'], ['provider_received_other','Other / unrecorded payment method']])
 const categoryLabel = p => labelFor(paymentCategories, p.category)
 const hasFee = p => ['provider_booking_fee','owned_platform_fee','provider_membership_fee','event_fee'].includes(p.category)
@@ -131,7 +135,8 @@ onBeforeUnmount(() => { ++requestId; clearTimeout(timer) })
     <p v-if="invalid" class="pay-notice pay-error" role="alert">{{ invalid }}</p>
     <p v-if="error" class="pay-notice pay-error" role="alert">{{ error }} <button class="pay-link" @click="load">Try again</button></p>
     <p v-if="ready === false && !error" class="pay-notice">Payment records are available. Earnings totals will appear after the updated payment report is deployed; the existing totals do not reliably separate fees from provider money.</p>
-    <p v-if="ready && reviewCount && !loading" class="pay-notice">{{ reviewCount.toLocaleString() }} matching records need review. Confirmed own-venue receipts count once in Bookboll received; their unknown fee split is shown separately. Other unclassified payments are excluded. <button class="pay-link" @click="filters.scope = 'review'">Review records</button></p>
+    <p v-if="ready && reviewCount && !loading && !error" class="pay-notice">{{ reviewCount.toLocaleString() }} matching payment records have unresolved recipient allocations. These amounts are excluded from earnings totals. <button class="pay-link" @click="filters.scope = 'review'">Review records</button></p>
+    <p v-if="ready && feeSplitCount && !loading && !error" class="pay-notice"><b>{{ feeSplitCount.toLocaleString() }} Bookboll records have a missing historical fee split.</b> Ownership is confirmed; paid amounts already count once in Bookboll received. The old records do not say how much was platform fee versus venue revenue. {{ feeSplitStatusText }}. Cancelled amounts do not count as received or pending. <button class="pay-link" @click="filters.scope = 'fee_split'">View missing splits</button></p>
 
     <section class="pay-summary" aria-label="Payment totals" :aria-busy="loading">
       <article v-for="[key,title,description] in cards" :key="key" class="pay-stat"><h2>{{ title }}</h2><strong v-for="amount in amounts(key)" :key="amount">{{ amount }}</strong><p>{{ description }}</p></article>
@@ -159,7 +164,7 @@ onBeforeUnmount(() => { ++requestId; clearTimeout(timer) })
         <template v-if="ready"><div class="pay-filter"><span>Allocation</span><MultiSelect v-model="filters.category" :options="paymentCategories" placeholder="All allocations" /></div><div class="pay-filter"><span>Booking channel</span><MultiSelect v-model="filters.channel" :options="channelOptions" placeholder="All channels" /></div><div class="pay-filter"><span>Source</span><MultiSelect v-model="filters.source" :options="sourceOptions" placeholder="All sources" /></div><div class="pay-filter"><span>Venue</span><MultiSelect v-model="filters.location_id" :options="options.venues" placeholder="All venues" /></div><div v-if="platform" class="pay-filter"><span>Business</span><MultiSelect v-model="filters.business_id" :options="options.businesses" placeholder="All businesses" /></div></template>
         <label>Minimum amount<input v-model="filters.amount_min" type="number" min="0" step="0.01" placeholder="No minimum" /></label><label>Maximum amount<input v-model="filters.amount_max" type="number" min="0" step="0.01" placeholder="No maximum" /></label>
       </div>
-      <div v-if="ready" class="pay-scopes" role="group" aria-label="Filter recipient"><button :class="{active:filters.scope === 'all'}" :aria-pressed="filters.scope === 'all'" @click="filters.scope = 'all'">All records</button><button :class="{active:filters.scope === (platform ? 'bookboll' : 'provider')}" :aria-pressed="filters.scope === (platform ? 'bookboll' : 'provider')" @click="filters.scope = platform ? 'bookboll' : 'provider'">{{ platform ? 'Bookboll’s share' : 'Your share' }}</button><button :class="{active:filters.scope === 'review'}" :aria-pressed="filters.scope === 'review'" @click="filters.scope = 'review'">Needs review</button></div>
+      <div v-if="ready" class="pay-scopes" role="group" aria-label="Filter recipient"><button :class="{active:filters.scope === 'all'}" :aria-pressed="filters.scope === 'all'" @click="filters.scope = 'all'">All records</button><button :class="{active:filters.scope === (platform ? 'bookboll' : 'provider')}" :aria-pressed="filters.scope === (platform ? 'bookboll' : 'provider')" @click="filters.scope = platform ? 'bookboll' : 'provider'">{{ platform ? 'Bookboll’s share' : 'Your share' }}</button><button v-if="platform" :class="{active:filters.scope === 'fee_split'}" :aria-pressed="filters.scope === 'fee_split'" @click="filters.scope = 'fee_split'">Historical fee splits</button><button :class="{active:filters.scope === 'review'}" :aria-pressed="filters.scope === 'review'" @click="filters.scope = 'review'">Needs review</button></div>
       <div class="pay-table-wrap"><table class="pay-table"><thead><tr><th :aria-sort="sort === 'date' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'"><button @click="changeSort('date')">Payment / date <ArrowUpDown :size="13" /></button></th><th>Customer / venue</th><th>Booking channel</th><th>Allocation / recipient</th><th>Method</th><th class="pay-number" :aria-sort="sort === 'amount' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'"><button @click="changeSort('amount')">Amount <ArrowUpDown :size="13" /></button></th><th>Status</th><th><span class="pay-sr">Details</span></th></tr></thead>
         <tbody><tr v-if="loading || invalid || error || !rows.length"><td colspan="8" class="pay-empty">{{ invalid || (loading ? 'Loading payments…' : error ? 'Payments could not be loaded.' : 'No payments match these filters.') }}</td></tr>
           <tr v-for="p in (loading || invalid || error ? [] : rows)" :key="p.id"><td><button class="pay-link" @click="selected = p">{{ p.payment_id || '#' + p.id }}</button><small>{{ p.payment_date || 'Date not recorded' }}</small><small v-if="p.booking_ref">{{ p.booking_ref }}</small></td><td><b>{{ p.customer_name }}</b><small>{{ p.venue_name }}</small><small v-if="p.listing_name">{{ p.listing_name }}</small></td><td>{{ labelFor(channelOptions,p.channel) }}<small v-if="p.created_by_name">Created by {{ p.created_by_name }}</small><small v-if="p.channel === 'admin'">No platform fee</small></td><td><b>{{ categoryLabel(p) }}</b><small>{{ p.recipient_label }}</small><small v-if="hasFee(p) && p.fee_rate != null">{{ p.fee_rate }}% recorded rate</small></td><td>{{ labelFor(methodOptions,p.method) }}</td><td class="pay-number"><b>{{ money(p.amount,p.currency) }}</b></td><td><span class="pay-status" :class="'pay-status-' + p.status">{{ labelFor(statusOptions,p.status) }}</span><button v-if="canCollect(p)" class="pay-link pay-collect" @click="viewBooking(p,true)">Record payment</button></td><td><button class="pay-icon" :aria-label="'Details for payment ' + (p.payment_id || p.id)" @click="selected = p"><ChevronRight :size="18" /></button></td></tr>

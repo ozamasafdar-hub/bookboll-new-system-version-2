@@ -61,8 +61,8 @@ final class OwnedVenueAllocation
             if (!$allocations && $row['channel'] === 'admin') return [$row];
             if (!$allocations && ($row['financial_context']['ownership_basis'] ?? '') === 'preview_owner_confirmed_2026_11_10') {
                 return [array_merge($row, ['category'=>'owned_unallocated', 'recipient_kind'=>'bookboll',
-                    'recipient_label'=>'Bookboll · split needs review',
-                    'review_reason'=>'Bookboll ownership is confirmed, but this historical receipt has no saved internal fee split.'])];
+                    'recipient_label'=>'Bookboll · historical fee split missing',
+                    'review_reason'=>'This belongs to Bookboll. Paid receipts are included once in Bookboll received. The old record has no saved platform fee amount; only the internal platform/venue split is missing.'])];
             }
             return [array_merge($row, ['category'=>'unclassified', 'recipient_kind'=>'unknown', 'recipient_label'=>'Needs review',
                 'review_reason'=>'The platform/venue split has not been recorded or no longer matches this receipt.'])];

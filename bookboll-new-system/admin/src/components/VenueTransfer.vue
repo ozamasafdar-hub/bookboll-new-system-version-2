@@ -109,8 +109,8 @@ const effects = computed(() => {
   if (isLegacy.value && historyDays.value) {
     const span = `${fmtDate(form.value.from_date)} – ${fmtDate(form.value.to_date)}`
     rows.push(
-      { tone: 'go', text: `Paid deposits on bookings played ${span} are re-labelled as Bookboll's fee.` },
-      { tone: 'go', text: `Arrival balances in that period are closed as cash ${to} already collected.` },
+      { tone: 'go', text: `Paid online deposits on customer bookings played ${span} become Bookboll's fee.` },
+      { tone: 'go', text: `Eligible customer arrival balances become cash ${to} already collected. Unpaid staff bookings stay pending with no platform fee.` },
     )
   } else {
     rows.push({ tone: 'go', text: 'Every existing fee, receipt and payment stays exactly as recorded.' })
@@ -133,6 +133,7 @@ const reviewStats = computed(() => {
   if (form.value.history_mode === 'preserve') return [landlord]
 
   return [
+    { label: 'Payment records updated', value: count(p.payment_count), tone: 'go' },
     { label: 'Deposits re-labelled as Bookboll fees', value: count(p.eligible_count), tone: 'go' },
     { label: 'Arrival balances closed as provider cash', value: count(p.pending_arrival_count), tone: 'info' },
     { label: 'Excluded · kept unchanged', value: count(p.excluded_count), tone: p.excluded_count > 0 ? 'warn' : '' },
@@ -410,7 +411,7 @@ load()
           <label class="fin-checkbox vt-confirm">
             <input v-model="agreed" type="checkbox" :disabled="busy" />
             <span>{{ isLegacy
-              ? 'I confirm the reviewed deposits were Bookboll fees and the reviewed arrival balances were collected by this provider as cash.'
+              ? (preview.pending_arrival_count > 0 ? 'I confirm the reviewed deposits were Bookboll fees and the reviewed arrival balances were collected by this provider as cash. Unpaid staff bookings stay pending.' : 'I confirm these payment records belong to the selected provider. Unpaid staff bookings stay pending and have no platform fee.')
               : 'I confirm this venue should move to the selected business, keeping historical payments unchanged.' }}</span>
           </label>
         </section>

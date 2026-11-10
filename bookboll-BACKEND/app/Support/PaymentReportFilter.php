@@ -14,7 +14,8 @@ final class PaymentReportFilter
             if (!in_array($actual, $values, true)) return false;
         }
         $scope = $filters['scope'] ?? 'all';
-        if ($scope === 'review' && !in_array($row['category'], ['unclassified','owned_unallocated'], true)) return false;
+        if ($scope === 'review' && $row['category'] !== 'unclassified') return false;
+        if ($scope === 'fee_split' && $row['category'] !== 'owned_unallocated') return false;
         if (in_array($scope, ['bookboll','provider'], true) && $row['recipient_kind'] !== $scope) return false;
         $date = $row['payment_date'];
         if (!empty($filters['from_date']) && $date < $filters['from_date']) return false;

@@ -134,6 +134,7 @@ class VenueTransferService
             'warnings' => $assessment['warnings'],
             'blockers' => $assessment['blockers'],
             'payment_changes' => $assessment['payment_changes'],
+            'payment_count' => count($assessment['payment_ids']),
             'report_impact' => $assessment['report_impact'],
         ]);
     }
@@ -161,6 +162,8 @@ class VenueTransferService
             $blockers[] = 'That business no longer exists.';
         } elseif (!in_array($destination->status, [Business::STATUS_ACTIVE, Business::STATUS_PENDING], true)) {
             $blockers[] = 'Choose an active or pending destination business.';
+        } elseif ((int)$venue->business_id === (int)$destination->id) {
+            $blockers[] = 'This business already operates the venue.';
         }
 
         // Landlord obligations survive a transfer. It does not cancel rent and
@@ -180,7 +183,7 @@ class VenueTransferService
                 $blockers[] = 'The historical range must end before the transfer date.';
             } elseif ($data['from_date'] > $data['to_date']) {
                 $blockers[] = 'The historical range is inverted.';
-            } else {
+            } elseif ($destination) {
                 [$eligible, $pendingArrival, $excluded, $totals, $paymentIds, $exclusionReasons, $paymentChanges, $reportImpact]
                     = $this->scanHistory($venue, $data['from_date'], $data['to_date'], $destination);
 

@@ -24,7 +24,7 @@ final class PaymentReportService
             'page' => 'nullable|integer|min:1', 'records_per_page' => 'nullable|integer|min:1|max:250',
             'search' => 'nullable|string|max:150',
             'sort' => 'nullable|in:date,amount,status,method', 'sort_dir' => 'nullable|in:asc,desc',
-            'scope' => 'nullable|in:all,bookboll,provider,review',
+            'scope' => 'nullable|in:all,bookboll,provider,review,fee_split',
         ]);
         $actor = $request->user();
         $platform = AccessScope::isPlatform($actor);
@@ -111,6 +111,7 @@ final class PaymentReportService
             'report_version' => 2, 'perspective' => $platform ? 'platform' : 'provider',
             'payments' => ['data' => $pageRows->rows(), 'total' => $matched, 'current_page' => $page, 'per_page' => $perPage],
             'summary' => $totals->result(), 'review_count' => $totals->reviewCount,
+            'fee_split_count' => $totals->feeSplitCount, 'fee_split_statuses' => $totals->feeSplitStatuses,
             'filter_options' => ['currencies' => array_keys($currencies), 'venues' => array_values($venues), 'businesses' => array_values($businesses)],
         ]);
     }
