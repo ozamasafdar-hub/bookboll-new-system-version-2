@@ -11,6 +11,7 @@ use App\Support\AccessScope;
 use App\Support\LegacyReconciliation as Legacy;
 use App\Support\Money;
 use App\Support\PaymentRecipient;
+use App\Support\TransferPaymentContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -50,6 +51,7 @@ class VenueTransferService
 
         return sendSuccess('Transfer options', [
             'contract_version' => self::CONTRACT_VERSION,
+            'reconciliation_version' => 2,
             'can_transfer'     => $this->canTransfer($actor),
             // Ownerless businesses are eligible destinations: an unclaimed
             // business is a valid operator, just one nobody has logged into.
@@ -115,6 +117,7 @@ class VenueTransferService
 
         return sendSuccess('Transfer preview', [
             'contract_version' => self::CONTRACT_VERSION,
+            'reconciliation_version' => 2,
             'preview_token'    => $row->token,
             'expires_at'       => \Carbon\Carbon::parse($row->expires_at)->utc()->toIso8601String(),
             'business_id'      => (string) $destination->id,
@@ -128,6 +131,7 @@ class VenueTransferService
             'totals'   => $assessment['totals'],
             'warnings' => $assessment['warnings'],
             'blockers' => $assessment['blockers'],
+            'payment_changes' => $assessment['payment_changes'],
         ]);
     }
 
@@ -147,9 +151,12 @@ class VenueTransferService
         $eligible = 0;
         $pendingArrival = 0;
         $excluded = 0;
+        $paymentChanges = [];
 
         if (! $destination) {
             $blockers[] = 'That business no longer exists.';
+        } elseif (!in_array($destination->status, [Business::STATUS_ACTIVE, Business::STATUS_PENDING], true)) {
+            $blockers[] = 'Choose an active or pending destination business.';
         }
 
         // Landlord obligations survive a transfer. It does not cancel rent and
@@ -170,7 +177,7 @@ class VenueTransferService
             } elseif ($data['from_date'] > $data['to_date']) {
                 $blockers[] = 'The historical range is inverted.';
             } else {
-                [$eligible, $pendingArrival, $excluded, $totals, $paymentIds, $exclusionReasons]
+                [$eligible, $pendingArrival, $excluded, $totals, $paymentIds, $exclusionReasons, $paymentChanges]
                     = $this->scanHistory($venue, $data['from_date'], $data['to_date']);
 
                 foreach ($exclusionReasons as $reason => $n) {
@@ -197,6 +204,7 @@ class VenueTransferService
             'warnings'    => array_values($warnings),
             'blockers'    => array_values($blockers),
             'payment_ids' => $paymentIds,
+            'payment_changes' => $paymentChanges,
             'state_hash'  => $this->stateHash($venue, $paymentIds),
         ];
     }
@@ -214,17 +222,16 @@ class VenueTransferService
         $bookings = Booking::query()
             ->where('venue_id', $venue->id)
             ->whereBetween('date', [$from, $to])
-            ->get(['id', 'status', 'payment_status', 'payment_method', 'date'])
+            ->get()
             ->keyBy('id');
 
         if ($bookings->isEmpty()) {
-            return [0, 0, 0, [], [], []];
+            return [0, 0, 0, [], [], [], []];
         }
 
         $payments = Payment::query()
             ->whereIn('booking_id', $bookings->keys())
-            ->get(['id', 'booking_id', 'type', 'status', 'amount', 'currency',
-                   'collected_by_business_id', 'reconciliation_batch_id']);
+            ->get();
 
         $eligible = 0;
         $pendingArrival = 0;
@@ -232,6 +239,7 @@ class VenueTransferService
         $ids = [];
         $reasons = [];
         $byCurrency = [];
+        $changes = [];
 
         foreach ($payments as $p) {
             $booking = $bookings->get($p->booking_id);
@@ -243,30 +251,38 @@ class VenueTransferService
                 continue;
             }
 
-            $kind = Legacy::kindFor($p);
+            $kind = Legacy::kindFor($p, $booking);
             if (! $kind) {
                 $excluded++;
-                $reasons['Not a deposit or arrival balance.'] = ($reasons['Not a deposit or arrival balance.'] ?? 0) + 1;
+                $reason = $p->method === 'online' ? 'Online payment needs its own settlement evidence; never assumed cash.' : 'Not an eligible deposit or arrival receipt.';
+                $reasons[$reason] = ($reasons[$reason] ?? 0) + 1;
 
                 continue;
             }
 
             $currency = strtoupper((string) $p->currency);
             $minor = Money::toMinor((float) $p->amount, $currency);
-            $byCurrency[$currency] ??= ['deposit_to_fee' => 0, 'provider_cash' => 0, 'earnings_delta' => 0];
+            $byCurrency[$currency] ??= ['deposit_to_fee' => 0, 'provider_cash' => 0, 'provider_already_paid' => 0, 'earnings_delta' => 0];
 
             if ($kind === Legacy::KIND_DEPOSIT_TO_FEE) {
                 $eligible++;
                 $byCurrency[$currency]['deposit_to_fee'] += $minor;
                 // Money Bookboll already held, now named correctly.
                 $byCurrency[$currency]['earnings_delta'] += $minor;
-            } else {
+            } elseif ($kind === Legacy::KIND_PROVIDER_CASH) {
                 $pendingArrival++;
                 // Never Bookboll's, so it does not move earnings at all.
                 $byCurrency[$currency]['provider_cash'] += $minor;
+            } else {
+                $byCurrency[$currency]['provider_already_paid'] += $minor;
             }
 
             $ids[] = (int) $p->id;
+            if (count($changes) < 50) $changes[] = [
+                'payment_id'=>$p->id, 'booking_id'=>$booking->id, 'date'=>substr((string)$booking->date,0,10),
+                'type'=>$p->type, 'method'=>$p->method, 'status'=>$p->status,
+                'currency'=>$currency, 'amount'=>(float)$p->amount, 'action'=>$kind,
+            ];
         }
 
         // Currencies are reported apart. Adding QAR to PKR produces a number
@@ -277,11 +293,12 @@ class VenueTransferService
                 'currency'       => $code,
                 'deposit_to_fee' => Money::toMajor($sums['deposit_to_fee'], $code),
                 'provider_cash'  => Money::toMajor($sums['provider_cash'], $code),
+                'provider_already_paid' => Money::toMajor($sums['provider_already_paid'], $code),
                 'earnings_delta' => Money::toMajor($sums['earnings_delta'], $code),
             ];
         }
 
-        return [$eligible, $pendingArrival, $excluded, $totals, $ids, $reasons];
+        return [$eligible, $pendingArrival, $excluded, $totals, $ids, $reasons, $changes];
     }
 
     /* ──────────────────────────────── commit ─────────────────────────────── */
@@ -307,10 +324,13 @@ class VenueTransferService
             ->where('idempotency_key', $data['idempotency_key'])
             ->whereNotNull('transfer_id')->first();
         if ($done) {
+            if ((int)$done->venue_id !== $venueId || (int)$done->actor_user_id !== (int)$actor->id
+                || $done->token !== $data['preview_token']) return sendError('That request key belongs to a different transfer.', [], 409);
             return $this->transferPayload((int) $done->transfer_id, $venue->fresh());
         }
 
         return DB::transaction(function () use ($data, $venue, $actor) {
+            $venue = Venue::whereKey($venue->id)->lockForUpdate()->firstOrFail();
             $preview = DB::table('venue_transfer_previews')
                 ->where('token', $data['preview_token'])->lockForUpdate()->first();
 
@@ -328,7 +348,11 @@ class VenueTransferService
                 return sendError('That review has expired. Please review the transfer again.', [], 409);
             }
 
-            $destination = Business::find($preview->business_id);
+            $destination = Business::whereKey($preview->business_id)->lockForUpdate()->first();
+            if ($preview->history_mode === 'legacy_deposit_fee') {
+                $bookings = Booking::where('venue_id',$venue->id)->whereBetween('date',[$preview->from_date,$preview->to_date])->lockForUpdate()->get();
+                Payment::whereIn('booking_id',$bookings->modelKeys())->lockForUpdate()->get();
+            }
             $recheck = $this->assess($venue, $destination, [
                 'effective_from' => $preview->effective_from,
                 'history_mode'   => $preview->history_mode,
@@ -424,16 +448,18 @@ class VenueTransferService
         $payments = Payment::whereIn('id', $paymentIds)->lockForUpdate()->get();
 
         foreach ($payments as $p) {
-            $kind = Legacy::kindFor($p);
+            $booking = Booking::findOrFail($p->booking_id);
+            $kind = Legacy::kindFor($p, $booking);
             if (! $kind) {
                 continue;
             }
 
-            $before = [
-                'type' => $p->type, 'status' => $p->status, 'method' => $p->method,
-                'recipient' => $p->recipient, 'amount' => (float) $p->amount,
-                'currency' => $p->currency,
-            ];
+            $before = $p->getAttributes();
+            $before['booking_financial_context'] = $booking->financial_context;
+            $before['internal_allocations'] = $p->ownedAllocations()->get()->toArray();
+            $context = TransferPaymentContext::make($booking, $destination, $batch, $kind);
+            $p->financial_context = $context;
+            $booking->forceFill(['financial_context'=>array_merge($context,['reconciliation_kind'=>null])])->saveQuietly();
 
             if ($kind === Legacy::KIND_DEPOSIT_TO_FEE) {
                 // The gross receipt, processor reference, date, currency and
@@ -443,7 +469,7 @@ class VenueTransferService
                     'recipient' => '@bookboll',
                     'reconciliation_batch_id' => $batch,
                 ])->save();
-            } else {
+            } elseif ($kind === Legacy::KIND_PROVIDER_CASH) {
                 $p->forceFill([
                     'status' => \PaymentStatus::PAID,
                     'method' => \PaymentMethod::CASH,
@@ -459,7 +485,14 @@ class VenueTransferService
                     // platform revenue for every venue that ever transfers.
                     'recipient'               => PaymentRecipient::forBusiness($destination),
                     'reconciliation_batch_id' => $batch,
-                    'paid_at'                 => $p->paid_at ?: now(),
+                    'paid_at'                 => $p->paid_at ?: ($p->date ?: $booking->date),
+                ])->save();
+            } else {
+                $p->forceFill([
+                    'recipient'=>PaymentRecipient::forBusiness($destination),
+                    'collection_method'=>Legacy::KIND_PROVIDER_RECEIPT,
+                    'collected_by_business_id'=>$destination->id,
+                    'reconciliation_batch_id'=>$batch,
                 ])->save();
             }
 
@@ -471,12 +504,7 @@ class VenueTransferService
                 'currency'    => $p->currency,
                 'amount_minor' => Money::toMinor((float) $p->amount, (string) $p->currency),
                 'before'      => json_encode($before),
-                'after'       => json_encode([
-                    'type' => $p->type, 'status' => $p->status, 'method' => $p->method,
-                    'recipient' => $p->recipient,
-                    'collection_method' => $p->collection_method,
-                    'collected_by_business_id' => $p->collected_by_business_id,
-                ]),
+                'after'       => json_encode($p->getAttributes()),
                 'created_at'  => now(),
                 'updated_at'  => now(),
             ]);
@@ -514,14 +542,15 @@ class VenueTransferService
 
         $fingerprint = Payment::whereIn('id', $paymentIds)
             ->orderBy('id')
-            ->get(['id', 'type', 'status', 'amount', 'currency'])
-            ->map(fn ($p) => $p->id.':'.$p->type.':'.$p->status.':'.$p->amount.':'.$p->currency)
+            ->get()
+            ->map(fn ($p) => json_encode([$p->getAttributes(), $p->booking?->getAttributes()]))
             ->implode('|');
 
         return hash('sha256', json_encode([
             'venue'   => $venue->id,
             'owner'   => $venue->owner_user_id,
             'business' => $venue->business_id,
+            'operator' => $venue->operator_type,
             'rows'    => $fingerprint,
         ]));
     }
@@ -543,6 +572,11 @@ class VenueTransferService
         $venue = Venue::find($venueId);
         if (! $venue) {
             return [null, null, sendError('Venue not found.', [], 404)];
+        }
+
+        $allowed = AccessScope::allowedVenueIds($actor);
+        if ($allowed !== null && !in_array((int)$venue->id, $allowed, true)) {
+            return [null, null, sendError('This venue is outside your access.', [], 403)];
         }
 
         return [$venue, $actor, null];

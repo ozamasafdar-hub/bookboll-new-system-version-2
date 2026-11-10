@@ -99,6 +99,43 @@ it('lists destinations including ownerless businesses', function () {
         ->toBeNull();
 });
 
+it('never turns an unpaid online payment into provider cash', function () {
+    $v=legacyVenue(); $b=legacyBooking($v);
+    Payment::where('booking_id',$b->id)->where('type','remaining')->update(['type'=>'full','method'=>'online']);
+    $res=previewTransfer(transferAdmin(),$v,destinationBusiness())->assertOk();
+    expect($res->json('data.reconciliation_version'))->toBe(2)
+        ->and($res->json('data.pending_arrival_count'))->toBe(0)
+        ->and((float)$res->json('data.totals.0.provider_cash'))->toBe(0.0);
+});
+
+it('reconciles saved receipts into the report without duplicating the retained deposit', function () {
+    $a=transferAdmin(); $v=legacyVenue(); $d=destinationBusiness();
+    legacyBooking($v,['origin'=>'bookboll_web','payment_method'=>'deposit_remaining_on_arrival']);
+    $token=previewTransfer($a,$v,$d)->json('data.preview_token');
+    $this->actingAs($a)->postJson("/api/admin/venues/{$v->id}/transfers",[
+        'preview_token'=>$token,'idempotency_key'=>'report-reconciled','acknowledge_legacy_cash'=>true,
+    ])->assertOk();
+    $res=$this->getJson('/api/admin/payments/dashboard?report_version=2')->assertOk();
+    expect((float)$res->json('data.summary.0.bookboll_received'))->toBe(20.0)
+        ->and((float)$res->json('data.summary.0.provider_received'))->toBe(80.0)
+        ->and($res->json('data.review_count'))->toBe(0);
+});
+
+it('assigns already-paid manual receipts entirely to the provider', function () {
+    $a=transferAdmin(); $v=legacyVenue(); $d=destinationBusiness();
+    $b=legacyBooking($v,['origin'=>'manual_admin','payment_method'=>'paid_cash']);
+    Payment::where('booking_id',$b->id)->update(['status'=>'paid']);
+    $review=previewTransfer($a,$v,$d)->assertOk();
+    expect((float)$review->json('data.totals.0.deposit_to_fee'))->toBe(0.0)
+        ->and((float)$review->json('data.totals.0.provider_already_paid'))->toBe(100.0);
+    $this->actingAs($a)->postJson("/api/admin/venues/{$v->id}/transfers",[
+        'preview_token'=>$review->json('data.preview_token'),'idempotency_key'=>'manual-receipts','acknowledge_legacy_cash'=>true,
+    ])->assertOk();
+    $res=$this->getJson('/api/admin/payments/dashboard?report_version=2')->assertOk();
+    expect((float)$res->json('data.summary.0.bookboll_received'))->toBe(0.0)
+        ->and((float)$res->json('data.summary.0.provider_manual'))->toBe(100.0);
+});
+
 it('previews the deposit as fee and the arrival as provider cash, per currency', function () {
     $v = legacyVenue();
     legacyBooking($v);

@@ -17,8 +17,9 @@ import { markDirty, clearDirty, confirmDiscardIfDirty } from '../lib/unsavedGuar
 import { useCurrentUser } from '../lib/currentUser.js'
 import { useJurisdiction } from '../lib/jurisdiction.js'
 import { localCalendarDate } from '../lib/calendarDate.js'
+import { CAP } from '../lib/permissions.js'
 
-const { role, isSuperAdmin, isCountryAdmin, currentOwnerUserId } = useCurrentUser()
+const { role, isSuperAdmin, isCountryAdmin, currentOwnerUserId, can } = useCurrentUser()
 const isBookbollSide = computed(() => isSuperAdmin.value || isCountryAdmin.value || role.value === 'platform_staff')
 
 const props = defineProps({
@@ -834,13 +835,19 @@ function fmt(n) { return Number(n).toLocaleString(undefined, { minimumFractionDi
                 <option value="" disabled>Select payment method</option>
                 <option value="payment_skipped">Skip payment</option>
                 <option value="cash">Pay on Arrival</option>
-                <option value="paid_cash">Paid Cash (Pre-paid)</option>
-                <option value="paid_cheque">Paid Cheque (Pre-paid)</option>
-                <option value="paid_card">Paid Credit Card (Pre-paid)</option>
-                <option value="paid_wire">Paid Wire Transfer</option>
+                <option v-if="can(CAP.ACCEPT_PAYMENTS)" value="paid_cash">Paid cash</option>
+                <option v-if="can(CAP.ACCEPT_PAYMENTS)" value="paid_cheque">Paid cheque</option>
+                <option v-if="can(CAP.ACCEPT_PAYMENTS)" value="paid_card">Paid by card at venue</option>
+                <option v-if="can(CAP.ACCEPT_PAYMENTS)" value="paid_wire">Paid bank transfer</option>
               </select>
               <ChevronDown :size="15" class="nbm-select-arrow" />
             </div>
+            <p v-if="paymentMethod" class="nbm-hint" role="status">
+              <template v-if="paymentMethod === 'payment_skipped'">Reserves the slot only. No payment record or revenue is created.</template>
+              <template v-else-if="paymentMethod === 'cash'">Creates an unpaid balance to collect at the venue.</template>
+              <template v-else>Records money already collected. It does not charge a card or send a payment request.</template>
+              <template v-if="paymentMethod !== 'payment_skipped'"> For bookings added here, the venue operator keeps the full payment: the external business, or Bookboll for its own venues. No platform fee is added.</template>
+            </p>
           </div>
 
           <!-- Promo code -->

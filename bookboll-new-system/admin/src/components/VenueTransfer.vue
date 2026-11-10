@@ -97,7 +97,7 @@ const effects = computed(() => {
   const to = destinationName.value || 'the new business'
   const rows = [
     { tone: 'go', text: `${to} becomes the operator of ${props.venueName || 'this venue'}.` },
-    { tone: 'go', text: `New bookings, commission and payouts go to ${to} from the moment you confirm.` },
+    { tone: 'go', text: `New bookings belong to ${to}; Bookboll keeps the applicable platform fee.` },
   ]
 
   if (isLegacy.value && historyDays.value) {
@@ -159,6 +159,7 @@ async function review() {
     error.value = dateRangeError(form.value.from_date, form.value.to_date)
     if (!error.value && form.value.to_date >= form.value.effective_from) error.value = 'Legacy history must end before the transfer date.'
   }
+  if (isLegacy.value && options.value?.reconciliation_version !== 2) error.value = 'This server needs the updated payment reconciliation before legacy history can be changed.'
   if (error.value || busy.value || !options.value?.can_transfer) return
 
   busy.value = true
@@ -280,7 +281,7 @@ load()
             <input v-model="form.history_mode" type="radio" value="legacy_deposit_fee" />
             <span>
               <strong>Reconcile legacy provider bookings</strong>
-              <small>Paid deposits become Bookboll fees. Arrival balances are recorded as cash collected by the destination provider, including balances still marked pending.</small>
+              <small>Paid online deposits become Bookboll fees. Reviewed arrival balances become provider cash. Full online payments are never converted to cash; manual bookings remain entirely provider revenue.</small>
             </span>
           </label>
 
@@ -366,10 +367,21 @@ load()
             <div class="vt-money-head"><strong>{{ total.currency }}</strong></div>
             <div class="fin-row"><span>Paid deposits → Bookboll fee</span><strong>{{ money(total.deposit_to_fee, total.currency) }}</strong></div>
             <div class="fin-row"><span>Arrival cash → collected directly by provider</span><strong>{{ money(total.provider_cash, total.currency) }}</strong></div>
-            <div class="fin-row"><span>Change in Bookboll earnings</span><strong>{{ money(total.earnings_delta, total.currency) }}</strong></div>
-            <p class="fin-help vt-money-note">This records the provider’s own cash collection. Bookboll owes no payout for these arrival balances.</p>
+            <div class="fin-row"><span>Recorded platform fee amount</span><strong>{{ money(total.earnings_delta, total.currency) }}</strong></div>
+            <div v-if="total.provider_already_paid" class="fin-row"><span>Already collected → provider revenue</span><strong>{{ money(total.provider_already_paid, total.currency) }}</strong></div><p class="fin-help vt-money-note">Deposits are existing receipts, not new earnings. This records the provider’s own cash collection. Bookboll owes no payout for these arrival balances.</p>
           </div>
 
+          <details v-if="preview.payment_changes?.length" class="fin-panel">
+            <summary>Review individual payment changes (first {{ preview.payment_changes.length }})</summary>
+            <div class="table-wrap"><table><thead><tr><th>Payment</th><th>Recorded payment</th><th>Amount</th><th>After reconciliation</th></tr></thead>
+              <tbody><tr v-for="change in preview.payment_changes" :key="change.payment_id">
+                <td>#{{ change.payment_id }}<small>Booking #{{ change.booking_id }}</small></td>
+                <td>{{ change.type }} · {{ change.method }} · {{ change.status }}</td>
+                <td>{{ money(change.amount, change.currency) }}</td>
+                <td>{{ change.action === 'deposit_to_fee' ? 'Bookboll platform fee' : change.action === 'provider_direct_cash' ? 'Provider collected cash' : 'Provider revenue (already paid)' }}</td>
+              </tr></tbody>
+            </table></div>
+          </details>
           <p v-for="warning in preview.warnings || []" :key="warning" class="fin-notice">{{ warning }}</p>
           <p v-for="blocker in preview.blockers || []" :key="blocker" class="fin-error">{{ blocker }}</p>
 

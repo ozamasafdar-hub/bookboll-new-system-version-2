@@ -55,6 +55,9 @@ class PaymentController extends Controller
 
     public function dashboard(Request $request)
     {
+        if ((int) $request->input('report_version') === 2) {
+            return app(\App\Services\PaymentReportService::class)->dashboard($request);
+        }
         return $this->paymentService->dashboard($request);
     }
 

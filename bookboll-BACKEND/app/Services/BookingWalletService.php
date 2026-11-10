@@ -351,14 +351,17 @@ class BookingWalletService
             ? "Full online booking payment (− {$currency} {$loyalty} loyalty)"
             : 'Full online booking payment';
 
+        $receiptContext = \Illuminate\Support\Facades\Schema::hasColumn('payments', 'financial_context')
+            ? ['financial_context' => ['receipt_ids' => array_values($args['receiptIds'] ?? [])]] : [];
+
         return DB::transaction(function () use (
             $bookingId, $userId, $ownerUserId, $currency, $netPlatformFee, $providerShare, $collected,
             $providerRecipient, $description, $wallet, $automatic, $availableOn, $holdDays,
-            $label, $countryId, $loyalty
+            $label, $countryId, $loyalty, $receiptContext
         ) {
             // 1. Bookboll's commission — paid immediately, reduced by any loyalty
             //    redemption (absorbed by the fee, not the provider's share).
-            Payment::create([
+            Payment::create($receiptContext + [
                 'booking_id'  => $bookingId,
                 'user_id'     => $userId,
                 'payment_id'  => generatePaymentId((int) $bookingId, \PaymentType::BOOKING_COMMISSION),
@@ -376,7 +379,7 @@ class BookingWalletService
 
             // 2. The provider's earning — paid immediately; the payout hold
             //    lifecycle is tracked on the wallet transaction, not here.
-            Payment::create([
+            Payment::create($receiptContext + [
                 'booking_id'  => $bookingId,
                 'user_id'     => $userId,
                 'payment_id'  => generatePaymentId((int) $bookingId, \PaymentType::BOOKING_EARNING),

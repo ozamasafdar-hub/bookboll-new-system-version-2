@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ['prefix' => 'api', 'middleware' => ['auth:sanctum']],
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->api(prepend: [\App\Http\Middleware\PaymentsPreviewAccess::class]);
         $middleware->alias([
             'checkRoles' => \App\Http\Middleware\CheckRole::class,
             'role' => \App\Http\Middleware\CheckRole::class,

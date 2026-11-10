@@ -851,6 +851,8 @@ class CustomerGameService
         $charge = $this->charge($currency, $courtTotal, $courtNow, $serviceFee, $method === 'online', $loyalty);
         $charge['paymentMethod']  = $method;
         $charge['paymentMethods'] = $plan['methods'];
+        $charge['eventFeeRate'] = $this->sellsOwnTickets($host, $data) ? 0 : $this->seatFeePct($listing, ! empty($data['community_id']));
+        $charge['courtFeeRate'] = app(BookingWalletService::class)->courtCommissionPct($listing);
 
         return $charge;
     }
@@ -888,7 +890,9 @@ class CustomerGameService
         // No court, so the service fee is the whole of Bookboll's share here.
         $loyalty = $this->loyaltyAllowed($host, (float) ($data['loyalty_redeem'] ?? 0), $serviceFee);
 
-        return $this->charge($currency, 0, 0, $serviceFee, false, $loyalty);
+        return $this->charge($currency, 0, 0, $serviceFee, false, $loyalty) + [
+            'eventFeeRate' => $this->sellsOwnTickets($host, $data) ? 0 : $this->seatFeePct(null, ! empty($data['community_id']), $this->hostCountryId($host, $data)),
+        ];
     }
 
     /** The flat publish fee for a free own-spot event, admin-tunable. */
@@ -1139,6 +1143,11 @@ class CustomerGameService
             'payment_status' => $paymentStatus,
             'payment_method' => $paymentMethod,
             'origin'         => 'customer_game',
+            'commission_channel' => 'marketplace',
+            'commission_effective_pct' => $charge['courtFeeRate'] ?? null,
+            'commission_currency' => $charge['currency'],
+            'commission_fee_minor' => isset($charge['courtFeeRate']) ? \App\Support\Money::percentOf(
+                \App\Support\Money::toMinor($charge['courtTotal'], $charge['currency']), (float) $charge['courtFeeRate']) : null,
             'notes'          => 'Hosted '.($data['game_type'] ?? 'game').': '.($data['title'] ?? $data['sport'] ?? '')
                 .'. Player seat payments handled offline; Bookboll service fee pre-paid by host.',
         ]);
@@ -1205,13 +1214,21 @@ class CustomerGameService
         }
 
         foreach ($rows as $row) {
-            Payment::create([
+            $courtReward = max(0, $charge['loyaltyRedeem'] - $charge['serviceFee']);
+            $context = \Illuminate\Support\Facades\Schema::hasColumn('payments', 'financial_context')
+                ? ['financial_context' => [
+                    'event_fee_rate' => $charge['eventFeeRate'] ?? null,
+                    'total_minor' => \App\Support\Money::toMinor(max(0, $charge['courtTotal'] - $courtReward), $currency),
+                    'net_fee_minor' => $booking->commission_fee_minor === null ? null : max(0,
+                        (int) $booking->commission_fee_minor - \App\Support\Money::toMinor($courtReward, $currency)),
+                ]] : [];
+            Payment::create($context + [
                 'payment_id'  => 'game-'.Str::uuid(),
                 'user_id'     => $host->id,
                 'booking_id'  => $booking->id,
                 'source_type' => 'booking',
                 'type'        => $row['type'],
-                'method'      => 'online',
+                'method'      => $row['type'] === 'remaining' ? 'cash' : 'online',
                 'amount'      => $row['amount'],
                 'currency'    => $currency,
                 'recipient'   => $row['recipient'],
@@ -1247,7 +1264,9 @@ class CustomerGameService
             return;
         }
 
-        Payment::create([
+        $context = \Illuminate\Support\Facades\Schema::hasColumn('payments', 'financial_context')
+            ? ['financial_context' => ['event_fee_rate' => $charge['eventFeeRate'] ?? null, 'channel' => 'marketplace']] : [];
+        Payment::create($context + [
             'payment_id'  => $this->ownSpotFeeKey($game),
             'user_id'     => $host->id,
             'booking_id'  => null,
@@ -1600,7 +1619,7 @@ class CustomerGameService
             $courtPrice = round((float) ($booking->total_price ?: $collected), 2);
             $reward = max(0, round($courtPrice - $collected, 2));
 
-            $this->creditProviderWallet($booking, $courtPrice, $reward);
+            $this->creditProviderWallet($booking, $courtPrice, $reward, $courtRows->pluck('id')->all());
         }
     }
 
@@ -1612,10 +1631,11 @@ class CustomerGameService
      * caps the reward at Bookboll's fee, so the payout is identical with or
      * without a reward.
      */
-    protected function creditProviderWallet(Booking $booking, float $courtPrice, float $reward = 0): void
+    protected function creditProviderWallet(Booking $booking, float $courtPrice, float $reward = 0, array $receiptIds = []): void
     {
         try {
             $venue       = $booking->venue_id ? Venue::find($booking->venue_id) : null;
+            if (($booking->financial_context['operator'] ?? $venue?->operator_type) === 'bookboll') return;
             $ownerUserId = $venue?->owner_user_id;
 
             if (! $ownerUserId || $courtPrice <= 0) {
@@ -1630,7 +1650,8 @@ class CustomerGameService
                 'countryId'     => $wallets->countryIdForVenue($venue),
                 'total'         => $courtPrice,
                 'currency'      => $this->venueCurrency($venue),
-                'ratePct'       => $wallets->courtCommissionPct($booking->listing),
+                'ratePct'       => $booking->commission_effective_pct ?? $wallets->courtCommissionPct($booking->listing),
+                'receiptIds'    => $receiptIds,
                 'customerLabel' => $booking->user?->name ?: 'Hosted event',
                 // Capped at the platform fee inside the ledger, which leaves
                 // the venue's share untouched.
@@ -2479,6 +2500,7 @@ class CustomerGameService
             $bookbollNow += $courtNow;
             $line = $this->charge($currency, $courtTotal, $courtNow, 0, $method === 'online', 0);
             $line['paymentMethod'] = $method;
+            $line['courtFeeRate'] = app(BookingWalletService::class)->courtCommissionPct($listing);
             $lines[] = $line;
         }
 

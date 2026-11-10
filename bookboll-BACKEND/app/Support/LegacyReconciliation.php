@@ -21,6 +21,7 @@ class LegacyReconciliation
 {
     public const KIND_DEPOSIT_TO_FEE  = 'deposit_to_fee';
     public const KIND_PROVIDER_CASH   = 'provider_direct_cash';
+    public const KIND_PROVIDER_RECEIPT = 'provider_recorded_receipt';
 
     /**
      * Why this payment cannot be reconciled, or null if it can.
@@ -88,19 +89,25 @@ class LegacyReconciliation
      * provider collected directly — which is only asserted after an admin
      * confirms it, because nobody can see that cash from here.
      */
-    public static function kindFor(object $payment): ?string
+    public static function kindFor(object $payment, ?object $booking = null): ?string
     {
         $type   = (string) ($payment->type ?? '');
         $status = (string) ($payment->status ?? '');
+        $online = ($payment->method ?? '') === 'online';
+        $manual = in_array($booking->origin ?? '', ['manual_admin', 'manual'], true);
 
-        if ($type === 'deposit' && $status === 'paid') {
+        if ($type === 'deposit' && $status === 'paid' && $online && !$manual) {
             return self::KIND_DEPOSIT_TO_FEE;
         }
 
         if (in_array($type, ['remaining', 'full'], true)
+            && !$online && in_array($payment->method ?? '', ['cash', 'card', 'credit_card'], true)
             && in_array($status, ['pending', 'unpaid'], true)) {
             return self::KIND_PROVIDER_CASH;
         }
+
+        if (in_array($type, ['deposit', 'remaining', 'full', 'balance'], true)
+            && $status === 'paid' && (!$online || $manual)) return self::KIND_PROVIDER_RECEIPT;
 
         return null;
     }

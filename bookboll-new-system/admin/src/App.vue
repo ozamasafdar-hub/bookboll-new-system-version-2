@@ -26,6 +26,7 @@ import { adminBrand, adminBrandVars, adminLogoSquareStyle, loadAdminBrand } from
 import { useHead } from '@unhead/vue'
 
 const route = useRoute()
+const paymentsPreview = import.meta.env.VITE_PAYMENTS_PREVIEW === 'true'
 const router = useRouter()
 const sidebarOpen = ref(false)
 const menuButton = ref(null)
@@ -202,6 +203,7 @@ const initials = computed(() => {
 </script>
 
 <template>
+  <div v-if="paymentsPreview" class="payments-preview-banner" role="status">Payments preview · Database copy from 4 Nov 2026 · Read-only · No live payments</div>
   <!-- Auth pages (login / callback) render bare -->
   <router-view v-if="area === 'auth'" />
 
@@ -337,6 +339,10 @@ const initials = computed(() => {
   </div>
   <CookieConsent scope="admin" />
 </template>
+
+<style>
+.payments-preview-banner { padding: 9px 20px; background: #fff4d6; color: #684a12; border-bottom: 1px solid #e9d29a; font-size: 12px; text-align: center; line-height: 1.4; position: relative; z-index: 100; }
+</style>
 
 
 <style scoped>

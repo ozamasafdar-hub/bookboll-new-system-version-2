@@ -3941,7 +3941,7 @@ class BookingService
                     'remaining_amount' => ($paymentStatus == BookingPaymentStatus::DEPOSIT_PAID || ($paymentStatus == BookingPaymentStatus::PENDING && $formData['payment_method'] === 'deposit_remaining_on_arrival')) ? $remainingAmount : 0,
                     'remaining_method' => ($paymentStatus == BookingPaymentStatus::DEPOSIT_PAID || ($paymentStatus == BookingPaymentStatus::PENDING && $formData['payment_method'] === 'deposit_remaining_on_arrival')) ? PaymentMethod::CASH : null,
                 ],
-            ] + $this->commissionSnapshot($listing, $formData, $totalPrice) + [
+            ] + $this->commissionSnapshot($listing, $formData, $preRewardTotal) + [
                 // Which rewards quote paid part of this, so a redirect payment
                 // can find the reservation to consume and a refund can find
                 // what to give back.

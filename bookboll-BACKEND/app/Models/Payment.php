@@ -32,9 +32,11 @@ class Payment extends Model
         'payment_intent_id',
         'stripe_invoice_url',
         'stripe_receipt_url',
+        'financial_context',
     ];
 
     protected $casts = [
+        'financial_context' => 'array',
         'amount'  => 'decimal:2',
         'paid_at' => 'datetime',
         'date'    => 'date',
@@ -48,6 +50,16 @@ class Payment extends Model
     public function booking()
     {
         return $this->belongsTo(Booking::class);
+    }
+
+    public function subscription()
+    {
+        return $this->belongsTo(ClassSubscription::class, 'subscription_id');
+    }
+
+    public function ownedAllocations()
+    {
+        return $this->hasMany(PaymentAllocation::class);
     }
 
     public function markedBy()

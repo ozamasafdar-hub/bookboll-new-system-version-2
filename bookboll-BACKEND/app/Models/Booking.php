@@ -63,6 +63,7 @@ class Booking extends Model
     ];
 
     protected $casts = [
+        'financial_context'     => 'array',
         'payment_breakdown'     => 'array',
         'full_payment_received' => 'boolean',
         'subtotal'              => 'decimal:2',
@@ -298,6 +299,9 @@ class Booking extends Model
     protected static function booted()
     {
         static::creating(function ($booking) {
+            if (\Illuminate\Support\Facades\Schema::hasColumn('bookings', 'financial_context')) {
+                $booking->financial_context = \App\Support\PaymentFinancialContext::forNewBooking($booking);
+            }
             if (auth()->check()) {
                 $booking->created_by = $booking->created_by ?? auth()->id();
             }

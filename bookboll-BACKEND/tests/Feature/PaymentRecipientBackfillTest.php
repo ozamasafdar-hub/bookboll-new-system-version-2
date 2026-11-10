@@ -31,18 +31,20 @@ function backfillVenue(array $over = []): Venue
 
 function backfillPayment(Venue $v, array $over = []): Payment
 {
-    $b = Booking::create([
+    // These are historical rows from before financial snapshots/recipient
+    // stamping. Bypass today's creation observers to preserve that fixture.
+    $b = Booking::withoutEvents(fn () => Booking::create([
         'user_id' => User::factory()->create()->id, 'venue_id' => $v->id,
         'date' => '2026-01-15', 'start_time' => '10:00', 'end_time' => '11:00',
         'subtotal' => 100, 'total_price' => 100, 'status' => 'completed',
         'payment_status' => 'fully_paid',
-    ]);
+    ]));
 
-    return Payment::create(array_merge([
+    return Payment::withoutEvents(fn () => Payment::create(array_merge([
         'booking_id' => $b->id, 'user_id' => $b->user_id, 'payment_id' => 'p-'.uniqid(),
         'type' => 'remaining', 'method' => 'cash', 'status' => 'paid',
         'amount' => 80, 'currency' => 'QAR', 'recipient' => null,
-    ], $over));
+    ], $over)));
 }
 
 function providerVenueWithBusiness(): array

@@ -18,8 +18,43 @@ use PaymentStatus;
  */
 class PaymentObserver
 {
+    public function creating(Payment $payment): void
+    {
+        if ($payment->status === PaymentStatus::PAID && !$payment->paid_at) $payment->paid_at = $payment->date ?: now();
+        if (!\Illuminate\Support\Facades\Schema::hasColumn('payments', 'financial_context')) return;
+        $booking = $payment->booking_id ? \App\Models\Booking::find($payment->booking_id) : null;
+        $context = $booking?->financial_context;
+        if (!$booking && $payment->subscription_id) {
+            $subscription = \App\Models\ClassSubscription::find($payment->subscription_id);
+            if ($subscription) $context = \App\Support\PaymentFinancialContext::forSubscription($subscription);
+        }
+        if ($context) {
+            // Receipt links are written by the settlement service, never supplied by a checkout client.
+            $payment->financial_context = array_merge($context, $payment->financial_context ?? []);
+            if (!$payment->recipient) {
+                $rows = \App\Support\PaymentReportRules::rows([array_merge($payment->getAttributes(), [
+                    'id' => 0, 'financial_context' => $payment->financial_context,
+                ])], array_merge($booking?->getAttributes() ?? [], ['financial_context' => $context]));
+                $kind = ($context['operator'] ?? '') === 'bookboll' ? 'bookboll' : $rows[0]['recipient_kind'];
+                if ($kind === 'bookboll') $payment->recipient = '@bookboll';
+                if ($kind === 'provider') $payment->recipient = $context['provider_recipient'] ?? '@provider';
+            }
+        }
+    }
+
+    public function updating(Payment $payment): void
+    {
+        if ($payment->isDirty('status') && $payment->status === PaymentStatus::PAID && !$payment->paid_at) {
+            $payment->paid_at = now();
+        }
+    }
+
     public function created(Payment $payment): void
     {
+        if (\Illuminate\Support\Facades\Schema::hasTable('payment_allocations')) {
+            $allocations = \App\Support\OwnedVenueAllocation::plan($payment->getAttributes(), $payment->financial_context ?? []);
+            if ($allocations) $payment->ownedAllocations()->createMany($allocations);
+        }
         if ($payment->status === PaymentStatus::PAID) {
             $this->announce($payment);
         }
@@ -27,6 +62,8 @@ class PaymentObserver
 
     public function updated(Payment $payment): void
     {
+        // Historical reconciliation records an assertion, not a new collection.
+        if ($payment->wasChanged('reconciliation_batch_id')) return;
         if ($payment->wasChanged('status')
             && $payment->status === PaymentStatus::PAID
             && $payment->getOriginal('status') !== PaymentStatus::PAID) {

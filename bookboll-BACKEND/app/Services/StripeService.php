@@ -1011,7 +1011,7 @@ class StripeService
         // deposit); a full payment's reward is Bookboll's, so the venue is paid
         // on the court price, not on what was left after the discount.
         $loyaltyRedeem = $depositAlreadyPaid ? 0.0 : max(0.0, (float) ($booking->loyalty_discount ?? 0));
-        $this->creditProviderWallet($booking, (float) $pendingPayments->sum('amount'), $depositAlreadyPaid, $loyaltyRedeem);
+        $this->creditProviderWallet($booking, (float) $pendingPayments->sum('amount'), $depositAlreadyPaid, $loyaltyRedeem, $pendingPayments->pluck('id')->all());
 
         // The charge is confirmed, so the points reserved at checkout are now
         // genuinely spent. Idempotent: a duplicate webhook finds the quote
@@ -1067,10 +1067,11 @@ class StripeService
         return (float) app(BookingWalletService::class)->courtCommissionPct($listing);
     }
 
-    protected function creditProviderWallet($booking, float $collected, bool $depositAlreadyPaid, float $loyaltyRedeem = 0.0): void
+    protected function creditProviderWallet($booking, float $collected, bool $depositAlreadyPaid, float $loyaltyRedeem = 0.0, array $receiptIds = []): void
     {
         try {
             $venue = $booking->venue;
+            if (($booking->financial_context['operator'] ?? $venue?->operator_type) === 'bookboll') return;
             $ownerUserId = $venue?->owner_user_id;
             if (! $ownerUserId || $collected + $loyaltyRedeem <= 0) {
                 return;   // Bookboll-run venue — no provider to pay
@@ -1099,7 +1100,8 @@ class StripeService
                 // change rewrite what a confirmed booking charged, and would
                 // bill an own-site booking at the marketplace rate because the
                 // channel is not knowable from here.
-                'ratePct'       => $depositAlreadyPaid ? 0 : $this->bookingCommissionPct($booking, $listing),
+                'ratePct'       => ($depositAlreadyPaid || $booking->origin === 'manual_admin') ? 0 : $this->bookingCommissionPct($booking, $listing),
+                'receiptIds'    => $receiptIds,
                 'customerLabel' => $booking->user?->name ?: 'QR payment',
             ]);
         } catch (\Throwable $e) {
