@@ -12,5 +12,5 @@ RUN npm run build
 FROM nginx:stable-alpine
 COPY --from=frontend /build/dist /usr/share/nginx/html
 COPY deploy/workspace-frontend/default.conf.template /etc/nginx/templates/default.conf.template
-ENV NGINX_ENVSUBST_FILTER=BACKEND_HOST
+ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1 NGINX_ENVSUBST_FILTER="BACKEND_HOST|NGINX_LOCAL_RESOLVERS"
 EXPOSE 8080
