@@ -76,6 +76,7 @@ final class PaymentReportService
                         $data = $group->map(fn ($p) => $this->raw($p))->all();
                         $b = $booking ? $booking->getAttributes() + [] : [];
                         $b['financial_context'] = $booking?->financial_context ?? [];
+                        $b['creation_context'] = $booking?->creation_context ?? [];
                         $cache[$groupKey] = collect(PaymentReportRules::rows($data, $b))->groupBy(fn ($row) => (string) ($row['source_payment_id'] ?? $row['id']));
                     }
                     foreach ($cache[$groupKey][(string) $payment->id] as $row) {
@@ -122,6 +123,9 @@ final class PaymentReportService
         return array_merge($row, [
             'booking_id' => $payment->booking_id ? (string) $payment->booking_id : null,
             'booking_ref' => $b?->booking_id ?: ($payment->booking_id ? '#'.$payment->booking_id : ''),
+            'created_by_name' => $b?->creation_context['actor_name'] ?? null,
+            'created_by_kind' => $b?->creation_context['actor_kind'] ?? 'unknown',
+            'creation_basis' => $b?->creation_context['basis'] ?? null,
             'customer_name' => $sub?->customer_name ?: ($customer?->name ?: '—'), 'customer_email' => $sub?->customer_email ?: ($customer?->email ?: ''),
             'venue_id' => $venue ? (string) $venue->id : null,
             'venue_name' => $venue?->name ?: '—', 'listing_name' => $b?->listing?->name ?: ($sub?->program?->name ?: ''),

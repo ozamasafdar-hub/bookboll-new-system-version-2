@@ -93,6 +93,12 @@ eq($sum[0]['owned_venue_pending'],51.0,'unpaid venue share is separate');
 $manual = Rules::rows([p(1,'full',100,'cash'),p(2,'full',80,'cash','pending')], context('provider','admin'));
 [$sum] = totals($manual);
 eq($sum[0]['provider_manual'],100.0,'2a provider keeps staff-added payment');
+
+$manualSplit = Rules::rows([p(1,'full',100,'online'),p(2,'booking_commission',15,'online'),p(3,'booking_earning',85,'online')], context('provider','admin'));
+[$manualSum] = totals($manualSplit);
+eq($manualSum[0]['provider_received'],100.0,'manual connected receipt belongs entirely to provider, counted once');
+eq($manualSum[0]['bookboll_received'],0.0,'manual connected receipt gives no platform revenue');
+eq($manualSum[0]['platform_fees'],0.0,'manual connected receipt gives no platform fee');
 eq($sum[0]['bookboll_received'],0.0,'2a no platform earnings');
 eq($sum[0]['provider_sales'],0.0,'2a not a sale sent from marketplace');
 $manualOwn = Rules::rows([p(1,'full',100,'wire_transfer')],context('bookboll','admin'));

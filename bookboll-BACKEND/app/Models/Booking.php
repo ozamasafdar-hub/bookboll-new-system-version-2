@@ -63,6 +63,7 @@ class Booking extends Model
     ];
 
     protected $casts = [
+        'creation_context'      => 'array',
         'financial_context'     => 'array',
         'payment_breakdown'     => 'array',
         'full_payment_received' => 'boolean',
@@ -192,6 +193,12 @@ class Booking extends Model
         return $this->hasMany(BookingHistory::class, 'booking_id');
     }
 
+    public function creationHistory()
+    {
+        return $this->hasOne(BookingHistory::class, 'booking_id')->ofMany(['id'=>'min'],
+            fn ($q) => $q->where('action', 'booking_created'));
+    }
+
     public function review()
     {
         return $this->hasOne(Review::class);
@@ -299,6 +306,16 @@ class Booking extends Model
     protected static function booted()
     {
         static::creating(function ($booking) {
+            if (auth()->check()) $booking->created_by ??= auth()->id();
+            if (\Illuminate\Support\Facades\Schema::hasColumn('bookings', 'creation_context')) {
+                $booking->creation_context = \App\Support\BookingProvenance::forNew($booking);
+                if ($booking->creation_context['channel'] === 'admin') {
+                    $booking->origin = 'manual_admin';
+                    $booking->commission_effective_pct = 0;
+                    $booking->commission_fee_minor = 0;
+                    $booking->payment_breakdown = array_merge($booking->payment_breakdown ?? [], ['commission_amount'=>0]);
+                }
+            }
             if (\Illuminate\Support\Facades\Schema::hasColumn('bookings', 'financial_context')) {
                 $booking->financial_context = \App\Support\PaymentFinancialContext::forNewBooking($booking);
             }

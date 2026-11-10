@@ -10,7 +10,7 @@ import { bookingRefLabel } from '../lib/bookingRef.js'
 import { dayWindows, slotsForWindows, slotInWindows } from '../lib/specialDays.js'
 import { notifyBookingChanged, notifyPaymentReceipt } from '../customer/notificationDispatch.js'
 import { useCurrentUser } from '../lib/currentUser.js'
-import { bookingChannel } from '../lib/bookingMeta.js'
+import { bookingChannel, bookingCreatorLabel } from '../lib/bookingMeta.js'
 import { logAudit, AUDIT } from '../lib/audit.js'
 import { useJurisdiction } from '../lib/jurisdiction.js'
 import { CAP } from '../lib/permissions.js'
@@ -478,14 +478,12 @@ function fmtDateTime(iso) {
 // every payment collected, every admin edit (audit log), cancellation, check-in.
 function createdSourceText(b) {
   const o = b?.origin || ''
-  if (o === 'bookboll_app') return 'on the Bookboll app'
-  if (o === 'bookboll_web') return 'on the Bookboll marketplace'
-  if (o === 'customer_game') return 'from a hosted event'
   const ch = bookingChannel(b)
   if (ch === 'provider_site') return "on the provider's own website"
   if (ch === 'manual') return 'manually in the admin dashboard'
   if (ch === 'auto') return 'automatically (membership schedule)'
-  return 'on the Bookboll marketplace'
+  if (ch === 'marketplace') return o === 'bookboll_app' ? 'on the Bookboll app' : o === 'customer_game' ? 'from a hosted event' : 'on the Bookboll marketplace'
+  return 'through an unrecorded channel'
 }
 const PMT_LABELS = { booking: 'Full payment', deposit: 'Deposit', balance: 'Balance', remaining: 'Balance' }
 const METHOD_LABELS = { cash: 'cash', card: 'card', cheque: 'cheque', wire_transfer: 'wire transfer', online: 'online' }
@@ -496,9 +494,12 @@ const timeline = computed(() => {
   const ev = []
   ev.push({
     key: 'created', ts: b.created_at, tone: 'create',
-    text: `Booking created${customer.value ? ` by ${customer.value.full_name}` : ''}`,
-    sub: `Booked ${createdSourceText(b)}`,
+    text: `Booking created · ${bookingCreatorLabel(b)}`,
+    sub: `Booked ${createdSourceText(b)}${bookingChannel(b) === 'manual' ? ' · No platform fee' : ''}`,
   })
+  if (b.creation_context?.history_description) {
+    ev[0].recorded = b.creation_context.history_description
+  }
   for (const p of payments.value) {
     // Customer-facing installments only — commission/earning ledger splits are internal.
     if (/_commission$|_earning$/.test(p.payment_type || '')) continue
@@ -1028,6 +1029,7 @@ function sendConfirmationEmail() {
                 <div>
                   <div class="bdm-activity-text" :class="{ muted: e.tone === 'muted' }">{{ e.text }}</div>
                   <div v-if="e.sub" class="bdm-activity-sub">{{ e.sub }}</div>
+                  <details v-if="e.recorded" class="bdm-activity-sub"><summary>Original creation log</summary>{{ e.recorded }}</details>
                   <div class="bdm-activity-date">{{ fmtDateTime(e.ts) }}</div>
                 </div>
               </div>

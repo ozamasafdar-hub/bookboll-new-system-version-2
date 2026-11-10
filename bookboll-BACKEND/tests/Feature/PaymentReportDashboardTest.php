@@ -48,6 +48,33 @@ function reportFixturePayment(Booking $b,string $type,float $amount,string $meth
     return Payment::withoutEvents(fn()=>Payment::create(['booking_id'=>$b->id,'user_id'=>$b->user_id,'type'=>$type,'amount'=>$amount,'method'=>$method,'status'=>$status,'currency'=>'QAR','date'=>'2026-11-10','payment_id'=>'qa-'.uniqid(),'financial_context'=>$b->financial_context]));
 }
 
+it('returns the same recorded staff author to booking history and payments',function(){
+    $b=reportFixtureBooking($this->ownVenue,$this->provider,'manual_admin');
+    $b->forceFill(['created_by'=>$this->platform->id,'creation_context'=>['version'=>1,'channel'=>'admin',
+        'actor_id'=>$this->platform->id,'actor_name'=>'Recorded Front Desk','actor_kind'=>'staff','basis'=>'creation_log_admin']])->saveQuietly();
+    reportFixturePayment($b,'full',100,'cash','paid');
+    $this->actingAs($this->platform)->getJson('/api/admin/bookings/'.$b->id.'/crm')->assertOk()
+        ->assertJsonPath('data.booking.creation_context.actor_name','Recorded Front Desk')
+        ->assertJsonPath('data.booking.creation_context.channel','admin')
+        ->assertJsonPath('data.booking.customer_id',(string)$this->provider->id);
+    $this->getJson('/api/admin/payments/dashboard?report_version=2&channel=admin')->assertOk()
+        ->assertJsonPath('data.payments.data.0.created_by_name','Recorded Front Desk')
+        ->assertJsonPath('data.payments.data.0.channel','admin');
+});
+
+it('filters booking channels using creation evidence before legacy web origins',function(){
+    foreach (['admin','marketplace','unknown'] as $channel) {
+        $b=reportFixtureBooking($this->ownVenue,$this->provider);
+        $b->forceFill(['creation_context'=>['version'=>1,'channel'=>$channel]])->saveQuietly();
+    }
+    $this->actingAs($this->platform);
+    foreach (['manual'=>'admin','marketplace'=>'marketplace','unknown'=>'unknown'] as $filter=>$channel) {
+        $this->getJson('/api/admin/bookings/dashboard?channel='.$filter)->assertOk()
+            ->assertJsonPath('data.pagination.total',1)
+            ->assertJsonPath('data.bookings.0.creation_context.channel',$channel);
+    }
+});
+
 it('summarizes the entire filtered set independently of pagination and excludes external pending',function(){
     $external = reportFixtureBooking($this->externalVenue,$this->provider);
     reportFixturePayment($external,'deposit',15,'online','paid');
@@ -161,7 +188,7 @@ it('preserves a fractional own-site fee and separates pending and refunded inter
     $b->forceFill(['financial_context'=>array_merge($b->financial_context,[
         'channel'=>'site','fee_rate'=>7.5,'fee_minor'=>1500,'net_fee_minor'=>1500,
         'total_minor'=>20000,'currency'=>'QAR','payment_method'=>'online_payment',
-    ])])->save();
+    ]), 'creation_context'=>array_merge($b->creation_context ?? [], ['channel'=>'site'])])->save();
     $p=Payment::create(['booking_id'=>$b->id,'user_id'=>$b->user_id,'type'=>'full','amount'=>200,'method'=>'online','status'=>'pending','currency'=>'QAR','payment_id'=>'qa-own-site']);
     $res=$this->actingAs($this->platform)->getJson('/api/admin/payments/dashboard?report_version=2');
     expect((float)$res->json('data.summary.0.owned_platform_pending'))->toBe(15.0);

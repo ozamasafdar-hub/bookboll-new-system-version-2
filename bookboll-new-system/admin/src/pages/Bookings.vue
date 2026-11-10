@@ -612,7 +612,7 @@ async function exportCSV(useFilters) {
                 <span v-if="b.origin === 'class_program'" class="badge badge-program">Program</span>
                 <span v-else-if="b.origin === 'customer_game'" class="badge badge-game">🎮 Game</span>
                 <span v-else-if="b.origin === 'provider_site'" class="badge badge-site">Provider site</span>
-                <span v-else class="badge" :class="b.origin?.startsWith('bookboll')?'badge-info':'badge-neutral'">{{ b.origin?.startsWith('bookboll')?'Bookboll':'Manual' }}</span>
+                <span v-else class="badge" :class="b.origin?.startsWith('bookboll')?'badge-info':'badge-neutral'">{{ channelLabel(b) }}</span>
               </td>
               <td><span class="badge" :class="statusBadge(b.booking_status)">{{ b.booking_status }}</span></td>
               <td>

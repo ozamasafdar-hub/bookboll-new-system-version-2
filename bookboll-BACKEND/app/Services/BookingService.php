@@ -4087,7 +4087,7 @@ class BookingService
             };
 
             $booking->history()->create([
-                'user_id'     => $user->id,
+                'user_id'     => $booking->created_by ?: $user->id,
                 'action'      => 'booking_created',
                 'description' => "Booking created by {$createdBy} for {$total}"
                     . ($plan ? " — {$plan}." : '.'),
@@ -4549,10 +4549,17 @@ class BookingService
             });
         }
 
-        // kind and channel are derived from `origin` (see the dashboard's
-        // bookingMeta.js); both translate to a set of raw origin values.
+        // Kind still comes from origin; channel uses recorded creation evidence.
         if ($f['kind'])    { $this->whereOrigin($query, $f['kind'], self::KIND_ORIGINS, ['customer_game', 'class_program']); }
-        if ($f['channel']) { $this->whereOrigin($query, $f['channel'], self::CHANNEL_ORIGINS, ['provider_site', 'manual_admin', 'manual', 'class_program']); }
+        if ($f['channel']) {
+            $query->where(function ($q) use ($f) {
+                $codes = array_map(fn ($v) => ['manual'=>'admin','provider_site'=>'site'][$v] ?? $v, $f['channel']);
+                $q->whereIn('creation_context->channel', $codes)->orWhere(function ($legacy) use ($f) {
+                    $legacy->whereNull('creation_context');
+                    $this->whereOrigin($legacy, $f['channel'], self::CHANNEL_ORIGINS, ['provider_site','manual_admin','manual','class_program']);
+                });
+            });
+        }
 
         // Geography and currency are properties of the VENUE, so they resolve to a
         // venue-id set once rather than joining on every row.
@@ -4575,6 +4582,8 @@ class BookingService
     ];
 
     private const CHANNEL_ORIGINS = [
+        'marketplace'   => ['bookboll_web','bookboll_app','customer_game'],
+        'unknown'       => ['unknown'],
         'provider_site' => ['provider_site'],
         'manual'        => ['manual_admin', 'manual'],
         'auto'          => ['class_program'],
@@ -5525,7 +5534,9 @@ class BookingService
             'booking_status' => $b->status,
             'payment_status' => $paymentStatus,
             'payment_method' => $this->toDashboardPaymentMethod($b->payment_method),
-            'origin'             => $b->origin ?: 'bookboll_web',
+            'origin'             => $b->origin,
+            'creation_context'   => $b->creation_context,
+            'created_by'         => $b->created_by ? (string) $b->created_by : null,
             'program_id'         => $b->program_id ? (string) $b->program_id : null,
             'commission_amount'  => (float) ($breakdown['commission_amount'] ?? 0),
             'created_at'         => $b->created_at?->toIso8601String(),

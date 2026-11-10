@@ -24,6 +24,7 @@ php artisan payments:prepare-preview
 mkdir -p storage/app/public storage/app/private
 php artisan storage:link --force
 php artisan config:cache
+php artisan bookings:reconcile-creators --apply
 php artisan workspace:sync-media
 php artisan payments:warm-report
 chown -R www-data:www-data storage bootstrap/cache

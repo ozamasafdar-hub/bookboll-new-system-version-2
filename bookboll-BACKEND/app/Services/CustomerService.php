@@ -656,7 +656,7 @@ class CustomerService
             ->whereIn('user_id', $customerIdSource)
             ->where('status', '!=', BookingStatus::CANCELLED)
             ->orderByDesc('date')
-            ->get(['id', 'user_id', 'listing_id', 'venue_id', 'date', 'total_price', 'status', 'payment_status', 'start_time', 'end_time', 'created_at'])
+            ->get(['id', 'user_id', 'listing_id', 'venue_id', 'date', 'total_price', 'status', 'payment_status', 'start_time', 'end_time', 'created_at', 'origin', 'created_by', 'creation_context'])
             ->map(fn (Booking $b) => $this->mapDashboardBooking($b))
             ->values();
 
@@ -1369,6 +1369,9 @@ class CustomerService
             // The reference staff and customers actually quote (BKN_YYYY_MM_NNNNN).
             // Without it the dashboard invented one from the row id.
             'booking_id'     => $b->booking_id,
+            'origin'         => $b->origin,
+            'creation_context'=> $b->creation_context,
+            'created_by'     => $b->created_by ? (string) $b->created_by : null,
             'customer_id'    => $b->user_id ? (string) $b->user_id : null,
             'listing_id'     => $b->listing_id ? (string) $b->listing_id : null,
             'location_id'    => $b->venue_id ? (string) $b->venue_id : null,

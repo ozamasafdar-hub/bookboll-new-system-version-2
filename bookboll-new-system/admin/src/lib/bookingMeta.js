@@ -1,5 +1,6 @@
 /**
- * bookingMeta.js — ONE place that understands `bookings.origin`.
+ * bookingMeta.js — shared booking kind and creation-channel labels.
+ * Recorded creation_context takes precedence over legacy origin values.
  *
  * Historically `origin` mixed two unrelated dimensions:
  *   - the CHANNEL a booking was created through (app / web / admin drawer), and
@@ -51,12 +52,14 @@ export function bookingKind(b) {
 }
 
 export function bookingChannel(b) {
+  const recorded = b?.creation_context?.channel
+  if (recorded) return ({ admin:'manual', site:'provider_site' })[recorded] || recorded
   const o = b?.origin || ''
   if (isProviderSlotBlock(b)) return 'manual'
   if (o === 'provider_site') return 'provider_site'
   if (o === 'manual_admin' || o === 'manual') return 'manual'
   if (o === 'class_program') return 'auto'
-  return 'marketplace'          // bookboll_app · bookboll_web · customer_game
+  return ['bookboll_app','bookboll_web','customer_game'].includes(o) ? 'marketplace' : 'unknown'
 }
 
 // ── option lists (value = the derived dimension, not raw origin) ─────────────
@@ -70,6 +73,7 @@ export const CHANNEL_LABELS = {
   provider_site: 'Provider website',
   manual: 'Admin created (manual)',
   auto: 'Auto — membership schedule',
+  unknown: 'Source not recorded',
 }
 
 /** Build option arrays for a page. Pass only the values that can actually occur
@@ -77,7 +81,7 @@ export const CHANNEL_LABELS = {
 export function kindOptions(values = ['venue', 'event', 'membership']) {
   return values.map(v => ({ value: v, label: KIND_LABELS[v] || v }))
 }
-export function channelOptions(values = ['marketplace', 'provider_site', 'manual']) {
+export function channelOptions(values = ['marketplace', 'provider_site', 'manual', 'unknown']) {
   return values.map(v => ({ value: v, label: CHANNEL_LABELS[v] || v }))
 }
 
@@ -94,7 +98,13 @@ export function kindLabel(b) { return KIND_LABELS[bookingKind(b)] || '' }
 export function channelLabel(b) {
   // Short badge text: the derived channel, with app/web detail where we have it.
   const o = b?.origin || ''
-  if (o === 'bookboll_app') return 'Bookboll app'
-  if (o === 'bookboll_web') return 'Bookboll web'
+  if (bookingChannel(b) === 'marketplace' && o === 'bookboll_app') return 'Bookboll app'
+  if (bookingChannel(b) === 'marketplace' && o === 'bookboll_web') return 'Bookboll web'
   return CHANNEL_LABELS[bookingChannel(b)] || ''
+}
+
+export function bookingCreatorLabel(b) {
+  const c = b?.creation_context
+  if (c?.actor_kind === 'system') return 'System'
+  return c?.actor_name || (b?.created_by ? `Recorded user #${b.created_by}` : 'Creator not recorded')
 }

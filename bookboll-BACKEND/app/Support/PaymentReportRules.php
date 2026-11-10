@@ -13,6 +13,9 @@ final class PaymentReportRules
 
     public static function channel(array $booking): string
     {
+        $creation = $booking['creation_context'] ?? [];
+        if (is_string($creation)) $creation = json_decode($creation, true) ?: [];
+        if (isset($creation['channel'])) return $creation['channel'];
         if (in_array($booking['origin'] ?? '', ['manual_admin', 'manual'], true)) return 'admin';
         return match ($booking['commission_channel'] ?? '') {
             'site' => 'site', 'marketplace' => 'marketplace',
@@ -89,7 +92,7 @@ final class PaymentReportRules
             $type = $p['type'] ?? 'full';
             $recipient = trim((string) ($p['recipient'] ?? ''));
             $ownership = $context['operator'] ?? 'unknown';
-            $channel = $context['channel'] ?? self::channel($booking);
+            $channel = !empty($booking['creation_context']) ? self::channel($booking) : ($context['channel'] ?? self::channel($booking));
             $status = $childStatus[$id] ?? self::status($p['status'] ?? '');
             $online = ($p['method'] ?? '') === 'online'; // terminal card ≠ Stripe
             $category = 'unclassified';
@@ -110,10 +113,11 @@ final class PaymentReportRules
             } elseif ($ownership === 'bookboll') {
                 $category = $online ? 'owned_online' : 'owned_onsite'; $recipientKind = 'bookboll';
             } elseif ($ownership === 'provider' && $channel === 'admin') {
-                // A manually entered provider booking earns no platform fee.
-                if (in_array($type, ['booking_commission', 'subscription_commission'], true) && (float) $p['amount'] > 0) {
-                    $reason = 'A provider-entered booking has a platform fee. Review the allocation.';
-                } else { $category = 'provider_manual'; $recipientKind = 'provider'; }
+                // Both parts of a reconciled receipt belong to the business;
+                // creation channel, not payment method, determines this rule.
+                $category = 'provider_manual'; $recipientKind = 'provider';
+            } elseif ($channel === 'admin') {
+                $reason = 'Staff booking has no platform fee; its historical venue operator needs review.';
             } elseif (in_array($type, ['booking_commission', 'subscription_commission'], true)) {
                 $category = $type === 'subscription_commission' ? 'provider_membership_fee' : 'provider_booking_fee';
                 $recipientKind = 'bookboll';
@@ -144,7 +148,7 @@ final class PaymentReportRules
                     : ($recipientKind === 'provider' ? ($context['business_name'] ?? ($recipient ?: 'External provider')) : 'Needs review'),
                 'business_id' => $context['business_id'] ?? null,
                 'operator' => $ownership, 'channel' => $channel,
-                'fee_rate' => $event ? ($context['event_fee_rate'] ?? null) : ($context['fee_rate'] ?? ($booking['commission_effective_pct'] ?? null)),
+                'fee_rate' => $event ? ($context['event_fee_rate'] ?? null) : ($channel === 'admin' ? 0 : ($context['fee_rate'] ?? ($booking['commission_effective_pct'] ?? null))),
                 'row_kind' => isset($receiptIds[$id]) ? 'receipt' : 'allocation',
                 'source_receipt_ids' => $childReceipts[$id] ?? [],
                 'review_reason' => $reason, 'snapshot_recorded' => !empty($context),

@@ -47,6 +47,8 @@ final class OwnedVenueAllocation
     public static function expand(array $row): array
     {
         if ($row['operator'] !== 'bookboll' || !in_array($row['category'], ['owned_online','owned_onsite'], true)) return [$row];
+        if ($row['channel'] === 'admin') return [array_merge($row, ['recipient_label'=>'Bookboll venue',
+            'fee_rate'=>0, 'allocation_basis'=>'manual_no_fee'])];
         $allocations = $row['owned_allocations'] ?? [];
         $amount = Money::toMinor($row['amount'], $row['currency']);
         $buckets = array_column($allocations, 'bucket');
