@@ -557,6 +557,16 @@ class HostPayoutService
             ? (Country::where('iso2', $country)->value('name') ?: $country)
             : 'that country';
 
+        // Not about the country at all: the PLATFORM account has never switched
+        // Connect on. Only the Stripe dashboard can fix that, so say so plainly
+        // rather than blaming the country the host chose.
+        if (str_contains($stripeMessage, 'signed up for Connect')) {
+            Log::error('Stripe Connect is not enabled on the platform account — enable it at https://dashboard.stripe.com/connect');
+
+            return 'Online payouts are not switched on for Bookboll yet (Stripe Connect is not enabled on '
+                .'the platform account). Please try again later, or collect payment on arrival.';
+        }
+
         if (str_contains($stripeMessage, 'card_payments') || str_contains($stripeMessage, 'service agreement')) {
             return "Stripe cannot open a payout account in {$name} for us yet. Pick another country, "
                 .'or connect your own Stripe account with your API keys instead.';

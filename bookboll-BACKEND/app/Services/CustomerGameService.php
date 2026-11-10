@@ -2804,6 +2804,9 @@ class CustomerGameService
                 : null,
             'community_public'        => (bool) $g->community_public,
             'moderation_status'       => $g->moderation_status ?: 'active',
+            // The mobile host flow polls this after Stripe to learn the event went
+            // live; without it the "payment not confirmed" sheet never cleared.
+            'published_at'            => optional($g->published_at)?->toIso8601String(),
             'created_at'              => optional($g->created_at)?->toIso8601String(),
         ];
     }

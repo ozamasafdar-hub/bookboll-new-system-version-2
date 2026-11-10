@@ -8,6 +8,8 @@ use App\Models\CommunityMember;
 use App\Support\CommunityPermissions;
 use App\Models\CommunityPost;
 use App\Models\CustomerMessage;
+use App\Models\GameJoinRequest;
+use App\Models\HostedGame;
 use App\Models\StreetCred;
 use App\Models\User;
 use App\Support\QatarMarketGeo;
@@ -747,6 +749,10 @@ class CustomerCommunityService
 
     public function loadGroupThread(User $user, string $key, int $limit = 200)
     {
+        if ($this->isMeetKey($key)) {
+            return $this->loadMeetThread($user, $key, $limit);
+        }
+
         $communityUuid = $this->communityUuidFromGroupKey($key);
         if (! $communityUuid) {
             return sendError('Invalid conversation key.');
@@ -762,20 +768,26 @@ class CustomerCommunityService
             return sendError('Members only.', [], 403);
         }
 
+        return sendSuccess('Messages', ['messages' => $this->groupThreadRows($key, $limit)]);
+    }
+
+    /** A group thread, oldest first, each row carrying its sender's name and avatar. */
+    protected function groupThreadRows(string $key, int $limit): array
+    {
         $rows = CustomerMessage::where('conversation_key', $key)
             ->orderBy('created_at')
             ->limit(max(1, min($limit, 500)))
             ->get();
 
         if ($rows->isEmpty()) {
-            return sendSuccess('Messages', ['messages' => []]);
+            return [];
         }
 
         $people = User::whereIn('uuid', $rows->pluck('sender_id')->unique())
             ->get(['uuid', 'name', 'image'])
             ->keyBy('uuid');
 
-        $mapped = $rows->map(function (CustomerMessage $m) use ($people) {
+        return $rows->map(function (CustomerMessage $m) use ($people) {
             $p = $people->get($m->sender_id);
 
             return [
@@ -790,8 +802,119 @@ class CustomerCommunityService
                 'senderAvatar'     => $p?->image ?: '',
             ];
         })->values()->all();
+    }
 
-        return sendSuccess('Messages', ['messages' => $mapped]);
+    // ── Event (meetup) chat — `meet__{gameUuid}` on the same endpoints ──────────
+    //
+    // The apps talk to one group-message API for both community chats and the
+    // chat of a hosted game. A community key is `community__{uuid}`; a game's is
+    // `meet__{uuid}`. Who may read and send a game thread is decided by the game
+    // itself: the host, and everyone whose join request was accepted.
+
+    public const MEET_PREFIX = 'meet__';
+
+    protected function isMeetKey(string $key): bool
+    {
+        return str_starts_with($key, self::MEET_PREFIX);
+    }
+
+    protected function gameFromMeetKey(string $key): ?HostedGame
+    {
+        $uuid = substr($key, strlen(self::MEET_PREFIX));
+        if (! Str::isUuid($uuid)) {
+            return null;
+        }
+
+        return HostedGame::where('uuid', $uuid)->first();
+    }
+
+    /** 'host', 'member' (accepted joiner) or null for someone with no place in this event. */
+    protected function meetRole(HostedGame $game, User $user): ?string
+    {
+        if (! $user->uuid) {
+            return null;
+        }
+        if ((string) $game->host_customer_id === (string) $user->uuid) {
+            return 'host';
+        }
+
+        $accepted = GameJoinRequest::where('game_id', $game->id)
+            ->where('joiner_customer_id', $user->uuid)
+            ->where('status', 'accepted')
+            ->exists();
+
+        return $accepted ? 'member' : null;
+    }
+
+    protected function loadMeetThread(User $user, string $key, int $limit)
+    {
+        $game = $this->gameFromMeetKey($key);
+        if (! $game) {
+            return sendError('Event not found.', [], 404);
+        }
+        if (! $this->meetRole($game, $user)) {
+            return sendError('Only people going to this event can read its chat.', [], 403);
+        }
+
+        return sendSuccess('Messages', ['messages' => $this->groupThreadRows($key, $limit)]);
+    }
+
+    protected function sendMeetMessage(User $user, string $key, string $body)
+    {
+        $game = $this->gameFromMeetKey($key);
+        if (! $game) {
+            return sendError('Event not found.', [], 404);
+        }
+        if (! $this->meetRole($game, $user)) {
+            return sendError('Only people going to this event can post in its chat.', [], 403);
+        }
+        if ($game->status === 'cancelled') {
+            return sendError('This event was cancelled, so its chat is closed.', [], 422);
+        }
+
+        $message = CustomerMessage::create([
+            'conversation_key' => $key,
+            'sender_id'        => $user->uuid,
+            'recipient_id'     => null,
+            'body'             => $body,
+        ]);
+
+        $this->notify->meetChatMessage($game, $message, $user);
+
+        return sendSuccess('Message sent', [
+            'message' => [
+                'id'               => $message->uuid,
+                'conversation_key' => $message->conversation_key,
+                'sender_id'        => $message->sender_id,
+                'recipient_id'     => null,
+                'body'             => $message->body,
+                'created_at'       => optional($message->created_at)?->toIso8601String(),
+                'read_at'          => null,
+                'senderName'       => $user->name ?: 'Player',
+                'senderAvatar'     => $user->image ?: '',
+            ],
+        ]);
+    }
+
+    /** Remove one message from an event chat: its author, or the host. */
+    protected function deleteMeetMessage(User $user, CustomerMessage $message)
+    {
+        $game = $this->gameFromMeetKey((string) $message->conversation_key);
+        if (! $game) {
+            return sendError('Event not found.', [], 404);
+        }
+
+        $role = $this->meetRole($game, $user);
+        if (! $role) {
+            return sendError('Members only.', [], 403);
+        }
+        if ($message->sender_id !== $user->uuid && $role !== 'host') {
+            return sendError('Not allowed.', [], 403);
+        }
+
+        $message->delete();
+
+        return sendSuccess('Message deleted', ['ok' => true]);
     }
 
     /**
@@ -826,6 +949,10 @@ class CustomerCommunityService
         $actualKey = (string) $message->conversation_key;
         if ($key !== '' && $key !== $actualKey) {
             return sendError('That message is not part of this conversation.', [], 403);
+        }
+
+        if ($this->isMeetKey($actualKey)) {
+            return $this->deleteMeetMessage($user, $message);
         }
 
         $communityUuid = $this->communityUuidFromGroupKey($actualKey);
@@ -864,6 +991,10 @@ class CustomerCommunityService
         $clean = trim($body);
         if (! $user->uuid || $clean === '') {
             return sendError('Empty message');
+        }
+
+        if ($this->isMeetKey($key)) {
+            return $this->sendMeetMessage($user, $key, $clean);
         }
 
         $communityUuid = $this->communityUuidFromGroupKey($key);

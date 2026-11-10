@@ -7,6 +7,8 @@ use App\Models\CommunityMember;
 use App\Models\CustomerMessage;
 use App\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * The customer inbox: one-to-one direct messages, plus a row per community group
@@ -20,6 +22,8 @@ use Illuminate\Support\Collection;
 class CustomerMessageService
 {
     public const GROUP_PREFIX = 'community__';
+
+    public function __construct(protected OneSignalService $push) {}
 
     /** Stable key for a pair, whichever way round the two are given. */
     public function conversationKey(string $a, string $b): string
@@ -219,7 +223,43 @@ class CustomerMessageService
             'body'             => $clean,
         ]);
 
+        $this->pushDirectMessage($user, $recipient, $message);
+
         return sendSuccess('Message sent', ['message' => $this->mapMessage($message)]);
+    }
+
+    /**
+     * Tell the recipient a direct message arrived.
+     *
+     * Same shape as the community pushes: title = who, body = what they said,
+     * and a `route` the mobile app opens straight into the thread. Synchronous
+     * for the same reason as CommunityNotifier (one recipient, one request),
+     * and it never throws — a push failure must not fail the send.
+     */
+    protected function pushDirectMessage(User $sender, User $recipient, CustomerMessage $message): void
+    {
+        try {
+            $name = trim((string) $sender->name);
+            $flat = trim((string) preg_replace('/\s+/', ' ', (string) $message->body));
+
+            $this->push->sendToUsers(
+                [(int) $recipient->id],
+                $name !== '' ? $name : 'New message',
+                Str::limit($flat, 90, '…'),
+                [
+                    'type'       => 'message',
+                    'peer_id'    => $sender->uuid,
+                    'peer_name'  => $name,
+                    'message_id' => $message->uuid,
+                    'route'      => '/messages/'.$sender->uuid,
+                ]
+            );
+        } catch (\Throwable $e) {
+            Log::error('Direct message push failed', [
+                'recipient_id' => $recipient->id,
+                'message'      => $e->getMessage(),
+            ]);
+        }
     }
 
     /** Mark everything the peer sent me in this thread as read. */

@@ -6,6 +6,7 @@ use App\Models\Community;
 use App\Models\CommunityMember;
 use App\Models\CommunityPost;
 use App\Models\CustomerMessage;
+use App\Models\GameJoinRequest;
 use App\Models\HostedGame;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -46,6 +47,7 @@ class CommunityNotifier
     public const T_CHAT             = 'community_chat';
     public const T_CHAT_REMOVED     = 'community_chat_removed';
     public const T_EVENT            = 'community_event';
+    public const T_MEET_CHAT        = 'game_chat';
 
     public function __construct(protected OneSignalService $push) {}
 
@@ -205,6 +207,41 @@ class CommunityNotifier
             $community->name,
             "{$hostName} is hosting {$title}".($when ? " on {$when}" : '').' — tap to join',
             $this->data(self::T_EVENT, $community, ['route' => $this->route($community, 'events'), 'game_id' => $game->uuid, 'game_type' => $game->game_type ?: 'game'])
+        );
+    }
+
+    // ── Event chat ───────────────────────────────────────────────────────────
+
+    /**
+     * A message in a hosted event's chat (`meet__{uuid}`): the host and every
+     * accepted joiner hear it, except whoever wrote it. Not a community event,
+     * but the same shape and delivery, so it lives with the other chat push.
+     */
+    public function meetChatMessage(HostedGame $game, CustomerMessage $message, User $sender): void
+    {
+        $uuids = GameJoinRequest::where('game_id', $game->id)
+            ->where('status', 'accepted')
+            ->pluck('joiner_customer_id')
+            ->push((string) $game->host_customer_id)
+            ->filter()
+            ->unique()
+            ->diff([(string) $sender->uuid])
+            ->values()
+            ->all();
+
+        $title = trim((string) ($game->title ?: ($game->sport ? $game->sport.' meetup' : 'Event chat')));
+
+        $this->send(
+            $this->userIdsFor($uuids),
+            $title,
+            $this->displayName($sender).': '.$this->snippet((string) $message->body),
+            [
+                'type'       => self::T_MEET_CHAT,
+                'game_id'    => $game->uuid,
+                'game_type'  => $game->game_type ?: 'game',
+                'message_id' => $message->uuid,
+                'route'      => '/games/chat/'.$game->uuid,
+            ]
         );
     }
 
