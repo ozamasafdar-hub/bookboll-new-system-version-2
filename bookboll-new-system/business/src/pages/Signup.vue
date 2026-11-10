@@ -104,7 +104,9 @@ async function requestOtp() {
     return
   }
   otpSent.value = true
-  otpNote.value = `Code sent to ${email.value.trim()}`
+  otpNote.value = res.data?.workspace_code
+    ? `Workspace verification code: ${res.data.workspace_code} · Email delivery is disabled here.`
+    : `Code sent to ${email.value.trim()}`
   startResendCountdown(Number(res.data?.resend_after) || 60)
 }
 

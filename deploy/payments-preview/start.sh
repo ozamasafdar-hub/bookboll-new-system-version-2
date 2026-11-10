@@ -19,9 +19,12 @@ if [ "$marker" = "0" ]; then
 fi
 unset MYSQL_PWD
 php artisan package:discover --ansi
-php artisan migrate --force --path=database/migrations/2026_11_10_000001_add_payment_financial_context.php
-php artisan migrate --force --path=database/migrations/2026_11_10_000002_create_payment_allocations_table.php
+php artisan migrate --force
 php artisan payments:prepare-preview
+mkdir -p storage/app/public storage/app/private
+php artisan storage:link --force
+php artisan config:cache
+php artisan payments:warm-report
 chown -R www-data:www-data storage bootstrap/cache
 php-fpm -D
 exec nginx -g 'daemon off;'

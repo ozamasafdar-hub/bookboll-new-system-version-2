@@ -136,3 +136,25 @@ Nothing further is needed from the developer to run the local database tests. Fo
 2. Provide the deployment workflow/access (hosting/SSH or CI and deployed branch), or have the developer deploy these PHP changes and both migrations with a backup. The API URL alone is not deployment access.
 3. Supply authoritative historical venue ownership/transfer dates and fee evidence for older bookings without snapshots. The dump also contains booking_commission rows but no booking_earning rows, so external full-online splits need their original receipt/allocation evidence reconciled before totals can be called complete.
 4. Separately provide a Stripe TEST-mode setup/Connect test accounts for end-to-end processor verification; live charges are not needed for local allocation/report tests.
+
+## Railway working environment — 10 November 2026
+
+This replaces the earlier read-only payments preview for ongoing development. It is a separate, writable database copy, not the existing newbackend deployment.
+
+- Marketplace: https://bookboll-marketplace-preview.up.railway.app
+- Business website and signup: https://bookboll-business-preview.up.railway.app
+- Admin and provider dashboard: https://bookboll-admin-preview.up.railway.app
+- All three services deploy the GitHub branch `codex/payments-railway-preview`. Push changes there to deploy. Keep changes reviewed and tested before pushing. The backend lives with the admin service; the other frontends proxy `/api` over Railway's private network. Configure all three cross-app URLs at build time.
+- MariaDB remains private and persistent. Uploads persist on the admin service volume at `/app/storage/app`; only `public/` is served at `/storage/`. The SQL import and historical reconciliation are one-time, marker-guarded operations. Redeploys must never re-import or erase workspace edits. Startup runs new migrations and warms the payment report.
+- Provider websites use `?b=<username>` on the Railway marketplace host. Set `VITE_PREVIEW_HOSTS` on all builds; do not redirect these previews to production subdomains. Custom-domain DNS remains a separate production setup.
+- `PAYMENTS_PREVIEW=true` plus `BOOKBOLL_WORKSPACE=true` enables normal saved edits under existing role/capability rules. With the workspace flag off the original read-only preview restriction remains. The dedicated preview administrator keeps access. Copied customer/staff credentials remain blocked. New signup/staff accounts have a non-mass-assignable `workspace_access` flag. Do not enable this workspace mode on production.
+- New provider signup shows its generated one-time verification code in the form because outbound email is disabled. This response field exists only in workspace mode. Existing copied identities cannot be claimed through signup or reset.
+- Stripe/Connect/live checkout, OAuth and outbound messaging are disabled. Mail transport has an additional MessageSending veto, Stripe's HTTP client refuses requests, and outbound HTTP writes are blocked even if copied database settings contain credentials. No queue worker or scheduler runs against the historical snapshot. Manual bookings and payment collection records can be saved in the copy; those are bookkeeping, not real charges. Configure and test sandbox integrations separately before enabling them.
+
+### Payments performance
+
+The previous report rebuilt all receipts, booking relations and allocations for every page/filter. It now caches normalized rows per actor and access scope, preserving the same immutable financial snapshots and all-history summary rules. Cold scans use keyset batches of 1,000, PHP OPcache is enabled, and JSON/assets are compressed. The deploy warms the dedicated administrator's report.
+
+Cache invalidation listens for committed writes to payments, allocations, bookings, venues, listings, businesses, customer identity and scope tables, including bulk reconciliation SQL through Laravel. Transaction reads bypass caching; rollbacks do not publish or invalidate uncommitted data. Filters, sorting and pagination reuse the same scoped dataset. The Refresh button explicitly rebuilds it. A 15-minute TTL bounds external direct-SQL changes; operations outside Laravel must clear the report cache or use Refresh immediately. Do not add financial writes that bypass invalidation. Multi-replica backend deployments require a shared cache/lock store such as Redis before scaling beyond one instance.
+
+Tests: `PaymentReportDashboardTest`, `PaymentReportCacheTest`, `PaymentsPreviewAccessTest`, plus the existing pure report rules and admin frontend tests. Verify totals, provider isolation, commit/rollback invalidation and actual deployed response timings when changing this implementation.

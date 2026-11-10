@@ -32,6 +32,8 @@ class AppServiceProvider extends ServiceProvider
         Booking::observe(BookingObserver::class);
         ClassSubscription::observe(ClassSubscriptionObserver::class);
         Payment::observe(PaymentObserver::class);
+        \Illuminate\Support\Facades\DB::listen(\App\Support\PaymentReportCache::written(...));
+        if (config('preview.workspace')) \App\Support\WorkspaceIntegrations::disableOutbound();
 
         Gate::define('viewLogViewer', function ($user = null) {
             return $user?->hasRole('super_admin') ?? false;

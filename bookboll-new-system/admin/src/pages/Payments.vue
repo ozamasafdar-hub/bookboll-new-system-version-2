@@ -29,13 +29,13 @@ const currencies = computed(() => (options.value.currencies || []).map(value => 
 const sourceOptions = [{ value:'venue', label:'Venue bookings' }, { value:'event', label:'Events' }, { value:'subscription', label:'Memberships' }]
 let timer, requestId = 0
 const query = () => ({ ...queryFilters(filters), report_version:2, sort:sort.value, sort_dir:sortDir.value })
-async function load() {
+async function load(refresh = false) {
   clearTimeout(timer)
   const id = ++requestId
   if (invalid.value) { loading.value = false; return }
   loading.value = true; error.value = ''
   try {
-    const result = await fetchPaymentsDashboard({ ...query(), page:page.value, records_per_page:perPage.value })
+    const result = await fetchPaymentsDashboard({ ...query(), page:page.value, records_per_page:perPage.value, ...(refresh === true ? { refresh:1 } : {}) })
     if (id !== requestId) return
     if (!result.success) throw new Error(result.message || 'Could not load payments.')
     const data = result.data || {}
@@ -119,7 +119,7 @@ onBeforeUnmount(() => { ++requestId; clearTimeout(timer) })
   <div class="page payments-page">
     <header class="page-header">
       <div><h1>Payments</h1><p>{{ platform ? 'Bookboll earnings, venue collections and provider sales.' : 'Your collections, outstanding balances and Bookboll fees.' }}</p></div>
-      <div class="pay-actions"><button class="btn" :disabled="loading" @click="load"><RefreshCw :size="15" /> Refresh</button><button v-if="can(CAP.EXPORT_PAYMENTS)" class="btn" :disabled="exporting || !ready || loading || !!invalid" @click="exportRows"><Download :size="15" /> {{ exporting ? 'Exporting…' : 'Export CSV' }}</button></div>
+      <div class="pay-actions"><button class="btn" :disabled="loading" @click="load(true)"><RefreshCw :size="15" /> Refresh</button><button v-if="can(CAP.EXPORT_PAYMENTS)" class="btn" :disabled="exporting || !ready || loading || !!invalid" @click="exportRows"><Download :size="15" /> {{ exporting ? 'Exporting…' : 'Export CSV' }}</button></div>
     </header>
 
     <section class="pay-period" aria-label="Payment reporting period">

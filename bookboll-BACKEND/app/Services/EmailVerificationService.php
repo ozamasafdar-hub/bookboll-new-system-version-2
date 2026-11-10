@@ -89,6 +89,7 @@ class EmailVerificationService
         return sendSuccess('Code sent — check your inbox.', [
             'expires_in_minutes' => self::OTP_TTL_MINUTES,
             'resend_after'       => self::RESEND_COOLDOWN_SECONDS,
+            ...(config('preview.workspace') ? ['workspace_code'=>$otp] : []),
         ]);
     }
 

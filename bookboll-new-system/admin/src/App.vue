@@ -26,6 +26,7 @@ import { adminBrand, adminBrandVars, adminLogoSquareStyle, loadAdminBrand } from
 import { useHead } from '@unhead/vue'
 
 const route = useRoute()
+const railwayWorkspace = import.meta.env.VITE_BOOKBOLL_WORKSPACE === 'true'
 const paymentsPreview = import.meta.env.VITE_PAYMENTS_PREVIEW === 'true'
 const router = useRouter()
 const sidebarOpen = ref(false)
@@ -203,7 +204,7 @@ const initials = computed(() => {
 </script>
 
 <template>
-  <div v-if="paymentsPreview" class="payments-preview-banner" role="status">Payments preview · Database copy from 4 Nov 2026 · Read-only · No live payments</div>
+  <div v-if="paymentsPreview" class="payments-preview-banner" role="status">{{ railwayWorkspace ? 'Railway workspace · Changes are saved to the shared database copy · Real payments and messages disabled' : 'Payments preview · Database copy from 4 Nov 2026 · Read-only · No live payments' }}</div>
   <!-- Auth pages (login / callback) render bare -->
   <router-view v-if="area === 'auth'" />
 

@@ -63,7 +63,10 @@ export function brandPreviewUrl(slug, { preview = false } = {}) {
   const s = (slug || '').toLowerCase()
   // Dev / local: load the public web app with ?b=. appBaseUrl() prefers VITE_WEB_URL
   // so this works from the admin app (port 5174 → 5173) as well.
-  if (typeof window !== 'undefined' && isLocalHost(window.location.hostname)) {
+  const previewHosts = String(import.meta.env.VITE_PREVIEW_HOSTS || '').split(',').map(h => h.trim().toLowerCase())
+  let previewEnvironment = false
+  try { previewEnvironment = previewHosts.includes(new URL(appBaseUrl()).hostname) } catch { /* no configured storefront */ }
+  if (previewEnvironment || (typeof window !== 'undefined' && isLocalHost(window.location.hostname))) {
     return `${appBaseUrl()}/?b=${encodeURIComponent(s)}${preview ? '&preview=1' : ''}`
   }
   return `https://${brandHost(s)}${preview ? '?preview=1' : ''}`

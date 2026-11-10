@@ -31,6 +31,9 @@ class User extends Authenticatable
         // explicit false (a dashboard form with the box unticked) still wins, and
         // the customer can switch any channel off from their account page.
         static::creating(function (User $user) {
+            // Only newly created workspace users may sign in to the imported copy.
+            // This field is deliberately not mass-assignable from public requests.
+            if (config('preview.workspace')) $user->workspace_access = true;
             $defaulted = false;
             foreach (['marketing_email', 'marketing_sms', 'marketing_whatsapp'] as $flag) {
                 if (! array_key_exists($flag, $user->getAttributes())) {

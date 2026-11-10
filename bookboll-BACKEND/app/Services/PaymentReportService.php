@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Payment;
 use App\Models\Venue;
 use App\Support\AccessScope;
+use App\Support\PaymentReportCache;
 use App\Support\PaymentReportRules;
 use App\Support\PaymentReportTotals;
 use App\Support\PaymentReportPage;
@@ -45,9 +46,6 @@ final class PaymentReportService
         if ($hasAllocations) $query->with('ownedAllocations');
         $sort = $request->input('sort', 'date');
         $dir = $request->input('sort_dir', 'desc');
-        $sort === 'date' ? $query->orderByRaw('COALESCE(paid_at, date, created_at) '.$dir)
-            : $query->orderBy($sort, $dir);
-        $query->orderBy('id', $dir);
         $perPage = (int) $request->input('records_per_page', 25);
         $page = (int) $request->input('page', 1);
         $start = ($page - 1) * $perPage;
@@ -59,36 +57,45 @@ final class PaymentReportService
         // allocations may inherit a receipt date older than their creation date.
         // Siblings are loaded BEFORE any payment filter so a filtered-out receipt
         // cannot make its fee/share rows look like additional receipts.
-        $query->chunk(250, function ($batch) use ($request, $pageRows, &$matched, $totals, &$currencies, &$venues, &$businesses, $hasAllocations) {
-            $bookingIds = $batch->pluck('booking_id')->filter()->unique();
-            $siblings = $bookingIds->isEmpty() ? collect() : Payment::whereIn('booking_id', $bookingIds)->when($hasAllocations, fn ($q) => $q->with('ownedAllocations'))->get()->groupBy('booking_id');
-            $subscriptionIds = $batch->whereNull('booking_id')->pluck('subscription_id')->filter()->unique();
-            $subSiblings = $subscriptionIds->isEmpty() ? collect() : Payment::whereIn('subscription_id', $subscriptionIds)->get()->groupBy('subscription_id');
-            $cache = [];
-            foreach ($batch as $payment) {
-                $booking = $payment->booking;
-                $groupKey = $payment->booking_id ? 'b'.$payment->booking_id : ($payment->subscription_id ? 's'.$payment->subscription_id : 'p'.$payment->id);
-                if (!isset($cache[$groupKey])) {
-                    $group = $payment->booking_id ? ($siblings[$payment->booking_id] ?? collect([$payment]))
-                        : ($payment->subscription_id ? ($subSiblings[$payment->subscription_id] ?? collect([$payment])) : collect([$payment]));
-                    $data = $group->map(fn ($p) => $this->raw($p))->all();
-                    $b = $booking ? $booking->getAttributes() + [] : [];
-                    $b['financial_context'] = $booking?->financial_context ?? [];
-                    $cache[$groupKey] = collect(PaymentReportRules::rows($data, $b))->groupBy(fn ($row) => (string) ($row['source_payment_id'] ?? $row['id']));
+        // Scope before caching. A permission or ownership change selects a new key.
+        $scope = hash('sha256', json_encode([$actor->id, $platform, $businessId, $venueIds, $programIds ?? [], $query->toSql(), $query->getBindings(), config('preview.workspace')]));
+        $rows = PaymentReportCache::remember($scope, 'rows', function () use ($query, $hasAllocations) {
+            $rows = [];
+            $query->chunkById(1000, function ($batch) use (&$rows, $hasAllocations) {
+                $bookingIds = $batch->pluck('booking_id')->filter()->unique();
+                $siblings = $bookingIds->isEmpty() ? collect() : Payment::whereIn('booking_id', $bookingIds)->when($hasAllocations, fn ($q) => $q->with('ownedAllocations'))->get()->groupBy('booking_id');
+                $subscriptionIds = $batch->whereNull('booking_id')->pluck('subscription_id')->filter()->unique();
+                $subSiblings = $subscriptionIds->isEmpty() ? collect() : Payment::whereIn('subscription_id', $subscriptionIds)->get()->groupBy('subscription_id');
+                $cache = [];
+                foreach ($batch as $payment) {
+                    $booking = $payment->booking;
+                    $groupKey = $payment->booking_id ? 'b'.$payment->booking_id : ($payment->subscription_id ? 's'.$payment->subscription_id : 'p'.$payment->id);
+                    if (!isset($cache[$groupKey])) {
+                        $group = $payment->booking_id ? ($siblings[$payment->booking_id] ?? collect([$payment]))
+                            : ($payment->subscription_id ? ($subSiblings[$payment->subscription_id] ?? collect([$payment])) : collect([$payment]));
+                        $data = $group->map(fn ($p) => $this->raw($p))->all();
+                        $b = $booking ? $booking->getAttributes() + [] : [];
+                        $b['financial_context'] = $booking?->financial_context ?? [];
+                        $cache[$groupKey] = collect(PaymentReportRules::rows($data, $b))->groupBy(fn ($row) => (string) ($row['source_payment_id'] ?? $row['id']));
+                    }
+                    foreach ($cache[$groupKey][(string) $payment->id] as $row) {
+                    if ($row['row_kind'] === 'receipt') continue;
+                    $row = $this->describe($row, $payment);
+                    $rows[] = $row;
+                    }
                 }
-                foreach ($cache[$groupKey][(string) $payment->id] as $row) {
-                if ($row['row_kind'] === 'receipt') continue;
-                $row = $this->describe($row, $payment);
-                if ($row['currency']) $currencies[$row['currency']] = true;
-                if ($row['venue_id']) $venues[$row['venue_id']] = ['value' => (string) $row['venue_id'], 'label' => $row['venue_name']];
-                if ($row['business_id']) $businesses[$row['business_id']] = ['value' => (string) $row['business_id'], 'label' => $row['business_name'] ?: $row['recipient_label']];
-                if (!\App\Support\PaymentReportFilter::matches($row, $request->query())) continue;
-                $totals->add($row);
-                $pageRows->add($row);
-                $matched++;
-                }
-            }
-        });
+            });
+            return $rows;
+        }, $request->boolean('refresh'));
+        foreach ($rows as $row) {
+            if ($row['currency']) $currencies[$row['currency']] = true;
+            if ($row['venue_id']) $venues[$row['venue_id']] = ['value' => (string) $row['venue_id'], 'label' => $row['venue_name']];
+            if ($row['business_id']) $businesses[$row['business_id']] = ['value' => (string) $row['business_id'], 'label' => $row['business_name'] ?: $row['recipient_label']];
+            if (!\App\Support\PaymentReportFilter::matches($row, $request->query())) continue;
+            $totals->add($row);
+            $pageRows->add($row);
+            $matched++;
+        }
         ksort($currencies);
         uasort($venues, fn ($a, $b) => strcasecmp($a['label'], $b['label']));
         return sendSuccess('Payment allocations fetched', [
@@ -125,7 +132,7 @@ final class PaymentReportService
                 : (($b?->origin === 'customer_game' || $payment->source_type === 'hosted_game') ? 'event' : 'venue'),
             'stripe_receipt_url' => StripeDocumentLink::sanitize($payment->stripe_receipt_url),
             'stripe_invoice_url' => StripeDocumentLink::sanitize($payment->stripe_invoice_url),
-            'can_collect' => !config('preview.enabled') && $row['status'] === 'pending' && $row['category'] !== 'unclassified'
+            'can_collect' => (!config('preview.enabled') || config('preview.workspace')) && $row['status'] === 'pending' && $row['category'] !== 'unclassified'
                 && $payment->booking_id && $payment->method !== 'online',
         ]);
     }
