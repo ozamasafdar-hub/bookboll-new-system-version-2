@@ -418,30 +418,70 @@ class Listing extends Model
 
     public function getImagesUrlsAttribute($images)
     {
-        if ($this->relationLoaded('assets') || $this->assets()->exists()) {
-            return $this->assets->map(function ($asset) {
-                return $asset->url;
-            })->toArray();
+        $hasAssets = $this->relationLoaded('assets')
+            ? $this->assets->isNotEmpty()
+            : $this->assets()->exists();
+
+        if ($hasAssets) {
+            return $this->assets
+                ->map(fn ($asset) => $asset->url)
+                ->filter()
+                ->values()
+                ->toArray();
         }
 
-        $images = $this->attributes['images_urls'] ?? null;
+        $candidates = [];
 
-        if (! empty($images)) {
-            $images = is_array($images) ? $images : json_decode($images, true);
+        $photos = $this->photos;
+        if (is_array($photos) && ! empty($photos)) {
+            $candidates = array_values(array_filter($photos));
+        }
 
-            $newImages = [];
-            foreach ($images as $image) {
-                if (strpos($image, 'http') === 0 || strpos($image, '/storage/') !== false) {
-                    $newImages[] = $image;
-                } else {
-                    $newImages[] = url("storage/{$image}");
+        if (empty($candidates) && ! empty($this->photo_url)) {
+            $candidates = [$this->photo_url];
+        }
+
+        if (empty($candidates)) {
+            $rawImages = $this->attributes['images_urls'] ?? $images;
+            if (! empty($rawImages)) {
+                $decoded = is_array($rawImages) ? $rawImages : json_decode($rawImages, true);
+                if (is_array($decoded)) {
+                    $candidates = array_values(array_filter($decoded));
                 }
             }
+        }
 
-            return $newImages;
+        if (empty($candidates) && $this->relationLoaded('venue') && $this->venue) {
+            $venuePhotos = $this->venue->photos;
+            if (is_array($venuePhotos) && ! empty($venuePhotos)) {
+                $candidates = array_values(array_filter($venuePhotos));
+            }
+            if (empty($candidates) && ! empty($this->venue->photo_url)) {
+                $candidates = [$this->venue->photo_url];
+            }
+        }
+
+        if (! empty($candidates)) {
+            return array_values(array_filter(array_map([$this, 'normalizeImageUrl'], $candidates)));
         }
 
         return [];
+    }
+
+    public function normalizeImageUrl(?string $image): string
+    {
+        $path = trim((string) ($image ?? ''));
+        if ($path === '') {
+            return '';
+        }
+        if (filter_var($path, FILTER_VALIDATE_URL)) {
+            return $path;
+        }
+        if (str_starts_with($path, '/storage/') || str_contains($path, '/storage/')) {
+            return url($path);
+        }
+
+        return url('storage/' . ltrim($path, '/'));
     }
 
     public function getAverageRatingAttribute()
