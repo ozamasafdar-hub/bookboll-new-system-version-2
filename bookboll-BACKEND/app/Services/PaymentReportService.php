@@ -153,13 +153,24 @@ final class PaymentReportService
             'owned_allocations'=>$p->relationLoaded('ownedAllocations') ? $p->ownedAllocations->toArray() : []]);
     }
 
-    public function describe(array $row, Payment $payment): array
+    public function describe(array $row, Payment $payment, bool $details = false): array
     {
         $b = $payment->booking;
         $sub = $payment->subscription;
         $venue = $b?->venue ?? $sub?->program?->venue;
         $context = array_merge($b?->financial_context ?? [], $payment->financial_context ?? []);
         $customer = $b?->user ?? $payment->user;
+        // Cache/public rows contain report fields only. Keeping every source
+        // attribute, financial audit snapshot and both nested allocations on
+        // every expanded row can exhaust memory when serializing full history.
+        // The classifier and refund preflight still use complete source facts.
+        $row = array_intersect_key($row, array_flip([
+            'id','payment_id','source_payment_id','amount','currency','method','status','type',
+            'charge_id','payment_intent_id','operator','channel','business_id','category',
+            'recipient_kind','recipient_label','fee_rate','row_kind','source_receipt_ids',
+            'review_reason','snapshot_recorded','payment_date','allocation_id','receipt_amount','allocation_basis',
+        ]));
+        if ($details) $row['notes'] = $payment->notes;
         return array_merge($row, [
             'booking_id' => $payment->booking_id ? (string) $payment->booking_id : null,
             'booking_ref' => $b?->booking_id ?: ($payment->booking_id ? '#'.$payment->booking_id : ''),

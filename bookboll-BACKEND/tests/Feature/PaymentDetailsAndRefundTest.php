@@ -69,11 +69,15 @@ function submitRefundForTest(string $fingerprint) {
 }
 
 it('loads related allocations independently of table filters and preserves original amount', function () {
+    $this->payment->forceFill(['notes'=>'Original collection note', 'financial_context'=>$this->context+['audit_evidence'=>str_repeat('history ',10000)]])->saveQuietly();
     $response = $this->getJson('/api/admin/payments/'.$this->payment->id.'/details?row_id='.$this->payment->id.':platform')->assertOk();
     expect($response->json('data.payment.amount'))->toEqual(20)
         ->and($response->json('data.connected_transactions.0.amount'))->toEqual(80)
         ->and($response->json('data.payment.receipt_amount'))->toEqual(100)
-        ->and($response->json('data.can_request_refund'))->toBeTrue();
+        ->and($response->json('data.can_request_refund'))->toBeTrue()
+        ->and($response->json('data.payment.notes'))->toBe('Original collection note');
+    $page = $this->getJson('/api/admin/payments/dashboard?report_version=2')->assertOk()->json('data.payments.data.0');
+    expect($page)->not->toHaveKey('financial_context')->not->toHaveKey('owned_allocations')->not->toHaveKey('notes');
     $this->getJson('/api/admin/payments/'.$this->payment->id.'/details?row_id=999999:platform')->assertNotFound();
 });
 

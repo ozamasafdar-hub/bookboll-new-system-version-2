@@ -8,6 +8,7 @@ Implemented 11 November 2026. This extends the Payments report; it does not run 
 - The detail drawer shows amount, recipient, status, collection date, creator/channel, saved rate and original receipt amount, followed by connected transactions. Connections load from the complete authorized booking, membership and Stripe payment history, independently of table pagination/filters.
 - Inspect a connected transaction and return with **Back to payment**. Gross receipt rows are identified as original receipts, not additional earnings. Document links on allocation rows use only one explicitly resolved, authorized original receipt, including an unambiguous conserving legacy pair recognized by the report.
 - Table and drawer show Stripe receipt actions. Refunded payments prefer the confirmed refund receipt. Links must be HTTPS on `stripe.com` or its subdomains; no fabricated URL from a charge/invoice ID. Missing processor links display unavailable.
+- The full-history cache stores only public report/filter/total fields, not repeated source audit snapshots or nested allocation arrays. Original notes load in the detail endpoint. Classification and refund validation continue to read complete persisted evidence. Cache format is version 8; charge/intent indexes support connected lookups.
 - Provider users can inspect their authorized transactions and receipts. A venue transfer never grants access to another operator's historical ledger or the current booking.
 
 ## Refund authorization and scope

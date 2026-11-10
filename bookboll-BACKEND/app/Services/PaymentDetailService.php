@@ -60,7 +60,7 @@ final class PaymentDetailService
             foreach (PaymentReportRules::rows($siblings->map(fn ($p) => $this->report->raw($p))->all(), $facts) as $row) {
                 $payment = $group->firstWhere('id', (int)($row['source_payment_id'] ?? $row['id']));
                 if (!$payment) continue;
-                $row = $this->report->describe($row, $payment);
+                $row = $this->report->describe($row, $payment, true);
                 $row['can_view_booking'] = $venueIds === null || in_array((int)$row['venue_id'], $venueIds, true);
                 $row['can_collect'] = $row['can_collect'] && $row['can_view_booking'];
                 $row['relationship'] = $payment->id === $selected->id ? 'Same payment'
