@@ -22,6 +22,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Nnjeim\World\Models\City;
+use Nnjeim\World\Models\Country;
 
 /**
  * Customer marketplace class programs / memberships — parity with storefront data.js.
@@ -53,8 +54,14 @@ class CustomerProgramService
             || ($countryId && (int) $countryId === $qatarId)
             || ($cityId && $qatarId && QatarMarketGeo::touchesQatar([(int) $cityId]));
 
+        // Country-only browsing (no city chosen yet): scope by the country's
+        // venues instead of returning nothing, matching the web.
+        $scopeCountryId = null;
         if (! $cityId && ! $brandOwner && ! $isQatar) {
-            return sendSuccess('Programs fetched', ['programs' => []]);
+            $scopeCountryId = $countryId ? (int) $countryId : ($iso !== '' ? (int) Country::where('iso2', $iso)->value('id') : null);
+            if (! $scopeCountryId) {
+                return sendSuccess('Programs fetched', ['programs' => []]);
+            }
         }
 
         $query = ClassProgram::query()
@@ -108,6 +115,29 @@ class CustomerProgramService
                 }
                 // Seeded/imported rows often lack venue_id — still show them on marketplace.
                 $q->orWhereNull('venue_id');
+            });
+        } elseif ($scopeCountryId) {
+            $venueQuery = Venue::query()->where(function ($q) use ($scopeCountryId) {
+                $q->where('country_id', $scopeCountryId)
+                    ->orWhereIn('city_id', City::query()->where('country_id', $scopeCountryId)->select('id'));
+            });
+            $venueIds = (clone $venueQuery)->pluck('id');
+            $ownerIds = (clone $venueQuery)->whereNotNull('owner_user_id')->pluck('owner_user_id');
+
+            $query->where(function ($q) use ($venueIds, $ownerIds) {
+                $has = false;
+                if ($venueIds->isNotEmpty()) {
+                    $q->whereIn('venue_id', $venueIds);
+                    $has = true;
+                }
+                if ($ownerIds->isNotEmpty()) {
+                    $method = $has ? 'orWhereIn' : 'whereIn';
+                    $q->{$method}('mapped_owner_user_id', $ownerIds);
+                    $has = true;
+                }
+                if (! $has) {
+                    $q->whereRaw('1 = 0');
+                }
             });
         } elseif ($cityId) {
             $cityId = (int) $cityId;

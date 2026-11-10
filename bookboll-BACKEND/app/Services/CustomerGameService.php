@@ -37,6 +37,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use PaymentStatus;
 use PaymentType;
+use Nnjeim\World\Models\City;
 
 /**
  * Hosting a game, hangout or tournament.
@@ -548,8 +549,16 @@ class CustomerGameService
             || ($countryId && (int) $countryId === $qatarId)
             || ($cityId && $qatarId && QatarMarketGeo::touchesQatar([$cityId]));
 
+        // No city but a country: the web shows the whole country, so the app
+        // must too. Qatar keeps its own expansion below; every other country
+        // scopes by country_id, or by any of its cities for rows written
+        // before country_id was stamped.
+        $scopeCountryId = null;
         if (! $isQatar && ! $cityId) {
-            return sendSuccess('Events', ['games' => []]);
+            $scopeCountryId = $countryId ?: ($iso !== '' ? (int) Country::where('iso2', $iso)->value('id') : null);
+            if (! $scopeCountryId) {
+                return sendSuccess('Events', ['games' => []]);
+            }
         }
 
         $today = now()->toDateString();
@@ -569,6 +578,11 @@ class CustomerGameService
                 if ($qatarId) {
                     $q->orWhere('country_id', $qatarId);
                 }
+            });
+        } elseif ($scopeCountryId) {
+            $query->where(function ($q) use ($scopeCountryId) {
+                $q->where('country_id', $scopeCountryId)
+                    ->orWhereIn('city_id', City::query()->where('country_id', $scopeCountryId)->select('id'));
             });
         } else {
             $query->where('city_id', $cityId);

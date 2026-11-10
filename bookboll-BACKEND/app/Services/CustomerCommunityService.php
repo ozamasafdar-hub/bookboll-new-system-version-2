@@ -16,6 +16,8 @@ use App\Support\QatarMarketGeo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Nnjeim\World\Models\City;
+use Nnjeim\World\Models\Country;
 
 /**
  * Customer marketplace communities — parity with storefront community.js.
@@ -66,6 +68,16 @@ class CustomerCommunityService
             });
         } elseif ($cityId) {
             $query->where('city_id', $cityId);
+        } elseif ($iso !== '' || $countryId) {
+            // Country known, city not: show the whole country rather than the
+            // global list, as the web does.
+            $scopeCountryId = $countryId ? (int) $countryId : (int) Country::where('iso2', $iso)->value('id');
+            if ($scopeCountryId) {
+                $query->where(function ($q) use ($scopeCountryId) {
+                    $q->where('country_id', $scopeCountryId)
+                        ->orWhereIn('city_id', City::query()->where('country_id', $scopeCountryId)->select('id'));
+                });
+            }
         }
 
         $rows = $query->get();
