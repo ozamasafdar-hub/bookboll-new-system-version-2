@@ -24,7 +24,7 @@ Access: only a new dedicated preview administrator may sign in; copied user pass
 
 Transfer reconciliation now returns `reconciliation_version: 2`, individual payment changes (first 50), a paid-provider-receipts subtotal, and accurate historical contexts for v2 reporting. The UI refuses legacy reconciliation on older servers. Pending online payments are excluded from cash reconciliation; already-paid manual receipts remain entirely provider revenue. Preview staleness covers payment/booking facts; retries are bound to actor, venue and preview token. Historical corrections preserve original data and do not send new-payment notifications or generate payouts.
 
-Latest focused validation: **39 database tests / 190 assertions** across report, transfer, recipient backfill and preview access; **12 frontend tests**; admin production build passed. Local full-snapshot reconciliation and report generation succeeded. The earlier validation below covers additional booking/commission paths. Real Stripe charges and deployment to the existing newbackend host remain outside this preview.
+Latest validation: **70 database tests / 281 assertions** across report, transfer, recipient backfill, preview access, booking payment-method access, commission snapshots, deposits and loyalty funding; **65 standalone rule assertions**, **12 frontend tests**, and the admin production build passed. Local full-snapshot reconciliation, authenticated HTTP report generation and restart idempotency succeeded. Original receipts remain 22,391; 10,642 internal allocation records and 41,456 preview audit entries were created. Real Stripe charges and deployment to the existing newbackend host remain outside this preview.
 
 ## What is implemented
 

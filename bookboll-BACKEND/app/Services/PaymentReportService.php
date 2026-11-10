@@ -125,7 +125,7 @@ final class PaymentReportService
                 : (($b?->origin === 'customer_game' || $payment->source_type === 'hosted_game') ? 'event' : 'venue'),
             'stripe_receipt_url' => StripeDocumentLink::sanitize($payment->stripe_receipt_url),
             'stripe_invoice_url' => StripeDocumentLink::sanitize($payment->stripe_invoice_url),
-            'can_collect' => $row['status'] === 'pending' && $row['category'] !== 'unclassified'
+            'can_collect' => !config('preview.enabled') && $row['status'] === 'pending' && $row['category'] !== 'unclassified'
                 && $payment->booking_id && $payment->method !== 'online',
         ]);
     }
