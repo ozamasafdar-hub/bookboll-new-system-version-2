@@ -8,5 +8,8 @@
 **/storage/framework/*
 **/bootstrap/cache/*.php
 **/tests
+!bookboll-BACKEND/tests
+bookboll-BACKEND/tests/*
+!bookboll-BACKEND/tests/payment-report-rules.php
 **/*.zip
 **/*.log
