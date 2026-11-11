@@ -88,6 +88,16 @@ it('labels a filtered part of a shared payment and does not add unmatched fees i
         ->assertJsonPath('data.summary.0.platform_fees',25);
 });
 
+it('keeps shared payments in the same-day order of their original receipt ids', function () {
+    $older=reportFixturePayment(reportFixtureBooking($this->externalVenue,$this->provider),'deposit',12,'online','cancelled');
+    sharedCheckoutFixture($this->externalVenue,$this->provider);
+    $newer=reportFixturePayment(reportFixtureBooking($this->externalVenue,$this->provider),'deposit',18,'online','paid');
+    $rows=$this->actingAs($this->platform)->getJson('/api/admin/payments/dashboard?report_version=2&group_by=stripe&method=online&sort=date&sort_dir=desc')
+        ->assertOk()->json('data.payments.data');
+    expect((int)$rows[0]['id'])->toBe($newer->id)->and($rows[1]['row_kind'])->toBe('online_group')
+        ->and((int)$rows[2]['id'])->toBe($older->id);
+});
+
 it('groups only authorized provider records and never exposes another business in context', function () {
     sharedCheckoutFixture($this->externalVenue,$this->provider);
     $foreign=reportFixtureBooking($this->ownVenue,$this->platform);

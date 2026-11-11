@@ -62,6 +62,7 @@ final class PaymentReportGroups
                 'id'=>$key, 'row_kind'=>'online_group', 'method'=>'online', 'currency'=>$first['currency'],
                 'amount'=>Money::toMajor($minor, $first['currency']),
                 'payment_date'=>max(array_column($children, 'payment_date')),
+                'sort_id'=>max(array_map(fn ($r) => (int)($r['source_payment_id'] ?? $r['id']), $children)),
                 'status'=>$unique('status','mixed'), 'customer_name'=>$unique('customer_name','Multiple customers'),
                 'venue_name'=>$unique('venue_name','Multiple venues'), 'channel'=>$unique('channel','mixed'),
                 'recipient_label'=>$unique('recipient_label','Multiple recipients'),

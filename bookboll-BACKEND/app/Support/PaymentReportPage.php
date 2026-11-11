@@ -20,7 +20,7 @@ final class PaymentReportPage
                 $comparison = $this->sort === 'amount'
                     ? (float) $a[$key] <=> (float) $b[$key]
                     : strcmp((string) ($a[$key] ?? ''), (string) ($b[$key] ?? ''));
-                $comparison = $comparison ?: ((int) $a['id'] <=> (int) $b['id']);
+                $comparison = $comparison ?: ((int) ($a['sort_id'] ?? $a['id']) <=> (int) ($b['sort_id'] ?? $b['id']));
                 $comparison = $comparison ?: strcmp((string) $a['id'], (string) $b['id']);
                 // The greatest priority is the last (worst) row in the desired
                 // ordering, so it can be discarded when the window is full.
