@@ -9,6 +9,7 @@ const props = defineProps({
   rows: { type: Array, default: () => [] },   // [{ label, value, sub? }]
   color: { type: String, default: '#0d9488' },
   suffix: { type: String, default: '' },      // e.g. ' bookings'
+  valueFormatter: { type: Function, default: null },
 })
 const max = computed(() => Math.max(1, ...props.rows.map(r => Number(r.value) || 0)))
 </script>
@@ -16,10 +17,10 @@ const max = computed(() => Math.max(1, ...props.rows.map(r => Number(r.value) ||
 <template>
   <div class="hb">
     <div v-if="!rows.length" class="hb-empty">No data for this period</div>
-    <div v-for="(r, i) in rows" :key="i" class="hb-row" :title="`${r.label}: ${Number(r.value).toLocaleString()}${suffix}`">
+    <div v-for="(r, i) in rows" :key="i" class="hb-row" :title="`${r.label}: ${valueFormatter ? valueFormatter(r.value) : Number(r.value).toLocaleString() + suffix}`">
       <div class="hb-head">
         <span class="hb-lab">{{ r.label }}</span>
-        <b class="hb-val">{{ Number(r.value).toLocaleString() }}<em v-if="r.sub"> · {{ r.sub }}</em></b>
+        <b class="hb-val">{{ valueFormatter ? valueFormatter(r.value) : Number(r.value).toLocaleString() }}<em v-if="r.sub"> · {{ r.sub }}</em></b>
       </div>
       <div class="hb-track">
         <div class="hb-bar" :style="{ width: (Number(r.value) / max * 100) + '%', background: color }"></div>

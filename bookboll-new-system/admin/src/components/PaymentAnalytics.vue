@@ -2,6 +2,7 @@
 import { computed, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { RefreshCw, SlidersHorizontal, ChevronRight, ArrowUpRight } from 'lucide-vue-next'
 import { apiFetch } from '../lib/api.js'
+import { useCurrentUser } from '../lib/currentUser.js'
 import { paymentCards, paymentBreakdown, metricValue } from '../lib/paymentMetrics.js'
 import { channelOptions, methodOptions, statusOptions, money, periodDates, filterError, queryFilters, listingsForVenues, keepAvailableListings, labelFor } from '../lib/paymentReport.js'
 import MultiSelect from './MultiSelect.vue'
@@ -14,7 +15,8 @@ const defaults = () => ({ currency:[], status:[], method:[], channel:[], source:
 const filters = reactive(defaults()), period = ref('all'), advanced = ref(false)
 const data = ref(null), loading = ref(true), error = ref(''), chartCurrency = ref(''), trendMetric = ref('')
 const options = computed(() => data.value?.filter_options || { currencies:[], venues:[], listings:[], businesses:[] })
-const platform = computed(() => data.value?.perspective === 'platform')
+const { currentUser } = useCurrentUser()
+const platform = computed(() => data.value?.perspective ? data.value.perspective === 'platform' : ['super_admin','admin','country_admin','platform_staff'].includes(currentUser.value?.role))
 const summary = computed(() => data.value?.summary || [])
 const analytics = computed(() => data.value?.analytics || { timeline:[], channels:[], methods:[], venues:[] })
 const cards = computed(() => paymentCards(platform.value)), breakdown = computed(() => paymentBreakdown(platform.value))
@@ -90,7 +92,7 @@ onBeforeUnmount(() => { ++requestId; clearTimeout(timer) })
         <div class="pa-chart-toolbar"><div><h3>Revenue breakdown</h3><p>Amounts use one currency at a time. Received amounts are paid only.</p></div><label>Chart &amp; table currency<select v-model="chartCurrency" aria-label="Payment chart currency"><option v-for="currency in chartCurrencies" :key="currency">{{ currency }}</option></select></label></div>
         <div class="pa-grid">
           <section class="pay-panel"><div class="pa-panel-head"><div><h3>{{ trendTitle }}</h3><p>{{ analytics.grain === 'month' ? 'Monthly' : 'Daily' }} · {{ chartCurrency }}</p></div><label class="pa-metric-label">Show<select v-model="trendMetric" aria-label="Payment trend metric"><option v-for="[key,title] in metricOptions" :key="key" :value="key">{{ title }}</option></select></label></div><TrendChart :points="trendPoints" color="#4c8dff" :prefix="chartCurrency + ' '" :value-formatter="v => money(v,chartCurrency)" :height="210" /><p v-if="analytics.undated_allocations" class="pa-note">{{ analytics.undated_allocations }} undated allocations are included in totals but cannot appear on the timeline.</p></section>
-          <section class="pay-panel"><h3>{{ platform ? 'Bookboll received' : 'Your business received' }} by method</h3><p>Only the recipient’s share; fees and venue revenue are not counted twice.</p><HBarChart :rows="methodBars" color="#4c8dff" :suffix="' ' + chartCurrency" /></section>
+          <section class="pay-panel"><h3>{{ platform ? 'Bookboll received' : 'Your business received' }} by method</h3><p>Only the recipient’s share; fees and venue revenue are not counted twice.</p><HBarChart :rows="methodBars" color="#4c8dff" :value-formatter="v => money(v,chartCurrency)" /></section>
         </div>
         <section class="pay-panel pa-table-panel"><h3>Where bookings came from</h3><p>Staff-added bookings have no platform fee. Event host fees remain separate charges.</p><div class="pay-table-wrap"><table class="pay-table"><thead><tr><th>Channel</th><th>Total sales</th><th>{{ platform ? 'Bookboll received' : 'Your business received' }}</th><th>{{ platform ? 'Platform fees' : 'Bookboll fees' }}</th><th>{{ platform ? 'External businesses received' : 'Still to collect' }}</th></tr></thead><tbody><tr v-for="row in channels" :key="row.key"><td>{{ labelFor(channelOptions,row.key) }}</td><td>{{ amount(row,'total_sales') }}</td><td>{{ amount(row,receivedKey) }}</td><td>{{ amount(row,'platform_fees') }}</td><td>{{ amount(row,platform ? 'provider_received' : 'provider_pending') }}</td></tr></tbody></table></div></section>
         <div class="pay-breakdown">
