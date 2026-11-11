@@ -114,6 +114,15 @@ it('blocks previous eighteen-rule evidence without audited payment review accept
         ->and(collect($status['checks'])->keyBy('id')['financial_regression']['passed'])->toBeFalse();
 });
 
+it('blocks previous acceptance without superadmin bulk payment checks', function () {
+    $policy = json_decode(file_get_contents(config('payment_release.policy_file')), true);
+    $oldRules = array_values(array_diff(array_column($policy['rules'],'id'), ['P20_SUPERADMIN_BULK_ACTIONS']));
+    signReleaseFixture(['financial_regression'=>['passed_rule_ids'=>$oldRules]]);
+    $status = (new CompletedRunnerFixtureGate)->status();
+    expect($status['production_ready'])->toBeFalse()
+        ->and(collect($status['checks'])->keyBy('id')['financial_regression']['passed'])->toBeFalse();
+});
+
 it('rejects a tampered signature or artifact without trusting checked boxes', function () {
     signReleaseFixture();
     file_put_contents($this->evidencePath.'/financial_regression.json', '{}');

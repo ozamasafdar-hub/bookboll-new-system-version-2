@@ -13,6 +13,14 @@ const group = { id:'online:test',row_kind:'online_group',kind:'online',title:'On
   can_request_refund:true,bookings:[] }
 const render = props => renderToString(createSSRApp(Entry,{canCollect:()=>false,...props}))
 
+test('selection checkboxes render only with explicit superadmin selection permission', async () => {
+  const denied=await render({payment:group,selectable:false})
+  assert.doesNotMatch(denied,/type="checkbox"/)
+  const allowed=await render({payment:group,selectable:true,checked:true})
+  assert.match(allowed,/aria-label="Select payment CHK-EXAMPLE-ONLINE"/)
+  assert.match(allowed,/checked/)
+})
+
 test('shared checkout is one collapsed payment with a combined amount and a single refund action', async () => {
   const html=await render({payment:group,canRefund:true})
   assert.match(html,/Online deposit/)

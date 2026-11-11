@@ -16,4 +16,6 @@ export const previewCheckoutCollection = (id, rowId) => apiFetch(`/admin/payment
 export const collectCheckoutPayment = (id, body) => apiFetch(`/admin/payments/${id}/collect-checkout`, { method:'POST', body })
 export const previewPaymentReview = (id, body) => apiFetch(`/admin/payments/${id}/review-preview`, { method:'POST', body })
 export const savePaymentReview = (id, body) => apiFetch(`/admin/payments/${id}/review`, { method:'POST', body })
+export const previewPaymentBulk = body => apiFetch('/admin/payments/bulk-preview', { method:'POST', body })
+export const savePaymentBulk = body => apiFetch('/admin/payments/bulk-action', { method:'POST', body })
 

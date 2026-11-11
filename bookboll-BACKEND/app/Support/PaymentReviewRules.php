@@ -9,7 +9,7 @@ final class PaymentReviewRules
         $facts = [];
         foreach ($payments as $p) {
             $context = $p['financial_context'] ?? [];
-            unset($context['review_decision']);
+            unset($context['review_decision'], $context['allocation_corrections']);
             $facts[] = array_intersect_key($p, array_flip(['id','booking_id','subscription_id','type','amount','currency','method','status',
                 'source_type','recipient','paid_at','date','charge_id','payment_intent_id','payment_refund_id','marked_paid_by','reconciliation_batch_id']))
                 + ['financial_context'=>$context, 'owned_allocations'=>$p['owned_allocations'] ?? []];

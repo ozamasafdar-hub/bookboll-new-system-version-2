@@ -142,7 +142,7 @@ final class PaymentReportRules
             }
             if ($category === 'unclassified') $recipientKind = 'unknown';
             return array_merge($p, [
-                'id' => $id, 'payment_type' => $type, 'status' => $status,
+                'id' => $id, 'payment_type' => $type, 'status' => $status, 'financial_context'=>$context,
                 'category' => $category, 'recipient_kind' => $recipientKind,
                 'recipient_label' => $recipientKind === 'bookboll' ? 'Bookboll'
                     : ($recipientKind === 'provider' ? ($context['business_name'] ?? ($recipient ?: 'External provider')) : 'Needs review'),
@@ -156,7 +156,7 @@ final class PaymentReportRules
                 'payment_date' => $childDates[$id] ?? substr((string) ($p['paid_at'] ?? $p['date'] ?? $p['created_at'] ?? ''), 0, 10),
             ]);
         }, $payments);
-        return PaymentReviewRules::apply(array_merge(...array_map(fn ($row) => OwnedVenueAllocation::expand($row), $rows)), $payments, $booking);
+        return PaymentBulkRules::apply(PaymentReviewRules::apply(array_merge(...array_map(fn ($row) => OwnedVenueAllocation::expand($row), $rows)), $payments, $booking), $payments);
     }
 
     public static function status(string $status): string

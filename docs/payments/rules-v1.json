@@ -167,6 +167,13 @@
       "implementation": ["bookboll-BACKEND/app/Services/PaymentReviewService.php","bookboll-BACKEND/app/Support/PaymentReviewRules.php","bookboll-new-system/admin/src/components/PaymentReviewPanel.vue"],
       "tests": ["bookboll-BACKEND/tests/Feature/PaymentReviewTest.php","bookboll-new-system/admin/tests/paymentReview.test.mjs"],
       "production_acceptance": "Test role/scope denial, immutable receipt fields, integer conservation, preview/change detection, duplicate replay, reversal/reopen, automatic invalidation, provider privacy and runtime gate. No automatic approval of the three cancelled examples. See docs/payments/PAYMENT_REVIEWS.md."
+    },
+    {
+      "id": "P20_SUPERADMIN_BULK_ACTIONS",
+      "rule": "Only a platform superadmin may confirm selected-payment changes. Exact visible allocation IDs, bounded batches, mandatory reason, preview, locked evidence recheck and append-only audit are required. Pending offline active-booking collections use the saved method and current collection date; Stripe payments cannot be manually confirmed. Partial receipt selections cannot mark a whole receipt paid. Reassignment preserves receipt amounts, original splits, booking channel and existing business, with no fees for staff-created bookings. No cross-business moves or processor transfers. Corrections remain visible in provider reports, while private audit evidence is superadmin-only.",
+      "implementation": ["bookboll-BACKEND/app/Services/PaymentBulkService.php","bookboll-BACKEND/app/Support/PaymentBulkRules.php","bookboll-new-system/admin/src/components/PaymentBulkDialog.vue","bookboll-new-system/admin/src/lib/paymentBulk.js"],
+      "tests": ["bookboll-BACKEND/tests/Feature/PaymentBulkTest.php","bookboll-new-system/admin/tests/paymentBulk.test.mjs","bookboll-BACKEND/tests/Feature/PaymentReleaseGateTest.php"],
+      "production_acceptance": "Apply payment_bulk_actions and payment_bulk_action_items migration. Prove admin/staff/provider and mixed provider-superadmin denial, immutable/conserving allocation corrections, stale preview rejection, atomicity, idempotent replay, provider report/permission parity, no partial-payment overcollection, source-change invalidation and release gate enforcement. Signed financial_regression passed_rule_ids must include P20; previous nineteen-rule acceptance is insufficient. See docs/payments/BULK_PAYMENT_ACTIONS.md."
     }
   ],
   "snapshot_identity_reference": {

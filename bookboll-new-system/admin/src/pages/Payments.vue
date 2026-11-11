@@ -8,18 +8,30 @@ import { usePremium } from '../lib/premium.js'
 import { downloadCSV } from '../lib/useExport.js'
 import { pushToast } from '../lib/toast.js'
 import PaymentLedgerEntry from '../components/PaymentLedgerEntry.vue'
+import PaymentBulkDialog from '../components/PaymentBulkDialog.vue'
+import { entryAllocations, selectionState, updateSelection } from '../lib/paymentBulk.js'
 import { paymentCategories, channelOptions, methodOptions, statusOptions, labelFor, money, periodDates, filterError, queryFilters, legacyPaymentRows, listingsForVenues, keepAvailableListings } from '../lib/paymentReport.js'
 import MultiSelect from '../components/MultiSelect.vue'
 import PaymentDetails from '../components/PaymentDetails.vue'
 import PaymentReleaseChecks from '../components/PaymentReleaseChecks.vue'
 import BookingDetailModal from '../components/BookingDetailModal.vue'
 import './payments.css'
+import './payment-bulk.css'
 
 const { currentUser, can } = useCurrentUser()
 const { requirePremium } = usePremium()
 const perspective = ref('')
 const platform = computed(() => perspective.value ? perspective.value === 'platform' : ['super_admin', 'admin', 'country_admin', 'platform_staff'].includes(currentUser.value?.role))
 const canRefund = computed(() => ['super_admin','admin'].includes(currentUser.value?.role) && platform.value && !currentUser.value?.owner_user_id)
+const bulkAllowed=ref(false), selection=ref(new Map()), bulkAction=ref('')
+const canBulk=computed(() => bulkAllowed.value && currentUser.value?.role === 'super_admin' && platform.value && !currentUser.value?.owner_user_id)
+const pageSelection=computed(() => selectionState({bookings:[{allocations:rows.value.flatMap(entryAllocations)}]},selection.value))
+function selectEntries(entries,checked) {
+  if (!canBulk.value || loading.value) return
+  try { selection.value=updateSelection(selection.value,entries,checked) } catch(e) { pushToast(e.message,'error') }
+}
+function clearSelection() { selection.value=new Map() }
+function bulkSaved(data) { bulkAction.value=''; clearSelection(); pushToast(`Payment changes saved · audit #${data.audit_id}`,'success'); load(true) }
 const refundRequested = ref(false)
 function openDetails(p, refund = false) { refundRequested.value = refund; selected.value = p }
 const defaults = () => ({ search:'', currency:[], status:[], method:[], category:[], channel:[], source:[], location_id:[], listing_id:[], business_id:[], from_date:'', to_date:'', amount_min:'', amount_max:'', scope:'all' })
@@ -44,6 +56,7 @@ const sourceOptions = [{ value:'venue', label:'Venue bookings' }, { value:'event
 let timer, requestId = 0
 const query = () => ({ ...queryFilters(filters), report_version:2, sort:sort.value, sort_dir:sortDir.value })
 async function load(refresh = false) {
+  if (refresh === true) clearSelection()
   clearTimeout(timer)
   const id = ++requestId
   if (invalid.value) { loading.value = false; return }
@@ -55,6 +68,8 @@ async function load(refresh = false) {
     const data = result.data || {}
     ready.value = data.report_version === 2
     perspective.value = data.perspective || ''
+    bulkAllowed.value = data.can_bulk_edit === true
+    if (!bulkAllowed.value) clearSelection()
     rows.value = ready.value ? data.payments.data : legacyPaymentRows(data)
     total.value = Number(data.payments?.total ?? rows.value.length)
     allocationTotal.value = Number(data.payments?.allocation_total ?? total.value)
@@ -69,7 +84,7 @@ async function load(refresh = false) {
     rows.value = []; summary.value = []; total.value = 0
   } finally { if (id === requestId) loading.value = false }
 }
-watch(filters, () => { ++requestId; clearTimeout(timer); page.value = 1; loading.value = true; timer = setTimeout(load, 250) }, { deep:true, flush:'sync' })
+watch(filters, () => { clearSelection(); ++requestId; clearTimeout(timer); page.value = 1; loading.value = true; timer = setTimeout(load, 250) }, { deep:true, flush:'sync' })
 function setPeriod() { if (period.value !== 'custom') [filters.from_date, filters.to_date] = periodDates(period.value) }
 function reset() { period.value = 'all'; Object.assign(filters, defaults()) }
 function goTo(next) { page.value = next; load() }
@@ -182,13 +197,15 @@ onBeforeUnmount(() => { ++requestId; clearTimeout(timer) })
         <div class="pay-amount-range"><label>Minimum amount<input v-model="filters.amount_min" type="number" min="0" step="0.01" placeholder="No minimum" /></label><label>Maximum amount<input v-model="filters.amount_max" type="number" min="0" step="0.01" placeholder="No maximum" /></label></div>
       </div>
       <div v-if="ready" class="pay-scopes" role="group" aria-label="Filter recipient"><button :class="{active:filters.scope === 'all'}" :aria-pressed="filters.scope === 'all'" @click="filters.scope = 'all'">All records</button><button :class="{active:filters.scope === (platform ? 'bookboll' : 'provider')}" :aria-pressed="filters.scope === (platform ? 'bookboll' : 'provider')" @click="filters.scope = platform ? 'bookboll' : 'provider'">{{ platform ? 'Bookboll’s share' : 'Your share' }}</button><button v-if="platform" :class="{active:filters.scope === 'fee_split'}" :aria-pressed="filters.scope === 'fee_split'" @click="filters.scope = 'fee_split'">Historical fee splits</button><button :class="{active:filters.scope === 'review'}" :aria-pressed="filters.scope === 'review'" @click="filters.scope = 'review'">Needs review</button></div>
-      <div class="pay-table-wrap"><table class="pay-table"><thead><tr><th :aria-sort="sort === 'date' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'"><button @click="changeSort('date')">Payment / date <ArrowUpDown :size="13" /></button></th><th>Customer / venue</th><th>Booking channel</th><th>Allocation / recipient</th><th>Method</th><th class="pay-number" :aria-sort="sort === 'amount' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'"><button @click="changeSort('amount')">Amount <ArrowUpDown :size="13" /></button></th><th>Status</th><th>Actions</th></tr></thead>
-        <tbody><tr v-if="loading || invalid || error || !rows.length"><td colspan="8" class="pay-empty">{{ invalid || (loading ? 'Loading payments…' : error ? 'Payments could not be loaded.' : 'No payments match these filters.') }}</td></tr>
-          <PaymentLedgerEntry v-for="p in (loading || invalid || error ? [] : rows)" :key="p.id" :payment="p" :can-refund="canRefund" :can-collect="canCollect" @details="openDetails" @booking="viewBooking" />
+      <div v-if="canBulk" class="pay-bulk-bar"><div><b>{{ selection.size ? selection.size + ' allocations selected' : 'Select payments to make changes' }}</b><small>Superadmin only · selection stays across pages and clears when filters change.</small></div><div class="pay-actions"><button class="btn" :disabled="!selection.size || loading" @click="bulkAction='mark_paid'">Mark pending as paid</button><button class="btn" :disabled="!selection.size || loading" @click="bulkAction='reassign'">Change allocation / recipient</button><button v-if="selection.size" class="pay-link" @click="clearSelection">Clear selection</button></div></div>
+      <div class="pay-table-wrap"><table class="pay-table"><thead><tr><th v-if="canBulk" class="pay-select-cell"><input type="checkbox" aria-label="Select all payments on this page" :checked="pageSelection.checked" :indeterminate="pageSelection.partial" :disabled="loading || !rows.length || !!error || !!invalid" @change="selectEntries(rows,$event.target.checked)" /></th><th :aria-sort="sort === 'date' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'"><button @click="changeSort('date')">Payment / date <ArrowUpDown :size="13" /></button></th><th>Customer / venue</th><th>Booking channel</th><th>Allocation / recipient</th><th>Method</th><th class="pay-number" :aria-sort="sort === 'amount' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'"><button @click="changeSort('amount')">Amount <ArrowUpDown :size="13" /></button></th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody><tr v-if="loading || invalid || error || !rows.length"><td :colspan="canBulk ? 9 : 8" class="pay-empty">{{ invalid || (loading ? 'Loading payments…' : error ? 'Payments could not be loaded.' : 'No payments match these filters.') }}</td></tr>
+          <PaymentLedgerEntry v-for="p in (loading || invalid || error ? [] : rows)" :key="p.id" :payment="p" :can-refund="canRefund" :can-collect="canCollect" :selectable="canBulk" :checked="selectionState(p,selection).checked" :partial="selectionState(p,selection).partial" @select="selectEntries([p],$event)" @details="openDetails" @booking="viewBooking" />
         </tbody></table></div>
       <footer class="pay-pagination"><label>Rows<select v-model.number="perPage" @change="goTo(1)"><option :value="25">25</option><option :value="50">50</option><option :value="100">100</option></select></label><div><button class="btn" :disabled="loading || page <= 1" @click="goTo(page-1)">Previous</button><span>Page {{ page }} of {{ lastPage }}</span><button class="btn" :disabled="loading || page >= lastPage" @click="goTo(page+1)">Next</button></div></footer>
     </section>
 
+    <PaymentBulkDialog v-if="bulkAction && canBulk" :rows="[...selection.values()]" :action="bulkAction" @close="bulkAction=''" @saved="bulkSaved" />
     <PaymentDetails v-if="selected" :key="selected.id" :payment="selected" :start-refund="refundRequested" :can-refund="canRefund" :can-collect-payment="canCollect" @close="selected = null" @booking="viewBooking" @changed="load(true)" />
     <BookingDetailModal v-if="bookingId" :booking-id="bookingId" :collect-payment-id="collectId" @close="bookingId = null; collectId = null; load()" />
   </div>

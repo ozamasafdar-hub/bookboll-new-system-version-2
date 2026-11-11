@@ -100,6 +100,10 @@ final class PaymentDetailService
             && collect($g['bookings'])->flatMap(fn ($b) => $b['allocations'])->contains(fn ($r) => (string)$r['id'] === (string)$current['id']));
         $current = $grouper->decorate($current);
         return ['payment'=>$current, 'checkout_payment'=>$shared,
+            'bulk_history'=>\App\Support\PaymentBulkRules::allows($actor) ? \Illuminate\Support\Facades\DB::table('payment_bulk_action_items as item')
+                ->join('payment_bulk_actions as audit','audit.id','=','item.bulk_action_id')->where('item.payment_id',$id)
+                ->orderByDesc('audit.id')->get(['audit.id','audit.actor_name','audit.action','audit.reason','audit.created_at','item.row_id','item.before','item.after'])
+                ->map(fn ($entry) => array_merge((array)$entry,['before'=>json_decode($entry->before,true),'after'=>json_decode($entry->after,true)]))->all() : [],
             'review'=>app(PaymentReviewService::class)->information($actor,$id),
             'checkout_payments'=>array_values(array_filter($groups, fn ($g) => isset($g['bookings']) && $g['id'] !== ($shared['id'] ?? null)
                 && $g['checkout_reference'] === ($shared['checkout_reference'] ?? null))),

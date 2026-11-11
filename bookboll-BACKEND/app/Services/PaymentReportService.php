@@ -163,6 +163,7 @@ final class PaymentReportService
         if ($platform) array_unshift($businessOptions, ['value' => 'bookboll', 'label' => 'Bookboll · own venues']);
         return sendSuccess('Payment allocations fetched', [
             'report_version' => 2, 'perspective' => $platform ? 'platform' : 'provider',
+            'can_bulk_edit' => \App\Support\PaymentBulkRules::allows($actor),
             'group_by' => $grouped ? 'stripe' : 'allocation',
             'payments' => ['data' => $visible, 'total' => $entryCount, 'allocation_total'=>$matched, 'current_page' => $page, 'per_page' => $perPage],
             'summary' => $totals->result(), 'review_count' => $totals->reviewCount,
@@ -227,7 +228,7 @@ final class PaymentReportService
             'id','payment_id','source_payment_id','amount','currency','method','status','type',
             'charge_id','payment_intent_id','operator','channel','business_id','category',
             'recipient_kind','recipient_label','fee_rate','row_kind','source_receipt_ids',
-            'review_reason','review_decision_id','snapshot_recorded','payment_date','allocation_id','receipt_amount','allocation_basis',
+            'review_reason','review_decision_id','bulk_correction_id','snapshot_recorded','payment_date','allocation_id','receipt_amount','allocation_basis',
         ]));
         if ($details) $row['notes'] = $payment->notes;
         return array_merge($row, [

@@ -5,8 +5,8 @@ import { paymentCategories, channelOptions, methodOptions, statusOptions, labelF
 import { stripeInvoiceUrl, isStripeOnlinePayment } from '../lib/stripeInvoice.js'
 import CheckoutPaymentBreakdown from './CheckoutPaymentBreakdown.vue'
 
-const props = defineProps({ payment:Object, canRefund:Boolean, canCollect:Function })
-const emit = defineEmits(['details','booking'])
+const props = defineProps({ payment:Object, canRefund:Boolean, canCollect:Function, selectable:Boolean, checked:Boolean, partial:Boolean })
+const emit = defineEmits(['details','booking','select'])
 const p = computed(() => props.payment)
 const expanded = ref(false)
 const grouped = computed(() => ['online_group','remaining_group'].includes(p.value.row_kind))
@@ -23,6 +23,7 @@ const reviewRow = computed(() => grouped.value ? p.value.bookings.flatMap(b => b
 <template>
   <template v-if="grouped">
     <tr class="pay-online-group" :class="{ 'is-expanded':expanded }">
+      <td v-if="selectable" class="pay-select-cell"><input type="checkbox" :checked="checked" :indeterminate="partial" :aria-label="'Select payment ' + p.payment_id" @change="emit('select',$event.target.checked)" /></td>
       <td><button class="pay-link pay-checkout-reference" @click="details(p.anchor)">{{ p.payment_id }}</button><small>{{ p.payment_date || 'Date not recorded' }}</small><button class="pay-group-toggle" :aria-expanded="expanded" :aria-controls="p.id" @click="expanded = !expanded"><ChevronRight :size="16" /><span>{{ p.booking_count }} {{ p.booking_count === 1 ? 'booking' : 'bookings' }} · view split</span></button></td>
       <td><b>{{ p.customer_name }}</b><small>{{ p.venue_name }}</small></td>
       <td>{{ p.channel === 'mixed' ? 'Multiple channels' : labelFor(channelOptions,p.channel) }}</td>
@@ -32,11 +33,12 @@ const reviewRow = computed(() => grouped.value ? p.value.bookings.flatMap(b => b
       <td><span class="pay-status" :class="'pay-status-' + p.status">{{ status(p) }}</span><button v-if="collectGroup" class="pay-link pay-collect" @click="details(p.anchor)">Record payment</button></td>
       <td><div class="pay-row-actions"><button v-if="reviewRow || p.can_review" class="pay-link" @click="details(reviewRow || p)">Review payment</button><button class="pay-icon" :aria-label="'Details for ' + p.title" title="Payment details" @click="details(p.anchor)"><ChevronRight :size="18" /></button><a v-if="sharedReceipt && p.kind === 'online'" class="pay-icon" :href="sharedReceipt" target="_blank" rel="noopener noreferrer" :aria-label="p.status === 'refunded' ? 'Stripe refund receipt' : 'Stripe receipt'" :title="p.status === 'refunded' ? 'Stripe refund receipt' : 'Stripe receipt'"><ReceiptText :size="16" /></a><button v-if="canRefund && p.can_request_refund" class="pay-icon pay-refund-button" aria-label="Review refund of shared online payment" title="Review refund of the full shared payment" @click="details(p.anchor,true)"><RotateCcw :size="15" /></button></div></td>
     </tr>
-    <tr v-if="expanded" class="pay-group-expanded"><td colspan="8"><div :id="p.id" class="pay-group-content">
+    <tr v-if="expanded" class="pay-group-expanded"><td :colspan="selectable ? 9 : 8"><div :id="p.id" class="pay-group-content">
       <p class="pay-group-explanation">{{ p.partial ? 'Only allocations matching your filters are included in the amount above.' : p.scoped ? 'These are the booking allocations visible to your business.' : 'One payment for this checkout. The amounts below are each booking’s share of the total.' }}</p>
       <CheckoutPaymentBreakdown :payment="p" @booking="row => emit('booking',row)" />
     </div></td></tr>
   </template>  <tr v-else>
+    <td v-if="selectable" class="pay-select-cell"><input type="checkbox" :checked="checked" :aria-label="'Select payment ' + reference(p)" @change="emit('select',$event.target.checked)" /></td>
     <td><button class="pay-link" @click="details(p)">{{ reference(p) }}</button><small>{{ p.payment_date || 'Date not recorded' }}</small><small v-if="p.booking_ref">{{ p.booking_ref }}</small></td>
     <td><b>{{ p.customer_name }}</b><small>{{ p.venue_name }}</small><small v-if="p.listing_name">{{ p.listing_name }}</small></td>
     <td>{{ labelFor(channelOptions,p.channel) }}<small v-if="p.created_by_name">Created by {{ p.created_by_name }}</small><small v-if="p.channel === 'admin'">No platform fee</small></td>
