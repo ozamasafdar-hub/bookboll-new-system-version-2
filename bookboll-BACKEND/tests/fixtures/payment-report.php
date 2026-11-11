@@ -34,9 +34,16 @@ foreach ([
     foreach (Rules::rows($group,$b) as $row) {
         if ($row['row_kind'] === 'receipt') continue;
         if ($perspective === 'provider' && $operator !== 'provider') continue;
-        $rows[] = $row + ['payment_id'=>'QA-'.str_pad($row['source_payment_id'] ?? $row['id'],4,'0',STR_PAD_LEFT),'booking_id'=>(string)($index+1),'booking_ref'=>'QA-B'.($index+1),'customer_name'=>'Example Customer '.($index+1),'venue_id'=>$operator === 'provider' ? '1' : '2','venue_name'=>$venue,'listing_name'=>'Badminton court','source'=>$index === 5 ? 'event' : 'venue','can_collect'=>false];
+        $rows[] = $row + ['payment_id'=>'QA-'.str_pad($row['source_payment_id'] ?? $row['id'],4,'0',STR_PAD_LEFT),'booking_id'=>(string)($index+1),'booking_ref'=>'QA-B'.($index+1),'customer_name'=>'Example Customer '.($index+1),'venue_id'=>$operator === 'provider' ? '1' : '2','venue_name'=>$venue,'listing_id'=>$operator === 'provider' ? ($index === 1 ? '12' : '11') : '21','listing_name'=>$index === 1 ? 'Padel court' : 'Badminton court','source'=>$index === 5 ? 'event' : 'venue','can_collect'=>false];
     }
 }
+$venues=[]; $listings=[];
+foreach ($rows as $row) {
+    $venues[$row['venue_id']]=['value'=>$row['venue_id'],'label'=>$row['venue_name']];
+    $listings[$row['listing_id']]=['value'=>$row['listing_id'],'label'=>$row['listing_name'],'venue_id'=>$row['venue_id'],'venue_name'=>$row['venue_name']];
+}
+$businesses=[['value'=>'7','label'=>'Example Sports Club']];
+if ($perspective === 'platform') array_unshift($businesses,['value'=>'bookboll','label'=>'Bookboll · own venues']);
 $rows = array_values(array_filter($rows,fn($r)=>Filter::matches($r,$filters)));
 $ordered = new \App\Support\PaymentReportPage(0, max(1,count($rows)), $filters['sort'] ?? 'date', $filters['sort_dir'] ?? 'desc');
 foreach ($rows as $row) $ordered->add($row);
@@ -44,4 +51,4 @@ $rows = $ordered->rows();
 $totals = new Totals;
 foreach ($rows as $row) $totals->add($row);
 $page = max(1,(int)($filters['page'] ?? 1)); $per = max(1,(int)($filters['records_per_page'] ?? 25));
-echo json_encode(['success'=>true,'data'=>['report_version'=>2,'perspective'=>$perspective,'payments'=>['data'=>array_slice($rows,($page-1)*$per,$per),'total'=>count($rows),'current_page'=>$page,'per_page'=>$per],'summary'=>$totals->result(),'review_count'=>$totals->reviewCount,'filter_options'=>['currencies'=>['QAR'],'venues'=>[['value'=>'1','label'=>'Court One'],['value'=>'2','label'=>'Bookboll Arena']],'businesses'=>[['value'=>'7','label'=>'Example Sports Club']]]]]);
+echo json_encode(['success'=>true,'data'=>['report_version'=>2,'perspective'=>$perspective,'payments'=>['data'=>array_slice($rows,($page-1)*$per,$per),'total'=>count($rows),'current_page'=>$page,'per_page'=>$per],'summary'=>$totals->result(),'review_count'=>$totals->reviewCount,'filter_options'=>['currencies'=>['QAR'],'venues'=>array_values($venues),'listings'=>array_values($listings),'businesses'=>$businesses]]]);

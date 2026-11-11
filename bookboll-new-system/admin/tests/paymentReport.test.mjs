@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { periodDates, filterError, queryFilters, legacyPaymentRows, money } from '../src/lib/paymentReport.js'
+import { periodDates, filterError, queryFilters, legacyPaymentRows, money, statusOptions, listingsForVenues, keepAvailableListings } from '../src/lib/paymentReport.js'
 test('custom dates and amount ranges reject contradictory filters', () => {
   assert.match(filterError({from_date:'2026-11-10',to_date:'2026-11-01',amount_min:'',amount_max:''}), /End date/)
   assert.match(filterError({amount_min:'20',amount_max:'10'}), /Maximum/)
@@ -27,4 +27,19 @@ test('currency formatting preserves currency and precision without inventing zer
   assert.equal(money(null,'QAR'),'—')
   assert.match(money(10.123,'KWD'),/10\.123/)
   assert.match(money(1000,'JPY'),/1,000/)
+})
+test('venue changes scope listing choices and remove only incompatible selections', () => {
+  const options = [{value:'11',venue_id:'1'}, {value:'12',venue_id:'1'}, {value:'21',venue_id:'2'}]
+  assert.deepEqual(listingsForVenues(options, []), options)
+  const scoped = listingsForVenues(options, ['1'])
+  assert.deepEqual(scoped.map(x=>x.value), ['11','12'])
+  assert.deepEqual(keepAvailableListings(['11','21'], scoped), ['11'])
+  assert.deepEqual(keepAvailableListings(['11'], listingsForVenues(options, [])), ['11'])
+  assert.deepEqual(listingsForVenues(options, ['1','2']), options)
+  assert.deepEqual(keepAvailableListings(['11'], listingsForVenues(options, ['2'])), [])
+  assert.deepEqual(queryFilters({location_id:['1'],listing_id:['11','12'],business_id:['bookboll','9']}),
+    {location_id:'1',listing_id:'11,12',business_id:'bookboll,9'})
+})
+test('payment status filters do not offer wallet clearing or payout states', () => {
+  assert.deepEqual(statusOptions.map(x=>x.value), ['paid','pending','refunded','cancelled'])
 })

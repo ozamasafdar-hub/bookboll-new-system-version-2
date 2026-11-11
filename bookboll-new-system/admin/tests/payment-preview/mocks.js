@@ -23,3 +23,8 @@ export async function fetchPaymentDetails(id, rowId) {
 export const previewPaymentRefund = () => { throw new Error('Local QA never contacts Stripe.') }
 export const requestPaymentRefund = previewPaymentRefund
 export const refreshPaymentRefund = previewPaymentRefund
+export const previewCheckoutCollection = previewPaymentRefund
+export const collectCheckoutPayment = previewPaymentRefund
+export const previewPaymentReview = previewPaymentRefund
+export const savePaymentReview = previewPaymentRefund
+export const apiFetch = async () => ({success:true,data:{mode:'workspace',production_ready:false,refunds_ready:false,checks:[]}})

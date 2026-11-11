@@ -1,5 +1,7 @@
 # Bookboll payments — current developer handoff
 
+**Total sales and payment filters (11 November):** The first platform KPI is **Total sales · GMV** (`summary[].total_sales`): paid + pending reconciled payment allocations across every recipient, including external businesses and staff bookings. It includes fees plus venue/provider shares once, never the full receipt again. It excludes cancelled/refunded/skipped/unresolved records; the review notice discloses excluded records. It is not Bookboll revenue or profit. Existing received/fee/venue KPIs are unchanged. P13 and P15 now require these checks; changing the policy checksum invalidates older release evidence.
+
 **Payment review actions:** [Required P19 workflow and acceptance](docs/payments/PAYMENT_REVIEWS.md). Platform admins can preview, confirm, annotate and reopen eligible review records. Apply the review-audit migration; preserve original receipts and enforce P19 in signed release evidence.
 
 Updated 11 November 2026. This is the current entry point for the Payments rebuild and historical reconciliation. The previous README is preserved in the [historical implementation log](docs/payments/implementation-history-through-2026-11-11.md); its earlier rules, totals and preview restrictions may be superseded by later corrections. Do not use that log as a production deployment script.
@@ -79,7 +81,12 @@ These are in `bookboll-BACKEND/database/migrations`. The intervening workspace-a
 
 `GET /api/admin/payments/dashboard?report_version=2` returns server-derived perspective, paginated allocation rows, summaries per currency, review counts and filter options. Older responses without v2 must keep unreliable earnings summaries disabled in the frontend.
 
-Search, multi-select status/method/category/channel/currency/source/location/business, recipient scope, inclusive custom dates, amount bounds including zero, sorting and pagination must apply consistently to the whole authorized set. Resolve sibling receipts/allocations before filtering. The Payments report is uncapped by the separate Analytics activity page's 5,000 loaded-booking limitation. Report totals are not sums of the visible page.
+Search, multi-select status/method/category/channel/currency/source/location/listing/business, recipient scope, inclusive custom dates, amount bounds including zero, sorting and pagination must apply consistently to the whole authorized set. Resolve sibling receipts/allocations before filtering. The Payments report is uncapped by the separate Analytics activity page's 5,000 loaded-booking limitation. Report totals are not sums of the visible page.
+
+- `listing_id` accepts comma-separated IDs (or an array), intersects `location_id`, and filters allocations before checkout grouping, summary and pagination. `filter_options.listings` contains `{value,label,venue_id,venue_name}` from the authorized ledger, independent of the active filters. The UI limits these to selected venues and removes incompatible listing selections; clearing venues preserves compatible listings. Provider requests cannot reveal foreign options or totals.
+- Platform Business options start with `bookboll` / **Bookboll · own venues**. Match the historical `operator=bookboll`, not `recipient_kind=bookboll`: a fee from an external venue must not match this option. Multiple business choices form a union, e.g. `business_id=bookboll,7`. Keep frozen ownership after transfers.
+- **On hold** and **Available for payout** are removed from the Payments filter. Wallet clearing (`wallet_transactions.status=on_hold`) is a separate process; do not delete or remap wallet records to implement this UI change. Payment filters retain Paid, Pending, Refunded and Cancelled.
+- Cache namespace is now **v12**, so old cached rows without listing IDs are discarded. No historical payment amounts, fees, statuses or ownership are changed by this report update.
 
 Historical operator/recipient, quote, currency and receipt links are server-owned snapshots. Current venue transfer, plan, commission or staff-role changes must not silently rewrite them. Provider historical ledger access must not expose another business's current booking details.
 

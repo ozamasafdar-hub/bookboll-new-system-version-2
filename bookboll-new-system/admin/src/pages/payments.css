@@ -95,3 +95,20 @@
 .pay-collection-method { display:flex; flex-direction:column; gap:6px; margin:14px 0; max-width:260px; }
 .pay-booking-breakdowns .pay-booking-breakdown > header { display:flex; flex-direction:column; align-items:flex-start; gap:6px; }
 .pay-status.pay-status-partially_paid { color:var(--warning-ink,#845900); background:var(--warning-bg,#fff3d8); border-color:var(--warning-border,#e8cf96); }
+.pay-summary-platform { grid-template-columns:repeat(5,minmax(0,1fr)); }
+.pay-summary-platform .pay-stat:first-child { background:var(--primary-soft,#eef4ff); }
+.pay-filter small { font-size:11px; font-weight:400; color:var(--muted); line-height:1.4; }
+.pay-amount-range { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.pay-amount-range label,.pay-amount-range input { min-width:0; width:100%; }
+@media(max-width:1250px) {
+  .pay-summary-platform { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .pay-summary-platform .pay-stat { border-right:1px solid var(--pay-border); border-bottom:1px solid var(--pay-border); }
+  .pay-summary-platform .pay-stat:first-child { grid-column:1 / -1; border-right:0; }
+  .pay-summary-platform .pay-stat:nth-child(odd) { border-right:0; }
+  .pay-summary-platform .pay-stat:nth-last-child(-n+2) { border-bottom:0; }
+}
+@media(max-width:600px) {
+  .pay-summary-platform { grid-template-columns:1fr; }
+  .pay-summary-platform .pay-stat { border-right:0; }
+  .pay-summary-platform .pay-stat:nth-last-child(2) { border-bottom:1px solid var(--pay-border); }
+}

@@ -121,10 +121,10 @@
     },
     {
       "id": "P13_RECEIPT_CONSERVATION",
-      "rule": "Bookboll received is paid platform allocations plus paid own venue AFTER fees plus confirmed own unallocated receipts. Gross and its allocations cannot both contribute. Pending/refunded/cancelled/provider-direct cash are not Bookboll received. Currency totals stay separate; these are receipts, not profit.",
+      "rule": "Bookboll received is paid platform allocations plus paid own venue AFTER fees plus confirmed own unallocated receipts. Total sales (GMV) is the sum of paid and pending reconciled allocations across ALL recipients, including external staff bookings, own venue bookings, memberships and event fees. Count a gross receipt OR its conserving allocations once, never both. Cancelled, refunded, skipped and unresolved amounts are excluded from GMV; unresolved amounts are disclosed. Pending/refunded/cancelled/provider-direct cash are not Bookboll received. Currency totals stay separate; sales and receipts are not profit.",
       "implementation": ["bookboll-BACKEND/app/Support/PaymentReportRules.php", "bookboll-BACKEND/app/Support/PaymentReportTotals.php"],
       "tests": ["bookboll-BACKEND/tests/payment-report-rules.php", "bookboll-BACKEND/tests/Feature/PaymentReportDashboardTest.php", "bookboll-new-system/admin/tests/paymentReport.test.mjs"],
-      "production_acceptance": "Audit paid/pending totals independently from persisted records per currency and parent receipt, including rounding, refunds and ambiguous splits."
+      "production_acceptance": "Audit paid/pending totals independently from persisted records per currency and parent receipt, including rounding, refunds and ambiguous splits. GMV must conserve deposit + arrival, full gross/fee/share, owned internal splits and shared multi-slot checkouts; include manual external/owned, event and membership allocations. It must follow filters before pagination and match flat CSV totals for eligible allocations. Test separate zero/three-decimal currencies."
     },
     {
       "id": "P14_REVIEW_AND_ACCESS",
@@ -135,10 +135,10 @@
     },
     {
       "id": "P15_FILTERS_AND_CACHES",
-      "rule": "Resolve receipt siblings before applying filters. Summary and rows use the entire authorized set and identical custom dates/status/method/channel/operator/recipient/currency/amount filters. Cache invalidation follows committed mutations; allocations are not extra receipt records.",
+      "rule": "Resolve receipt siblings before applying filters. Summary and rows use the entire authorized set and identical custom dates/status/method/channel/operator/recipient/currency/venue/listing/business/amount filters. The business_id=bookboll sentinel matches the frozen bookboll operator, not the fee recipient or current venue owner. Combine selected businesses with OR; combine different filter fields with AND. Listing options carry venue_id and come only from authorized records; selecting venues limits choices and clears incompatible listings. Payment statuses are paid/pending/refunded/cancelled, not wallet hold/payout states. Cache invalidation follows committed mutations; allocations are not extra receipt records.",
       "implementation": ["bookboll-BACKEND/app/Services/PaymentReportService.php", "bookboll-BACKEND/app/Support/PaymentReportFilter.php", "bookboll-BACKEND/app/Support/PaymentReportCache.php"],
       "tests": ["bookboll-BACKEND/tests/Feature/PaymentReportDashboardTest.php", "bookboll-BACKEND/tests/Feature/PaymentReportCacheTest.php", "bookboll-new-system/admin/tests/paymentReport.test.mjs"],
-      "production_acceptance": "Validate shared multi-replica cache/locks and consistent export snapshot during edits. Separate Analytics activity 5,000-record cap still requires its own server aggregate work."
+      "production_acceptance": "Validate shared multi-replica cache/locks and consistent export snapshot during edits. Test listing-filtered multi-slot checkout partial amounts, stable pre-filter choices, invalid venue/listing combinations, multi-select owned + external businesses, frozen ownership after transfer and denial of foreign listing IDs/options to providers. Verify venue changes clear incompatible selections. Cache v12 includes listing IDs. Separate Analytics activity 5,000-record cap still requires its own server aggregate work."
     },
     {
       "id": "P16_LANDLORD_COSTS",

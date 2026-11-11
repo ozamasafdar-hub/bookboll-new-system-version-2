@@ -5,7 +5,16 @@ export const paymentCategories = [
 ].map(([value, label]) => ({ value, label }))
 export const channelOptions = [['marketplace', 'Bookboll marketplace'], ['site', 'Business website'], ['admin', 'Added by staff'], ['unknown', 'Not recorded']].map(([value, label]) => ({ value, label }))
 export const methodOptions = [['online', 'Online payment'], ['cash', 'Cash'], ['card', 'Card at venue'], ['cheque', 'Cheque'], ['wire_transfer', 'Bank transfer']].map(([value, label]) => ({ value, label }))
-export const statusOptions = [['paid', 'Paid'], ['pending', 'Pending'], ['refunded', 'Refunded'], ['cancelled', 'Cancelled'], ['on_hold', 'On hold'], ['available_for_payout', 'Available for payout']].map(([value, label]) => ({ value, label }))
+// Wallet clearing/payout states are separate from the payment ledger.
+export const statusOptions = [['paid', 'Paid'], ['pending', 'Pending'], ['refunded', 'Refunded'], ['cancelled', 'Cancelled']].map(([value, label]) => ({ value, label }))
+export function listingsForVenues(listings, venueIds = []) {
+  const selected = new Set(venueIds.map(String))
+  return listings.filter(listing => !selected.size || selected.has(String(listing.venue_id)))
+}
+export function keepAvailableListings(selectedIds, listings) {
+  const available = new Set(listings.map(listing => String(listing.value)))
+  return selectedIds.filter(id => available.has(String(id)))
+}
 export const labelFor = (options, value) => options.find(x => x.value === (options === methodOptions && value === 'credit_card' ? 'card' : value))?.label || value || 'Not recorded'
 export const money = (amount, currency) => {
   if (amount === null || amount === undefined || !Number.isFinite(Number(amount))) return '—'

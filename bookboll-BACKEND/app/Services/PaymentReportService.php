@@ -66,7 +66,7 @@ final class PaymentReportService
         $start = ($page - 1) * $perPage;
         $pageRows = new PaymentReportPage($start, $perPage, $sort, $dir);
         $matched = 0; $totals = new PaymentReportTotals;
-        $currencies = []; $venues = []; $businesses = [];
+        $currencies = []; $venues = []; $listings = []; $businesses = [];
 
         // Process bounded batches. Keep the requested sorted window and totals;
         // allocations may inherit a receipt date older than their creation date.
@@ -118,7 +118,11 @@ final class PaymentReportService
             $row['can_review'] = $mayRefund && $row['category'] === 'unclassified';
             if ($row['currency']) $currencies[$row['currency']] = true;
             if ($row['venue_id']) $venues[$row['venue_id']] = ['value' => (string) $row['venue_id'], 'label' => $row['venue_name']];
-            if ($row['business_id']) $businesses[$row['business_id']] = ['value' => (string) $row['business_id'], 'label' => $row['business_name'] ?: $row['recipient_label']];
+            if ($row['listing_id']) $listings[$row['listing_id']] = [
+                'value' => (string) $row['listing_id'], 'label' => $row['listing_name'] ?: 'Listing #'.$row['listing_id'],
+                'venue_id' => $row['venue_id'], 'venue_name' => $row['venue_name'],
+            ];
+            if ($row['business_id'] && $row['operator'] !== 'bookboll') $businesses[$row['business_id']] = ['value' => (string) $row['business_id'], 'label' => $row['business_name'] ?: $row['recipient_label']];
             if (!\App\Support\PaymentReportFilter::matches($row, $request->query())) continue;
             $totals->add($row);
             if ($grouped) $matching[] = $row;
@@ -153,13 +157,17 @@ final class PaymentReportService
         unset($entry);
         ksort($currencies);
         uasort($venues, fn ($a, $b) => strcasecmp($a['label'], $b['label']));
+        uasort($listings, fn ($a, $b) => strcasecmp($a['label'], $b['label']));
+        uasort($businesses, fn ($a, $b) => strcasecmp($a['label'], $b['label']));
+        $businessOptions = array_values($businesses);
+        if ($platform) array_unshift($businessOptions, ['value' => 'bookboll', 'label' => 'Bookboll · own venues']);
         return sendSuccess('Payment allocations fetched', [
             'report_version' => 2, 'perspective' => $platform ? 'platform' : 'provider',
             'group_by' => $grouped ? 'stripe' : 'allocation',
             'payments' => ['data' => $visible, 'total' => $entryCount, 'allocation_total'=>$matched, 'current_page' => $page, 'per_page' => $perPage],
             'summary' => $totals->result(), 'review_count' => $totals->reviewCount,
             'fee_split_count' => $totals->feeSplitCount, 'fee_split_statuses' => $totals->feeSplitStatuses,
-            'filter_options' => ['currencies' => array_keys($currencies), 'venues' => array_values($venues), 'businesses' => array_values($businesses)],
+            'filter_options' => ['currencies' => array_keys($currencies), 'venues' => array_values($venues), 'listings' => array_values($listings), 'businesses' => $businessOptions],
         ]);
     }
 
@@ -232,6 +240,7 @@ final class PaymentReportService
             'creation_basis' => $b?->creation_context['basis'] ?? null,
             'customer_name' => $sub?->customer_name ?: ($customer?->name ?: '—'), 'customer_email' => $sub?->customer_email ?: ($customer?->email ?: ''),
             'venue_id' => $venue ? (string) $venue->id : null,
+            'listing_id' => $b?->listing_id ? (string) $b->listing_id : null,
             'venue_name' => $venue?->name ?: '—', 'listing_name' => $b?->listing?->name ?: ($sub?->program?->name ?: ''),
             'business_name' => $context['business_name'] ?? null,
             'country_id' => $context['country_id'] ?? $b?->venue?->country_id,

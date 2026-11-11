@@ -8,7 +8,7 @@ import { usePremium } from '../lib/premium.js'
 import { downloadCSV } from '../lib/useExport.js'
 import { pushToast } from '../lib/toast.js'
 import PaymentLedgerEntry from '../components/PaymentLedgerEntry.vue'
-import { paymentCategories, channelOptions, methodOptions, statusOptions, labelFor, money, periodDates, filterError, queryFilters, legacyPaymentRows } from '../lib/paymentReport.js'
+import { paymentCategories, channelOptions, methodOptions, statusOptions, labelFor, money, periodDates, filterError, queryFilters, legacyPaymentRows, listingsForVenues, keepAvailableListings } from '../lib/paymentReport.js'
 import MultiSelect from '../components/MultiSelect.vue'
 import PaymentDetails from '../components/PaymentDetails.vue'
 import PaymentReleaseChecks from '../components/PaymentReleaseChecks.vue'
@@ -22,11 +22,18 @@ const platform = computed(() => perspective.value ? perspective.value === 'platf
 const canRefund = computed(() => ['super_admin','admin'].includes(currentUser.value?.role) && platform.value && !currentUser.value?.owner_user_id)
 const refundRequested = ref(false)
 function openDetails(p, refund = false) { refundRequested.value = refund; selected.value = p }
-const defaults = () => ({ search:'', currency:[], status:[], method:[], category:[], channel:[], source:[], location_id:[], business_id:[], from_date:'', to_date:'', amount_min:'', amount_max:'', scope:'all' })
+const defaults = () => ({ search:'', currency:[], status:[], method:[], category:[], channel:[], source:[], location_id:[], listing_id:[], business_id:[], from_date:'', to_date:'', amount_min:'', amount_max:'', scope:'all' })
 const filters = reactive(defaults())
 const period = ref('all'), advanced = ref(false), page = ref(1), perPage = ref(25), total = ref(0), sort = ref('date'), sortDir = ref('desc')
 const allocationTotal = ref(0)
-const rows = ref([]), summary = ref([]), options = ref({ currencies:[], venues:[], businesses:[] }), ready = ref(null), reviewCount = ref(0)
+const rows = ref([]), summary = ref([]), options = ref({ currencies:[], venues:[], listings:[], businesses:[] }), ready = ref(null), reviewCount = ref(0)
+const listingOptions = computed(() => listingsForVenues(options.value.listings, filters.location_id).map(listing => ({
+  ...listing, label: `${listing.label}${listing.venue_name ? ' · ' + listing.venue_name : ''}`,
+})))
+watch(() => filters.location_id, () => {
+  const next = keepAvailableListings(filters.listing_id, listingOptions.value)
+  if (next.length !== filters.listing_id.length) filters.listing_id = next
+}, { deep:true })
 const feeSplitCount = ref(0), feeSplitStatuses = ref({})
 const feeSplitStatusText = computed(() => Object.entries(feeSplitStatuses.value).map(([status,count]) => `${Number(count).toLocaleString()} ${labelFor(statusOptions,status).toLowerCase()}`).join(' · '))
 const loading = ref(false), error = ref(''), exporting = ref(false), selected = ref(null), bookingId = ref(null), collectId = ref(null)
@@ -55,7 +62,7 @@ async function load(refresh = false) {
     reviewCount.value = ready.value ? data.review_count || 0 : 0
     feeSplitCount.value = ready.value ? data.fee_split_count || 0 : 0
     feeSplitStatuses.value = data.fee_split_statuses || {}
-    options.value = { currencies:[], venues:[], businesses:[], ...data.filter_options }
+    options.value = { currencies:[], venues:[], listings:[], businesses:[], ...data.filter_options }
   } catch (e) {
     if (id !== requestId) return
     error.value = e.message || 'Could not load payments. Please try again.'
@@ -72,6 +79,7 @@ function amounts(key) {
   return summary.value.length ? summary.value.map(s => money(s[key], s.currency)) : ['No recorded amount']
 }
 const cards = computed(() => platform.value ? [
+  ['total_sales','Total sales · GMV','Paid + pending sales across all businesses. Excludes cancelled and refunded payments.'],
   ['bookboll_received','Bookboll received','Platform fees + Bookboll’s own-venue share after fees; each receipt counted once'],
   ['platform_fees','Platform fees','External + own-venue fees, memberships and events'],
   ['owned_venue_received','Own venues · revenue','Venue share after the internal platform fee'],
@@ -141,10 +149,10 @@ onBeforeUnmount(() => { ++requestId; clearTimeout(timer) })
     <p v-if="invalid" class="pay-notice pay-error" role="alert">{{ invalid }}</p>
     <p v-if="error" class="pay-notice pay-error" role="alert">{{ error }} <button class="pay-link" @click="load">Try again</button></p>
     <p v-if="ready === false && !error" class="pay-notice">Payment records are available. Earnings totals will appear after the updated payment report is deployed; the existing totals do not reliably separate fees from provider money.</p>
-    <p v-if="ready && reviewCount && !loading && !error" class="pay-notice">{{ reviewCount.toLocaleString() }} matching payment records have unresolved recipient allocations. These amounts are excluded from earnings totals. <button class="pay-link" @click="filters.scope = 'review'">Review records</button></p>
+    <p v-if="ready && reviewCount && !loading && !error" class="pay-notice">{{ reviewCount.toLocaleString() }} matching payment records have unresolved recipient allocations. These amounts are excluded from sales and earnings totals until reviewed. <button class="pay-link" @click="filters.scope = 'review'">Review records</button></p>
     <p v-if="ready && feeSplitCount && !loading && !error" class="pay-notice"><b>{{ feeSplitCount.toLocaleString() }} Bookboll records have a missing historical fee split.</b> Ownership is confirmed; paid amounts already count once in Bookboll received. The old records do not say how much was platform fee versus venue revenue. {{ feeSplitStatusText }}. Cancelled amounts do not count as received or pending. <button class="pay-link" @click="filters.scope = 'fee_split'">View missing splits</button></p>
 
-    <section class="pay-summary" aria-label="Payment totals" :aria-busy="loading">
+    <section class="pay-summary" :class="{ 'pay-summary-platform':platform }" aria-label="Payment totals" :aria-busy="loading">
       <article v-for="[key,title,description] in cards" :key="key" class="pay-stat"><h2>{{ title }}</h2><strong v-for="amount in amounts(key)" :key="amount">{{ amount }}</strong><p>{{ description }}</p></article>
     </section>
 
@@ -163,8 +171,15 @@ onBeforeUnmount(() => { ++requestId; clearTimeout(timer) })
       <div class="pay-tools"><div class="pay-search"><Search :size="17" /><input v-model="filters.search" type="search" maxlength="150" aria-label="Search payments" placeholder="Search payment, booking, customer or venue…" /></div><button class="btn" :aria-expanded="advanced" aria-controls="payment-filters" @click="advanced = !advanced"><SlidersHorizontal :size="16" /> Filters</button><button class="pay-link" @click="reset">Reset</button></div>
       <div v-if="advanced" id="payment-filters" class="pay-advanced">
         <div class="pay-filter"><span>Status</span><MultiSelect v-model="filters.status" :options="statusOptions" placeholder="All statuses" /></div><div class="pay-filter"><span>Payment method</span><MultiSelect v-model="filters.method" :options="methodOptions" placeholder="All methods" /></div>
-        <template v-if="ready"><div class="pay-filter"><span>Allocation</span><MultiSelect v-model="filters.category" :options="paymentCategories" placeholder="All allocations" /></div><div class="pay-filter"><span>Booking channel</span><MultiSelect v-model="filters.channel" :options="channelOptions" placeholder="All channels" /></div><div class="pay-filter"><span>Source</span><MultiSelect v-model="filters.source" :options="sourceOptions" placeholder="All sources" /></div><div class="pay-filter"><span>Venue</span><MultiSelect v-model="filters.location_id" :options="options.venues" placeholder="All venues" /></div><div v-if="platform" class="pay-filter"><span>Business</span><MultiSelect v-model="filters.business_id" :options="options.businesses" placeholder="All businesses" /></div></template>
-        <label>Minimum amount<input v-model="filters.amount_min" type="number" min="0" step="0.01" placeholder="No minimum" /></label><label>Maximum amount<input v-model="filters.amount_max" type="number" min="0" step="0.01" placeholder="No maximum" /></label>
+        <template v-if="ready">
+          <div class="pay-filter"><span>Allocation</span><MultiSelect v-model="filters.category" :options="paymentCategories" placeholder="All allocations" /></div>
+          <div class="pay-filter"><span>Booking channel</span><MultiSelect v-model="filters.channel" :options="channelOptions" placeholder="All channels" /></div>
+          <div class="pay-filter"><span>Source</span><MultiSelect v-model="filters.source" :options="sourceOptions" placeholder="All sources" /></div>
+          <div v-if="platform" class="pay-filter"><span>Business</span><MultiSelect v-model="filters.business_id" :options="options.businesses" placeholder="All businesses" /></div>
+          <div class="pay-filter"><span>Venue</span><MultiSelect v-model="filters.location_id" :options="options.venues" placeholder="All venues" /></div>
+          <div class="pay-filter"><span>Listing</span><MultiSelect v-model="filters.listing_id" :options="listingOptions" placeholder="All listings" /><small v-if="filters.location_id.length">Listings in your selected venues.</small></div>
+        </template>
+        <div class="pay-amount-range"><label>Minimum amount<input v-model="filters.amount_min" type="number" min="0" step="0.01" placeholder="No minimum" /></label><label>Maximum amount<input v-model="filters.amount_max" type="number" min="0" step="0.01" placeholder="No maximum" /></label></div>
       </div>
       <div v-if="ready" class="pay-scopes" role="group" aria-label="Filter recipient"><button :class="{active:filters.scope === 'all'}" :aria-pressed="filters.scope === 'all'" @click="filters.scope = 'all'">All records</button><button :class="{active:filters.scope === (platform ? 'bookboll' : 'provider')}" :aria-pressed="filters.scope === (platform ? 'bookboll' : 'provider')" @click="filters.scope = platform ? 'bookboll' : 'provider'">{{ platform ? 'Bookboll’s share' : 'Your share' }}</button><button v-if="platform" :class="{active:filters.scope === 'fee_split'}" :aria-pressed="filters.scope === 'fee_split'" @click="filters.scope = 'fee_split'">Historical fee splits</button><button :class="{active:filters.scope === 'review'}" :aria-pressed="filters.scope === 'review'" @click="filters.scope = 'review'">Needs review</button></div>
       <div class="pay-table-wrap"><table class="pay-table"><thead><tr><th :aria-sort="sort === 'date' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'"><button @click="changeSort('date')">Payment / date <ArrowUpDown :size="13" /></button></th><th>Customer / venue</th><th>Booking channel</th><th>Allocation / recipient</th><th>Method</th><th class="pay-number" :aria-sort="sort === 'amount' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'"><button @click="changeSort('amount')">Amount <ArrowUpDown :size="13" /></button></th><th>Status</th><th>Actions</th></tr></thead>

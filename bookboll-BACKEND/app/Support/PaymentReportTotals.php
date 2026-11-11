@@ -21,7 +21,7 @@ final class PaymentReportTotals
         $currency = $row['currency'];
         $amount = Money::toMinor($row['amount'], $currency);
         $this->currencies[$currency] ??= array_fill_keys([
-            'bookboll_received', 'platform_fees', 'marketplace_fees', 'site_fees', 'other_channel_fees',
+            'total_sales', 'bookboll_received', 'platform_fees', 'marketplace_fees', 'site_fees', 'other_channel_fees',
             'event_fees', 'membership_fees', 'owned_online', 'owned_onsite', 'owned_pending',
             'provider_received', 'provider_online', 'provider_arrival', 'provider_manual', 'provider_pending',
             'provider_received_online', 'provider_received_offline', 'provider_received_other',
@@ -33,6 +33,10 @@ final class PaymentReportTotals
         $s = &$this->currencies[$currency];
         $category = $row['category'];
         $status = $row['status'];
+        // Gross recorded sales include every recipient, including manual bookings
+        // and unpaid balances. Only reconciled allocations reach this point;
+        // their parent receipt must never be added a second time.
+        if (in_array($status, ['paid', 'pending'], true)) $s['total_sales'] += $amount;
         $providerSale = $row['operator'] === 'provider' && in_array($row['channel'], ['marketplace', 'site'], true)
             && in_array($category, ['provider_booking_fee', 'provider_online', 'provider_arrival'], true);
         if ($providerSale && in_array($status, ['paid', 'pending'], true)) $s['provider_sales'] += $amount;

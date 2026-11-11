@@ -3,6 +3,7 @@
 use App\Models\Booking;
 use App\Models\Business;
 use App\Models\LoyaltyTier;
+use App\Models\Listing;
 use App\Models\Payment;
 use App\Models\User;
 use App\Models\Venue;
@@ -59,6 +60,60 @@ function sharedCheckoutFixture($venue, $customer): array {
     }
     return $payments;
 }
+
+function reportFixtureListing(Venue $venue, string $name): Listing {
+    return Listing::create(['name'=>$name,'venue_id'=>$venue->id,'base_price'=>100,'capacity'=>4,'slot_duration'=>1,'payment_options'=>['deposit_remaining_on_arrival']]);
+}
+
+it('filters listings across checkout allocations with stable scoped choices and totals', function () {
+    $payments=sharedCheckoutFixture($this->externalVenue,$this->provider);
+    $first=reportFixtureListing($this->externalVenue,'Court One');
+    $second=reportFixtureListing($this->externalVenue,'Court Two');
+    $private=reportFixtureListing($this->ownVenue,'Private Owned Court');
+    foreach ([$first,$second] as $i=>$listing) $payments[$i]->booking->forceFill(['listing_id'=>$listing->id])->saveQuietly();
+    $own=reportFixtureBooking($this->ownVenue,$this->platform,'manual_admin');
+    $own->forceFill(['listing_id'=>$private->id])->saveQuietly();
+    reportFixturePayment($own,'full',70,'cash','paid');
+    $url='/api/admin/payments/dashboard?report_version=2&group_by=stripe';
+    $all=$this->actingAs($this->platform)->getJson($url.'&records_per_page=1')->assertOk()
+        ->assertJsonPath('data.summary.0.total_sales',295);
+    $filtered=$this->getJson($url.'&listing_id='.$first->id.'&location_id='.$this->externalVenue->id)->assertOk()
+        ->assertJsonPath('data.payments.total',2)->assertJsonPath('data.payments.allocation_total',2)
+        ->assertJsonPath('data.summary.0.total_sales',125)->assertJsonPath('data.summary.0.platform_fees',25)
+        ->assertJsonPath('data.summary.0.provider_pending',100);
+    expect($filtered->json('data.filter_options'))->toBe($all->json('data.filter_options'));
+    foreach ($filtered->json('data.payments.data') as $group) {
+        expect($group['partial'])->toBeTrue()->and($group['booking_count'])->toBe(1);
+    }
+    $this->getJson($url.'&listing_id='.$first->id.','.$second->id)->assertOk()
+        ->assertJsonPath('data.summary.0.total_sales',225)->assertJsonPath('data.payments.total',2);
+    $this->getJson($url.'&listing_id='.$first->id.'&location_id='.$this->ownVenue->id)->assertOk()
+        ->assertJsonPath('data.payments.total',0)->assertJsonPath('data.summary',[]);
+    $provider=$this->actingAs($this->provider)->getJson($url)->assertOk()->assertJsonPath('data.summary.0.total_sales',225);
+    expect(collect($provider->json('data.filter_options.listings'))->pluck('value')->sort()->values()->all())
+        ->toBe([(string)$first->id,(string)$second->id]);
+    expect($provider->json('data.filter_options.listings.0.venue_id'))->toBe((string)$this->externalVenue->id);
+    $this->getJson($url.'&listing_id='.$private->id)->assertOk()->assertJsonPath('data.payments.total',0);
+});
+
+it('offers owned venues as a business filter without treating external fees as owned revenue', function () {
+    $own=reportFixtureBooking($this->ownVenue,$this->platform,'manual_admin');
+    reportFixturePayment($own,'full',70,'cash','paid');
+    sharedCheckoutFixture($this->externalVenue,$this->provider);
+    // Current ownership must not change the historical ownership filter.
+    $this->ownVenue->forceFill(['operator_type'=>'provider','business_id'=>$this->business->id,'owner_user_id'=>$this->provider->id])->saveQuietly();
+    $base='/api/admin/payments/dashboard?report_version=2';
+    $this->actingAs($this->platform)->getJson($base.'&business_id=bookboll')->assertOk()
+        ->assertJsonPath('data.payments.total',1)->assertJsonPath('data.summary.0.total_sales',70)
+        ->assertJsonPath('data.filter_options.businesses.0.value','bookboll');
+    $this->getJson($base.'&business_id='.$this->business->id)->assertOk()->assertJsonPath('data.payments.total',4)
+        ->assertJsonPath('data.summary.0.total_sales',225)->assertJsonPath('data.summary.0.platform_fees',45);
+    $this->getJson($base.'&business_id=bookboll,'.$this->business->id)->assertOk()
+        ->assertJsonPath('data.summary.0.total_sales',295)->assertJsonPath('data.payments.total',5);
+    $provider=$this->actingAs($this->provider)->getJson($base)->assertOk();
+    expect(collect($provider->json('data.filter_options.businesses'))->pluck('value')->all())->not->toContain('bookboll');
+    $this->getJson($base.'&business_id=bookboll')->assertOk()->assertJsonPath('data.payments.total',0);
+});
 
 it('shows one deposit and one remaining payment per checkout before pagination', function () {
     $payments = sharedCheckoutFixture($this->externalVenue,$this->provider);
@@ -215,7 +270,8 @@ it('groups conserving full-payment allocations without adding their gross receip
     reportFixturePayment($b,'booking_earning',85,'online','paid');
     $this->actingAs($this->platform)->getJson('/api/admin/payments/dashboard?report_version=2&group_by=stripe')
         ->assertOk()->assertJsonPath('data.payments.total',1)->assertJsonPath('data.payments.data.0.amount',100)
-        ->assertJsonPath('data.payments.data.0.allocation_count',2)->assertJsonPath('data.summary.0.bookboll_received',15);
+        ->assertJsonPath('data.payments.data.0.allocation_count',2)->assertJsonPath('data.summary.0.bookboll_received',15)
+        ->assertJsonPath('data.summary.0.total_sales',100);
     $this->getJson('/api/admin/payments/dashboard?report_version=2&group_by=stripe&scope=bookboll')
         ->assertOk()->assertJsonPath('data.payments.data.0.partial',true)->assertJsonPath('data.payments.data.0.amount',15);
 });

@@ -6,11 +6,14 @@ final class PaymentReportFilter
 {
     public static function matches(array $row, array $filters): bool
     {
-        foreach (['status'=>'status','method'=>'method','category'=>'category','channel'=>'channel','currency'=>'currency','source'=>'source','location_id'=>'venue_id','business_id'=>'business_id'] as $filter => $key) {
+        foreach (['status'=>'status','method'=>'method','category'=>'category','channel'=>'channel','currency'=>'currency','source'=>'source','location_id'=>'venue_id','listing_id'=>'listing_id','business_id'=>'business_id'] as $filter => $key) {
             $values = $filters[$filter] ?? null;
             if ($values === null || $values === '' || $values === []) continue;
             $values = is_array($values) ? array_map('strval', $values) : explode(',', (string) $values);
             $actual = $key === 'method' && ($row[$key] ?? '') === 'credit_card' ? 'card' : (string) ($row[$key] ?? '');
+            // Ownership follows the payment's historical snapshot, not today's
+            // venue owner or the fee recipient (external fees also go to Bookboll).
+            if ($key === 'business_id' && ($row['operator'] ?? '') === 'bookboll') $actual = 'bookboll';
             if (!in_array($actual, $values, true)) return false;
         }
         $scope = $filters['scope'] ?? 'all';

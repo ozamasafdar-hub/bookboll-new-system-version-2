@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process'
 import path from 'node:path'
 const root = fileURLToPath(new URL('../../',import.meta.url))
 const php = process.env.PAYMENT_TEST_PHP || 'php'
+const port = Number(process.env.PAYMENT_PREVIEW_PORT || 5186)
 const mock = name => path.join(root,'tests/payment-preview',name)
 const server = await createServer({ root, configFile:false, cacheDir:'node_modules/.vite-payment-preview', optimizeDeps:{entries:['tests/payment-preview/index.html']}, plugins:[vue(), {
   name:'payment-qa-fixtures',
@@ -23,9 +24,10 @@ const server = await createServer({ root, configFile:false, cacheDir:'node_modul
   },
 }], resolve:{alias:[
   {find:/.*\/lib\/payments\.js$/,replacement:mock('mocks.js')},
+  {find:/.*\/lib\/api\.js$/,replacement:mock('mocks.js')},
   {find:/.*\/lib\/currentUser\.js$/,replacement:mock('mocks.js')},
   {find:/.*\/lib\/premium\.js$/,replacement:mock('mocks.js')},
   {find:/.*\/lib\/adminBrand\.js$/,replacement:mock('mocks.js')},
   {find:/.*\/components\/BookingDetailModal\.vue$/,replacement:mock('BookingStub.vue')},
-]},server:{host:'127.0.0.1',port:5186,strictPort:true} })
-await server.listen(); console.log('Isolated payment QA: http://127.0.0.1:5186/tests/payment-preview/index.html')
+]},server:{host:'127.0.0.1',port,strictPort:true} })
+await server.listen(); console.log(`Isolated payment QA: http://127.0.0.1:${port}/tests/payment-preview/index.html`)
