@@ -80,6 +80,18 @@
 .pay-refund-label{max-width:120px;color:var(--warning-ink)!important}
 @media(max-width:600px){.pay-detail-header{padding:18px}.pay-detail-body{padding:20px 18px}.pay-detail-footer{padding:14px 18px}.pay-detail-hero strong{font-size:28px}.pay-detail-hero{align-items:flex-start}.pay-detail-state{max-width:115px}.pay-detail .pay-detail-facts{gap:18px}.pay-connection{padding:12px;gap:9px}.pay-connection-value b{font-size:12px}.pay-refund-state{flex-direction:column}.pay-detail-actions .btn{flex:1;justify-content:center}}
 .pay-link.pay-checkout-reference { font-size:11px; overflow-wrap:anywhere; max-width:190px; text-align:left; }
+.pay-review { border:1px solid var(--border); border-left:3px solid var(--primary-ink,var(--primary)); border-radius:9px; padding:20px; margin:18px 0; background:var(--card); }
+.pay-review-heading { display:flex; align-items:flex-start; gap:10px; }
+.pay-review h3 { margin:0; font-size:16px; }.pay-review p { font-size:12px; line-height:1.6; }.pay-review-heading p { color:var(--muted); margin:5px 0 15px; }
+.pay-review .pay-review-evidence { display:grid; grid-template-columns:1fr 1fr; gap:12px 20px; margin-bottom:20px; }
+.pay-review .pay-review-evidence > div { display:block; padding:8px 0; min-width:0; }.pay-review-evidence dt { color:var(--muted); font-size:11px; }.pay-review .pay-review-evidence dd { text-align:left; margin-top:5px; overflow-wrap:anywhere; }
+.pay-review-options { padding:0; margin:0 0 16px; border:0; }.pay-review-options legend { font-size:12px; font-weight:600; margin-bottom:10px; }
+.pay-review-options label { display:flex; align-items:flex-start; gap:10px; padding:12px; border:1px solid var(--border); border-radius:7px; margin:7px 0; cursor:pointer; }.pay-review-options label.is-selected { background:var(--primary-soft); border-color:var(--primary-ink,var(--primary)); }
+.pay-review-options input { margin:3px 0 0; accent-color:var(--primary); flex-shrink:0; }.pay-review-options b { display:block; font-size:12px; }.pay-review small { display:block; font-size:11px; color:var(--muted); line-height:1.5; margin-top:4px; }
+.pay-review-field { display:flex; flex-direction:column; gap:7px; font-size:12px; font-weight:600; margin:16px 0; }.pay-review-field textarea,.pay-review-field input { padding:10px; border:1px solid var(--border); border-radius:7px; font:inherit; color:var(--text); background:var(--card); resize:vertical; }.pay-review-field input { max-width:200px; }.pay-review-field small { font-weight:400; }
+.pay-review-preview h4 { margin:0 0 8px; font-size:14px; }.pay-review-preview > p { overflow-wrap:anywhere; white-space:pre-wrap; }.pay-review-impact { margin:16px 0!important; }.pay-review-result { display:flex; justify-content:space-between; gap:15px; font-size:12px; padding:10px 0; }
+.pay-review-history { border-top:1px solid var(--border); padding-top:16px; margin-top:20px; font-size:12px; }.pay-review-history summary { cursor:pointer; }.pay-review-history ol { padding-left:18px; }.pay-review-history li { padding:8px 0; }.pay-review-history p { white-space:pre-wrap; overflow-wrap:anywhere; margin:5px 0; }
+@media(max-width:600px) { .pay-review{padding:15px}.pay-review .pay-review-evidence{grid-template-columns:1fr}.pay-review .pay-actions .btn{flex:1} }
 .pay-collection-method { display:flex; flex-direction:column; gap:6px; margin:14px 0; max-width:260px; }
 .pay-booking-breakdowns .pay-booking-breakdown > header { display:flex; flex-direction:column; align-items:flex-start; gap:6px; }
 .pay-status.pay-status-partially_paid { color:var(--warning-ink,#845900); background:var(--warning-bg,#fff3d8); border-color:var(--warning-border,#e8cf96); }

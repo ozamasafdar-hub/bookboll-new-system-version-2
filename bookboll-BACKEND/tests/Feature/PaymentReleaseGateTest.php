@@ -96,9 +96,18 @@ it('blocks a release whose signed regression evidence omits shared online paymen
         ->and(collect($status['checks'])->keyBy('id')['financial_regression']['passed'])->toBeFalse();
 });
 
-it('blocks previous seventeen-rule evidence without checkout balance acceptance', function () {
+it('blocks evidence without checkout balance acceptance', function () {
     $policy = json_decode(file_get_contents(config('payment_release.policy_file')), true);
     $oldRules = array_values(array_diff(array_column($policy['rules'],'id'), ['P18_CHECKOUT_BALANCES']));
+    signReleaseFixture(['financial_regression'=>['passed_rule_ids'=>$oldRules]]);
+    $status = (new CompletedRunnerFixtureGate)->status();
+    expect($status['production_ready'])->toBeFalse()
+        ->and(collect($status['checks'])->keyBy('id')['financial_regression']['passed'])->toBeFalse();
+});
+
+it('blocks previous eighteen-rule evidence without audited payment review acceptance', function () {
+    $policy = json_decode(file_get_contents(config('payment_release.policy_file')), true);
+    $oldRules = array_values(array_diff(array_column($policy['rules'],'id'), ['P19_PAYMENT_REVIEW_ACTIONS']));
     signReleaseFixture(['financial_regression'=>['passed_rule_ids'=>$oldRules]]);
     $status = (new CompletedRunnerFixtureGate)->status();
     expect($status['production_ready'])->toBeFalse()

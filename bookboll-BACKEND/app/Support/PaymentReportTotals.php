@@ -12,6 +12,7 @@ final class PaymentReportTotals
     public function add(array $row): void
     {
         if ($row['row_kind'] === 'receipt') return;
+        if ($row['category'] === 'cancelled_uncollected') return;
         if ($row['category'] === 'unclassified') { $this->reviewCount++; return; }
         if ($row['category'] === 'owned_unallocated') {
             $this->feeSplitCount++;

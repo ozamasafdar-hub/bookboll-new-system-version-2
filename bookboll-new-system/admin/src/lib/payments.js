@@ -14,4 +14,6 @@ export const requestPaymentRefund = (id, body) => apiFetch(`/admin/payments/${id
 export const refreshPaymentRefund = id => apiFetch(`/admin/payments/${id}/refund-refresh`, { method:'POST' })
 export const previewCheckoutCollection = (id, rowId) => apiFetch(`/admin/payments/${id}/collection-preview`, { query:{ row_id:rowId } })
 export const collectCheckoutPayment = (id, body) => apiFetch(`/admin/payments/${id}/collect-checkout`, { method:'POST', body })
+export const previewPaymentReview = (id, body) => apiFetch(`/admin/payments/${id}/review-preview`, { method:'POST', body })
+export const savePaymentReview = (id, body) => apiFetch(`/admin/payments/${id}/review`, { method:'POST', body })
 

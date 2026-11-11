@@ -17,6 +17,21 @@ class PaymentDetailController extends Controller
     {
         return sendSuccess('Review full Stripe refund', $refunds->preview($request->user(), $id));
     }
+    private function reviewInput(Request $request, bool $save = false): array
+    {
+        $request->merge(['reason'=>trim((string)$request->input('reason'))]);
+        return $request->validate(['action'=>'required|in:cancelled_uncollected,retained_deposit,provider_split,note,reopen',
+            'reason'=>'required|string|min:10|max:1500','fee_amount'=>'nullable|numeric|min:0',
+            'fingerprint'=>($save ? 'required' : 'nullable').'|string|size:64']);
+    }
+    public function reviewPreview(Request $request, int $id, \App\Services\PaymentReviewService $reviews)
+    {
+        return sendSuccess('Review reporting change',$reviews->preview($request->user(),$id,$this->reviewInput($request)));
+    }
+    public function reviewSave(Request $request, int $id, \App\Services\PaymentReviewService $reviews)
+    {
+        return sendSuccess('Payment review saved',$reviews->save($request->user(),$id,$this->reviewInput($request,true)));
+    }
     public function collectionPreview(Request $request, int $id, \App\Services\CheckoutPaymentCollection $collections)
     {
         $request->validate(['row_id'=>'nullable|string|max:100']);

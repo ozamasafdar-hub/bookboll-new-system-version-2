@@ -88,7 +88,7 @@ Restoring the full backup is a cutover fallback **before reopening**. After new 
 
 ## 4. Acceptance evidence required before launch
 
-Include **P17_SHARED_ONLINE_PAYMENTS** and **P18_CHECKOUT_BALANCES** in the [checkout-payment acceptance cases](SHARED_ONLINE_PAYMENTS.md): one deposit and one remaining payment, stable checkout references, combined details, grouped pagination, partial balances, authorized atomic collection, replay/stale protection, provider isolation, receipt conservation, flat exports and full-charge refunds. Apply the checkout-reference/collection-audit migration. Grouping preserves historical receipts; do not rewrite their amounts/statuses or create duplicate receipts. The release gate rejects the old 17-rule evidence.
+Include **P17_SHARED_ONLINE_PAYMENTS** and **P18_CHECKOUT_BALANCES** in the [checkout-payment acceptance cases](SHARED_ONLINE_PAYMENTS.md): one deposit and one remaining payment, stable checkout references, combined details, grouped pagination, partial balances, authorized atomic collection, replay/stale protection, provider isolation, receipt conservation, flat exports and full-charge refunds. Apply the checkout-reference/collection-audit migration. Grouping preserves historical receipts; do not rewrite their amounts/statuses or create duplicate receipts. The release gate rejects the old 18-rule evidence.
 
 Use the rule IDs in `rules-v1.json` as a checklist with test result and artifact links. A passing unit suite is necessary but does not replace full-copy reconciliation.
 
@@ -128,3 +128,5 @@ If a gate fails, keep writes closed until recovery is complete; do not bypass ev
 Alamgir implements the production runner and supplies genuine test/reconciliation artifacts. The deployment owner supplies the actual source connection, deployment method, backup/restore facility, test-mode processor setup and external approval key. The release gate is implemented; its checks must pass rather than be removed. Osama reviews the final business identity mapping, scoped historical assertions and the dry-run totals/remaining exceptions. Already confirmed fee/manual/deposit policies do not need to be remembered or re-decided from chat.
 
 After each further project change, update the inventory and acceptance cases, create a new policy version when eligibility or accounting meaning changes, and rehearse again. Applied policy versions and audit evidence are immutable. Updating this documentation alone never changes historical payments.
+
+Payment review actions also require **P19_PAYMENT_REVIEW_ACTIONS** and the review audit migration. See [mandatory review acceptance](PAYMENT_REVIEWS.md). Previous 18-rule evidence is insufficient.

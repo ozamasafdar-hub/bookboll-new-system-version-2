@@ -4,7 +4,7 @@ Implemented 11 November 2026. This is an executable release gate, not a checklis
 
 ## What is enforced
 
-The policy now requires **18 rules**, including `P17_SHARED_ONLINE_PAYMENTS` and `P18_CHECKOUT_BALANCES`. Signed regression evidence that omits checkout-balance acceptance is rejected even if the previous 17 rules passed. The schema check also requires the booking checkout reference and collection audit table. See [checkout-payment acceptance](SHARED_ONLINE_PAYMENTS.md). Changed code, schema and policy invalidate approval for the previous build.
+The policy now requires **19 rules**, including `P17_SHARED_ONLINE_PAYMENTS` and `P18_CHECKOUT_BALANCES`. Signed regression evidence that omits checkout-balance acceptance is rejected even if the previous 18 rules passed. The schema check also requires the booking checkout reference and collection audit table. See [checkout-payment acceptance](SHARED_ONLINE_PAYMENTS.md). Changed code, schema and policy invalidate approval for the previous build.
 
 - `PaymentReleaseGate` reads the approved rule inventory. Missing policy, migrations or database identity fail closed.
 - It independently checks persisted internal allocations against their original receipts: same currency, exact minor-unit total, valid/nonduplicate buckets, and zero platform allocation on confirmed staff bookings. This arithmetic check does not by itself prove all historical ownership, cash assertions or unallocated receipts are correct; the full reconciliation evidence is still mandatory.
@@ -87,3 +87,5 @@ The release owner reviews those outputs and signs these exact UTF-8 payload byte
 The GitHub workflow alone is **not** a required branch-protection rule. Repository owners should require `Payment release checks / payment-regressions` in the protected production branch and restrict changes to the workflow/gate and signing-key configuration. This change does not modify GitHub access controls or fabricate a passing production certificate.
 
 Application checks prevent accidental omission and ordinary UI/API bypass. A person with unrestricted source, server, database and signing-key access can deliberately remove controls; no code inside a system can make itself unremovable by that system's owner. Keep approval keys and production deployment authority separate from routine development access if enforcement against deliberate changes is required.
+
+Payment review actions also require **P19_PAYMENT_REVIEW_ACTIONS** and the review audit migration. See [mandatory review acceptance](PAYMENT_REVIEWS.md). Previous 18-rule evidence is insufficient.

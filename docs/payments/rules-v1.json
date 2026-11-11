@@ -160,6 +160,13 @@
       "implementation": ["bookboll-BACKEND/app/Support/CheckoutReference.php", "bookboll-BACKEND/app/Support/PaymentReportGroups.php", "bookboll-BACKEND/app/Services/CheckoutPaymentCollection.php", "bookboll-new-system/admin/src/components/CheckoutPaymentBreakdown.vue", "bookboll-new-system/admin/src/components/PaymentDetails.vue"],
       "tests": ["bookboll-BACKEND/tests/Feature/PaymentReportDashboardTest.php", "bookboll-BACKEND/tests/Feature/PaymentReleaseGateTest.php", "bookboll-new-system/admin/tests/paymentLedgerEntry.test.mjs"],
       "production_acceptance": "Prove two entries: QAR 45 online and QAR 180 remaining, with one checkout reference and separate phase references. Confirm linked details, allocation CSV conservation, partial filters, future reference stability through processor confirmation, mixed paid/pending status, separate collectors, unauthorized rejection, changed/cancelled balance rejection, atomic collection, replay safety and saved audit. Apply checkout schema migrations. Signed financial_regression passed_rule_ids must include P18; previous 17-rule evidence is insufficient."
+    },
+    {
+      "id": "P19_PAYMENT_REVIEW_ACTIONS",
+      "rule": "Only platform admins/super admins may resolve reviewable payments through evidence-bound preview and confirmation. Preserve original receipts and append audit history. Cancelled uncollected records contribute no earnings; paid external customer receipts may be confirmed retained deposits or conserving exact fee/provider splits. Staff/skipped/unknown-source conflicts cannot be overridden. Notes stay open; reopening and source changes restore original classification.",
+      "implementation": ["bookboll-BACKEND/app/Services/PaymentReviewService.php","bookboll-BACKEND/app/Support/PaymentReviewRules.php","bookboll-new-system/admin/src/components/PaymentReviewPanel.vue"],
+      "tests": ["bookboll-BACKEND/tests/Feature/PaymentReviewTest.php","bookboll-new-system/admin/tests/paymentReview.test.mjs"],
+      "production_acceptance": "Test role/scope denial, immutable receipt fields, integer conservation, preview/change detection, duplicate replay, reversal/reopen, automatic invalidation, provider privacy and runtime gate. No automatic approval of the three cancelled examples. See docs/payments/PAYMENT_REVIEWS.md."
     }
   ],
   "snapshot_identity_reference": {

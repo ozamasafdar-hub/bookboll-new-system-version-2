@@ -81,7 +81,7 @@ final class PaymentDetailService
             }
         }
         $rows = $this->report->withProcessorIdentity($actor, $this->report->withDocuments($actor, $rows));
-        $current = collect($rows)->first(fn ($r) => (string)$r['id'] === (string)($rowId ?? $id));
+        $current = collect($rows)->first(fn ($r) => $rowId !== null ? (string)$r['id'] === $rowId : (int)($r['source_payment_id'] ?? $r['id']) === $id);
         abort_unless($current && (int)($current['source_payment_id'] ?? $current['id']) === $id, 404);
         $source = $anchor;
         $refund = $source->paymentRefund;
@@ -100,6 +100,7 @@ final class PaymentDetailService
             && collect($g['bookings'])->flatMap(fn ($b) => $b['allocations'])->contains(fn ($r) => (string)$r['id'] === (string)$current['id']));
         $current = $grouper->decorate($current);
         return ['payment'=>$current, 'checkout_payment'=>$shared,
+            'review'=>app(PaymentReviewService::class)->information($actor,$id),
             'checkout_payments'=>array_values(array_filter($groups, fn ($g) => isset($g['bookings']) && $g['id'] !== ($shared['id'] ?? null)
                 && $g['checkout_reference'] === ($shared['checkout_reference'] ?? null))),
             'online_group'=>$shared && $shared['kind'] === 'online' ? array_intersect_key($shared, array_flip(['amount','currency','booking_count','scoped'])) : null,

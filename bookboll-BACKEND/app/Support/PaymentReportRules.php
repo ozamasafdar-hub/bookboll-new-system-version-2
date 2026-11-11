@@ -8,7 +8,7 @@ final class PaymentReportRules
     public const CATEGORIES = [
         'provider_booking_fee', 'owned_platform_fee', 'provider_membership_fee', 'event_fee',
         'owned_online', 'owned_onsite', 'owned_unallocated', 'provider_online', 'provider_arrival',
-        'provider_manual', 'unclassified',
+        'provider_manual', 'cancelled_uncollected', 'unclassified',
     ];
 
     public static function channel(array $booking): string
@@ -156,7 +156,7 @@ final class PaymentReportRules
                 'payment_date' => $childDates[$id] ?? substr((string) ($p['paid_at'] ?? $p['date'] ?? $p['created_at'] ?? ''), 0, 10),
             ]);
         }, $payments);
-        return array_merge(...array_map(fn ($row) => OwnedVenueAllocation::expand($row), $rows));
+        return PaymentReviewRules::apply(array_merge(...array_map(fn ($row) => OwnedVenueAllocation::expand($row), $rows)), $payments, $booking);
     }
 
     public static function status(string $status): string

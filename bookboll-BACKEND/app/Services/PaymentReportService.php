@@ -115,6 +115,7 @@ final class PaymentReportService
                 && (!empty($row['charge_id']) || !empty($row['payment_intent_id']) || !empty($row['source_receipt_ids']));
             $row['can_view_booking'] = $venueIds === null || in_array((int)$row['venue_id'], $venueIds, true);
             $row['can_collect'] = $row['can_collect'] && $row['can_view_booking'];
+            $row['can_review'] = $mayRefund && $row['category'] === 'unclassified';
             if ($row['currency']) $currencies[$row['currency']] = true;
             if ($row['venue_id']) $venues[$row['venue_id']] = ['value' => (string) $row['venue_id'], 'label' => $row['venue_name']];
             if ($row['business_id']) $businesses[$row['business_id']] = ['value' => (string) $row['business_id'], 'label' => $row['business_name'] ?: $row['recipient_label']];
@@ -218,7 +219,7 @@ final class PaymentReportService
             'id','payment_id','source_payment_id','amount','currency','method','status','type',
             'charge_id','payment_intent_id','operator','channel','business_id','category',
             'recipient_kind','recipient_label','fee_rate','row_kind','source_receipt_ids',
-            'review_reason','snapshot_recorded','payment_date','allocation_id','receipt_amount','allocation_basis',
+            'review_reason','review_decision_id','snapshot_recorded','payment_date','allocation_id','receipt_amount','allocation_basis',
         ]));
         if ($details) $row['notes'] = $payment->notes;
         return array_merge($row, [

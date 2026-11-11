@@ -1,5 +1,7 @@
 # Bookboll payments — current developer handoff
 
+**Payment review actions:** [Required P19 workflow and acceptance](docs/payments/PAYMENT_REVIEWS.md). Platform admins can preview, confirm, annotate and reopen eligible review records. Apply the review-audit migration; preserve original receipts and enforce P19 in signed release evidence.
+
 Updated 11 November 2026. This is the current entry point for the Payments rebuild and historical reconciliation. The previous README is preserved in the [historical implementation log](docs/payments/implementation-history-through-2026-11-11.md); its earlier rules, totals and preview restrictions may be superseded by later corrections. Do not use that log as a production deployment script.
 
 ## Before moving to the actual live database
@@ -17,7 +19,7 @@ Updated 11 November 2026. This is the current entry point for the Payments rebui
 
 ## Approved rules to preserve
 
-**Checkout payments:** [implementation and mandatory acceptance](docs/payments/SHARED_ONLINE_PAYMENTS.md). A checkout with two slots now shows **one deposit payment and one remaining payment**: QAR 45 online (25 + 20 allocations), QAR 180 remaining (100 + 80 allocations). Use one checkout reference and one reference per phase; keep old per-slot IDs in the audit breakdown. Apply the new checkout-reference/collection-audit migration. New checkouts save a common reference; old ones require verified processor evidence. Remaining collection is one reviewed, atomic and replay-safe operation by the receiving business. Totals and CSV count allocations once. Enforced rules **P17_SHARED_ONLINE_PAYMENTS** and **P18_CHECKOUT_BALANCES** are mandatory; previous 17-rule release evidence cannot unlock this build.
+**Checkout payments:** [implementation and mandatory acceptance](docs/payments/SHARED_ONLINE_PAYMENTS.md). A checkout with two slots now shows **one deposit payment and one remaining payment**: QAR 45 online (25 + 20 allocations), QAR 180 remaining (100 + 80 allocations). Use one checkout reference and one reference per phase; keep old per-slot IDs in the audit breakdown. Apply the new checkout-reference/collection-audit migration. New checkouts save a common reference; old ones require verified processor evidence. Remaining collection is one reviewed, atomic and replay-safe operation by the receiving business. Totals and CSV count allocations once. Enforced rules **P17_SHARED_ONLINE_PAYMENTS** and **P18_CHECKOUT_BALANCES** are mandatory; previous 18-rule release evidence cannot unlock this build.
 
 Rates below describe historical policy, not a replacement for each booking's saved quote. Currency amounts must be calculated in integer minor units; never sum different currencies.
 

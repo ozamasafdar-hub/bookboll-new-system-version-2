@@ -3,6 +3,7 @@
 require __DIR__.'/../../app/Support/Money.php';
 require __DIR__.'/../../app/Support/OwnedVenueAllocation.php';
 require __DIR__.'/../../app/Support/PaymentReportRules.php';
+require __DIR__.'/../../app/Support/PaymentReviewRules.php';
 require __DIR__.'/../../app/Support/PaymentReportTotals.php';
 require __DIR__.'/../../app/Support/PaymentReportFilter.php';
 require __DIR__.'/../../app/Support/PaymentReportPage.php';

@@ -658,6 +658,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::get('payments/dashboard', [PaymentController::class, 'dashboard'])->name('payments.dashboard');
             Route::get('payments/release-checks', [\App\Http\Controllers\Admin\PaymentReleaseController::class, 'show']);
             Route::get('payments/{id}/details', [\App\Http\Controllers\Admin\PaymentDetailController::class, 'show'])->whereNumber('id');
+            Route::post('payments/{id}/review-preview', [\App\Http\Controllers\Admin\PaymentDetailController::class, 'reviewPreview'])->whereNumber('id')->middleware('throttle:30,1');
+            Route::post('payments/{id}/review', [\App\Http\Controllers\Admin\PaymentDetailController::class, 'reviewSave'])->whereNumber('id')->middleware('throttle:20,1');
             Route::get('payments/{id}/collection-preview', [\App\Http\Controllers\Admin\PaymentDetailController::class, 'collectionPreview'])->whereNumber('id');
             Route::post('payments/{id}/collect-checkout', [\App\Http\Controllers\Admin\PaymentDetailController::class, 'collectCheckout'])->whereNumber('id')->middleware('throttle:20,1');
             Route::get('payments/{id}/refund-preview', [\App\Http\Controllers\Admin\PaymentDetailController::class, 'preview'])->whereNumber('id');
