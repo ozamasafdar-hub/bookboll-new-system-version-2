@@ -605,74 +605,52 @@ async function exportCSV(useFilters) {
 
       <!-- ── Table ──────────────────────────────────────────────────────────── -->
       <div class="table-wrap">
-        <table>
+        <table class="bk-table">
+          <colgroup><col style="width:17%" /><col style="width:23%" /><col style="width:15%" /><col style="width:17%" /><col style="width:15%" /><col style="width:13%" /></colgroup>
           <thead>
             <tr>
-              <th>Reference</th>
-              <th class="th-sort" @click="toggleSort('created_at')">
-                Record Date <span class="sort-icon"><ChevronUp v-if="sortCol==='created_at' && sortDir==='asc'" :size="12" /><ChevronDown v-else-if="sortCol==='created_at' && sortDir==='desc'" :size="12" /><ChevronsUpDown v-else :size="12" /></span>
-              </th>
-              <th class="th-sort" @click="toggleSort('customer')">
-                Customer <span class="sort-icon"><ChevronUp v-if="sortCol==='customer' && sortDir==='asc'" :size="12" /><ChevronDown v-else-if="sortCol==='customer' && sortDir==='desc'" :size="12" /><ChevronsUpDown v-else :size="12" /></span>
-              </th>
-              <th class="th-sort" @click="toggleSort('listing')">
-                Listing <span class="sort-icon"><ChevronUp v-if="sortCol==='listing' && sortDir==='asc'" :size="12" /><ChevronDown v-else-if="sortCol==='listing' && sortDir==='desc'" :size="12" /><ChevronsUpDown v-else :size="12" /></span>
-              </th>
-              <th class="th-sort" @click="toggleSort('booking_date')">
-                Date / Time <span class="sort-icon"><ChevronUp v-if="sortCol==='booking_date' && sortDir==='asc'" :size="12" /><ChevronDown v-else-if="sortCol==='booking_date' && sortDir==='desc'" :size="12" /><ChevronsUpDown v-else :size="12" /></span>
-              </th>
-              <th class="th-sort" @click="toggleSort('total')">
-                Total <span class="sort-icon"><ChevronUp v-if="sortCol==='total' && sortDir==='asc'" :size="12" /><ChevronDown v-else-if="sortCol==='total' && sortDir==='desc'" :size="12" /><ChevronsUpDown v-else :size="12" /></span>
-              </th>
-              <th>Source</th>
-              <th class="th-sort" @click="toggleSort('booking_status')">
-                Status <span class="sort-icon"><ChevronUp v-if="sortCol==='booking_status' && sortDir==='asc'" :size="12" /><ChevronDown v-else-if="sortCol==='booking_status' && sortDir==='desc'" :size="12" /><ChevronsUpDown v-else :size="12" /></span>
-              </th>
-              <th class="th-sort" @click="toggleSort('payment_status')">
-                Payment <span class="sort-icon"><ChevronUp v-if="sortCol==='payment_status' && sortDir==='asc'" :size="12" /><ChevronDown v-else-if="sortCol==='payment_status' && sortDir==='desc'" :size="12" /><ChevronsUpDown v-else :size="12" /></span>
-              </th>
-              <th></th>
+              <th><button class="bk-sort" @click="toggleSort('created_at')" :aria-label="`Sort by date booked, ${sortCol==='created_at' ? sortDir : 'not sorted'}`">Booking / date booked <ChevronsUpDown :size="12" /></button></th>
+              <th><button class="bk-sort" @click="toggleSort('customer')">Customer <ChevronsUpDown :size="12" /></button><button class="bk-sort secondary" @click="toggleSort('listing')">Court / listing <ChevronsUpDown :size="12" /></button></th>
+              <th><button class="bk-sort" @click="toggleSort('booking_date')">Reservation <ChevronsUpDown :size="12" /></button></th>
+              <th>Channel / created by</th>
+              <th><button class="bk-sort" @click="toggleSort('total')">Booking value <ChevronsUpDown :size="12" /></button><button class="bk-sort secondary" @click="toggleSort('payment_status')">Payment state <ChevronsUpDown :size="12" /></button></th>
+              <th><button class="bk-sort" @click="toggleSort('booking_status')">Status <ChevronsUpDown :size="12" /></button></th>
             </tr>
           </thead>
           <tbody>
-            <tr v-if="loading"><td colspan="10" class="empty"><Loader :size="18" class="spin" /> Loading bookings…</td></tr>
-            <tr v-else-if="!paginated.length"><td colspan="10" style="padding:0">
+            <tr v-if="loading"><td colspan="6" class="empty"><Loader :size="18" class="spin" /> Loading bookings…</td></tr>
+            <tr v-else-if="!paginated.length"><td colspan="6" style="padding:0">
               <EmptyState :icon="BookOpen"
                 :title="isFiltering ? 'No matching bookings' : 'No bookings yet'"
                 :message="isFiltering ? 'No bookings match your search or filters. Try adjusting them.' : 'Bookings will appear here once they are created.'"
                 :action-label="can(CAP.MANAGE_BOOKINGS) ? 'New Booking' : ''" @action="showNewBooking = true" />
             </td></tr>
             <tr v-for="b in (loading ? [] : paginated)" :key="b.id" class="row-clickable" @click="viewingId=b.id">
-              <td><button class="bk-ref" @click.stop="viewingId=b.id">{{ bookingRefLabel(b) }}</button><small v-if="b.record_purpose === 'provider_slot_block'" class="cell-sub bk-block">Slot block · no sale</small><small v-else-if="b.origin === 'customer_game'" class="cell-sub">Event reservation</small></td>
-              <td>
-                <div class="record-date">{{ fmtDateTime(b.created_at) }}</div>
-              </td>
+              <td><button class="bk-ref" @click.stop="viewingId=b.id">{{ bookingRefLabel(b) }}</button><small class="cell-sub">{{ fmtDateTime(b.created_at) }}</small><small v-if="b.record_purpose === 'provider_slot_block'" class="cell-sub bk-block">Slot block · no sale</small><small v-else-if="b.origin === 'customer_game'" class="cell-sub">Event reservation</small></td>
               <td>
                 <span v-if="b.origin === 'class_program'" class="program-block-label">{{ b.notes || 'Program Block' }}</span>
                 <button v-else-if="b.customer_id" class="bk-cust-link" @click.stop="openCustomer(b.customer_id)" title="View customer">{{ customerName(b) }}</button>
                 <span v-else>{{ customerName(b) }}</span>
-              </td>
-              <td>
-                <div>{{ listingName(b) }}</div>
+                <div class="bk-listing">{{ listingName(b) }}</div>
                 <div class="cell-sub">{{ locationName(b) }}</div>
               </td>
               <td>
-                <div>{{ b.booking_date }}</div>
+                <div class="bk-reservation-date">{{ b.booking_date }}</div>
                 <div class="cell-sub">{{ fmtRange12(b.start_time, b.end_time) }}</div>
               </td>
-              <td class="bk-amount"><template v-if="b.record_purpose === 'provider_slot_block'">—<small class="cell-sub">Payment skipped</small></template><template v-else>{{ money(b.total,currencyOf(b)) }}<small class="cell-sub">Booking value</small></template></td>
               <td>
                 <span class="bk-channel">{{ activityChannelLabel(b.report_channel) }}</span>
                 <small class="cell-sub">Created by {{ bookingCreatorLabel(b) }}</small>
                 <small v-if="b.report_channel === 'admin'" class="cell-sub">No platform fee</small>
               </td>
-              <td><span class="badge" :class="statusBadge(b.booking_status)">{{ b.booking_status === 'confirmed' ? 'Confirmed' : statusLabel(b.booking_status) }}</span></td>
               <td>
+                <div class="bk-amount">{{ b.record_purpose === 'provider_slot_block' ? '—' : money(b.total,currencyOf(b)) }}</div>
                 <span class="badge" :class="statusBadge(b.payment_status)">{{ statusLabel(b.payment_status) }}</span>
                 <small v-if="b.recorded_payment_summary?.paid != null && b.record_purpose !== 'provider_slot_block'" class="cell-sub">{{ money(b.recorded_payment_summary.paid,b.recorded_payment_summary.currency) }} received</small>
                 <small v-else-if="b.recorded_payment_summary?.status === 'Needs review'" class="cell-sub">Receipt allocation needs review</small>
               </td>
               <td>
+                <span class="badge" :class="statusBadge(b.booking_status)">{{ b.booking_status === 'confirmed' ? 'Confirmed' : statusLabel(b.booking_status) }}</span>
                 <div class="row-actions">
                   <button class="btn-icon" title="View"  @click.stop="viewingId=b.id"><Eye :size="15" /></button>
                   <button v-if="can(CAP.MANAGE_BOOKINGS)" class="btn-icon" title="Edit"  @click.stop="openEdit($event, b)"><Pencil :size="15" /></button>
@@ -840,6 +818,7 @@ async function exportCSV(useFilters) {
 .bk-reset-link:hover { color: var(--danger-ink, #dc2626); }
 
 /* ── Table ────────────────────────────────────────────────────────────────── */
+.bk-table{width:100%;min-width:940px;table-layout:fixed}.bk-table th,.bk-table td{padding:16px 14px;vertical-align:top;white-space:normal;overflow-wrap:anywhere}.bk-table th{font-size:11px}.bk-sort{display:flex;align-items:center;gap:5px;background:none;border:0;padding:0;color:inherit;font:inherit;font-weight:600;text-align:left;cursor:pointer}.bk-sort.secondary{margin-top:6px;font-weight:400}.bk-sort:hover{color:var(--text)}.bk-sort:focus-visible{outline:2px solid var(--primary);outline-offset:3px}.bk-table .bk-ref{font-size:11px;color:var(--primary-ink);overflow-wrap:anywhere}.bk-table .cell-sub{display:block;font-size:11px;line-height:1.5;margin-top:5px}.bk-listing{font-size:12px;margin-top:8px;line-height:1.5}.bk-reservation-date{white-space:nowrap;font-weight:600;font-size:12px}.bk-table .bk-amount{font-size:13px;white-space:nowrap;margin-bottom:8px}.bk-table .bk-cust-link{font-size:12px;font-weight:600}.bk-table .row-actions{margin-top:10px}.bk-table .badge{max-width:100%;font-size:10px}.bk-table .bk-channel{font-size:12px}
 .th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
 .th-sort:hover { background: var(--surface-hover, #f8fafc); }
 .sort-icon { display: inline-flex; align-items: center; margin-left: 4px; color: var(--text-light, #94a3b8); vertical-align: middle; }
