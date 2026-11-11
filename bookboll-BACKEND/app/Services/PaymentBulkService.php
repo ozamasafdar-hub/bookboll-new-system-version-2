@@ -69,6 +69,7 @@ final class PaymentBulkService
                 $fees=['provider_booking_fee','owned_platform_fee','provider_membership_fee','event_fee'];
                 $target=collect($destinations)->first(fn ($value) => in_array($value,$fees,true) === (($data['destination'] ?? '') === 'platform_fee'));
                 if ($p->payment_refund_id) $reason='Payments with refunds cannot be reassigned here.';
+                elseif ($row['channel'] === 'admin' && ($data['destination'] ?? '') === 'platform_fee') $reason='Staff-added bookings have no platform fee. Their money stays with the venue business.';
                 elseif (!in_array($target,PaymentBulkRules::destinations($row),true)) $reason='This destination does not match the existing business, booking channel or payment method.';
                 elseif ($row['category'] === $target) $reason='Already assigned to this allocation.';
                 else $after=PaymentBulkRules::assign($row,$target,'preview');

@@ -4,6 +4,7 @@
 .pay-select-cell input{width:16px;height:16px;accent-color:var(--primary,#2563eb);cursor:pointer}
 .pay-bulk-dialog{width:min(900px,100%);padding:0;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box}
 .pay-bulk-dialog .pay-detail-header small{font-size:10px;letter-spacing:.6px;color:var(--muted)}
+.pay-bulk-dialog .pay-detail-footer .btn.primary{background:var(--primary,#2563eb);color:#fff;border:1px solid var(--primary,#2563eb);border-radius:7px;padding:10px 16px}.pay-bulk-dialog .pay-detail-footer .btn.primary:disabled{opacity:.45;cursor:not-allowed}
 .pay-bulk-dialog .pay-review-field select{min-height:42px;padding:10px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:7px;font:inherit}
 .pay-bulk-summary{display:flex;flex-direction:column;gap:6px;padding:16px;border:1px solid var(--border);border-radius:9px;background:var(--primary-soft,#eef4ff)}
 .pay-bulk-summary span{font-size:12px;color:var(--muted)}.pay-bulk-dialog h3{font-size:14px;margin:20px 0 8px}
