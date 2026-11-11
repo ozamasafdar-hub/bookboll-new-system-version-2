@@ -70,7 +70,7 @@ final class PaymentDetailService
                 $rows[] = $row;
             }
         }
-        $rows = $this->report->withDocuments($actor, $rows);
+        $rows = $this->report->withProcessorIdentity($actor, $this->report->withDocuments($actor, $rows));
         $current = collect($rows)->first(fn ($r) => (string)$r['id'] === (string)($rowId ?? $id));
         abort_unless($current && (int)($current['source_payment_id'] ?? $current['id']) === $id, 404);
         $source = $anchor;
@@ -83,7 +83,12 @@ final class PaymentDetailService
         }
         unset($row);
         $current['stripe_receipt_url'] ??= StripeDocumentLink::sanitize($source->stripe_receipt_url);
-        return ['payment'=>$current, 'connected_transactions'=>array_values(array_filter($rows, fn ($r) => (string)$r['id'] !== (string)$current['id'])),
+        $allocations = array_values(array_filter($rows, fn ($r) => $r['row_kind'] !== 'receipt'));
+        $groups = (new \App\Support\PaymentReportGroups($allocations))->entries($allocations, AccessScope::isPlatform($actor));
+        $shared = collect($groups)->first(fn ($g) => ($g['row_kind'] ?? '') === 'online_group'
+            && collect($g['bookings'])->flatMap(fn ($b) => $b['online'])->contains(fn ($r) => (string)$r['id'] === (string)$current['id']));
+        return ['payment'=>$current, 'online_group'=>$shared ? array_intersect_key($shared, array_flip(['amount','currency','booking_count','scoped'])) : null,
+            'connected_transactions'=>array_values(array_filter($rows, fn ($r) => (string)$r['id'] !== (string)$current['id'])),
             'refund_source_payment_id'=>$source->id,
             'can_request_refund'=>PaymentRefundAccess::allows($actor) && $source->method === 'online'
                 && $source->status === 'paid' && !$refund && ($source->charge_id || $source->payment_intent_id),

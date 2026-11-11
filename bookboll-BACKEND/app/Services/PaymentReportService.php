@@ -9,6 +9,7 @@ use App\Support\PaymentReportCache;
 use App\Support\PaymentReportRules;
 use App\Support\PaymentReportTotals;
 use App\Support\PaymentReportPage;
+use App\Support\PaymentReportGroups;
 use App\Support\StripeDocumentLink;
 use Illuminate\Http\Request;
 
@@ -48,6 +49,7 @@ final class PaymentReportService
             'search' => 'nullable|string|max:150',
             'sort' => 'nullable|in:date,amount,status,method', 'sort_dir' => 'nullable|in:asc,desc',
             'scope' => 'nullable|in:all,bookboll,provider,review,fee_split',
+            'group_by' => 'nullable|in:stripe,allocation',
         ]);
         $actor = $request->user();
         $platform = AccessScope::isPlatform($actor);
@@ -72,7 +74,7 @@ final class PaymentReportService
         // cannot make its fee/share rows look like additional receipts.
         // Scope before caching. A permission or ownership change selects a new key.
         $scope = hash('sha256', json_encode([$actor->id, $platform, $businessId, $venueIds, $query->toSql(), $query->getBindings(), config('preview.workspace')]));
-        $rows = PaymentReportCache::remember($scope, 'rows', function () use ($query, $hasAllocations) {
+        $rows = PaymentReportCache::remember($scope, 'rows', function () use ($query, $hasAllocations, $actor) {
             $rows = [];
             $query->chunkById(1000, function ($batch) use (&$rows, $hasAllocations) {
                 $bookingIds = $batch->pluck('booking_id')->filter()->unique();
@@ -99,10 +101,12 @@ final class PaymentReportService
                     }
                 }
             });
-            return $rows;
+            return $this->withProcessorIdentity($actor, $rows);
         }, $request->boolean('refresh'));
         $mayRefund = \App\Support\PaymentRefundAccess::allows($actor);
-        foreach ($rows as $row) {
+        $grouped = $request->input('group_by') === 'stripe';
+        $matching = [];
+        foreach ($rows as &$row) {
             $row['can_request_refund'] = $mayRefund
                 && $row['method'] === 'online' && $row['status'] === 'paid'
                 && empty($row['refund_status'])
@@ -114,18 +118,62 @@ final class PaymentReportService
             if ($row['business_id']) $businesses[$row['business_id']] = ['value' => (string) $row['business_id'], 'label' => $row['business_name'] ?: $row['recipient_label']];
             if (!\App\Support\PaymentReportFilter::matches($row, $request->query())) continue;
             $totals->add($row);
-            $pageRows->add($row);
+            if ($grouped) $matching[] = $row;
+            else $pageRows->add($row);
             $matched++;
         }
+        unset($row);
+        $entryCount = $matched;
+        if ($grouped) {
+            $entries = (new PaymentReportGroups($rows))->entries($matching, $platform);
+            $entryCount = count($entries);
+            foreach ($entries as $entry) $pageRows->add($entry);
+        }
+        $visible = $pageRows->rows();
+        $documentRows = [];
+        foreach ($visible as $entry) {
+            if (($entry['row_kind'] ?? '') !== 'online_group') $documentRows[] = $entry;
+            else foreach ($entry['bookings'] as $booking) foreach ($booking['online'] as $child) $documentRows[] = $child;
+        }
+        $documented = collect($this->withDocuments($actor, $documentRows))->keyBy('id');
+        foreach ($visible as &$entry) {
+            if (($entry['row_kind'] ?? '') !== 'online_group') {
+                $entry = $documented[$entry['id']];
+                continue;
+            }
+            $entry['anchor'] = $documented[$entry['anchor']['id']];
+            foreach ($entry['bookings'] as &$booking) {
+                $booking['online'] = array_map(fn ($r) => $documented[$r['id']], $booking['online']);
+            }
+            unset($booking);
+        }
+        unset($entry);
         ksort($currencies);
         uasort($venues, fn ($a, $b) => strcasecmp($a['label'], $b['label']));
         return sendSuccess('Payment allocations fetched', [
             'report_version' => 2, 'perspective' => $platform ? 'platform' : 'provider',
-            'payments' => ['data' => $this->withDocuments($actor, $pageRows->rows()), 'total' => $matched, 'current_page' => $page, 'per_page' => $perPage],
+            'group_by' => $grouped ? 'stripe' : 'allocation',
+            'payments' => ['data' => $visible, 'total' => $entryCount, 'allocation_total'=>$matched, 'current_page' => $page, 'per_page' => $perPage],
             'summary' => $totals->result(), 'review_count' => $totals->reviewCount,
             'fee_split_count' => $totals->feeSplitCount, 'fee_split_statuses' => $totals->feeSplitStatuses,
             'filter_options' => ['currencies' => array_keys($currencies), 'venues' => array_values($venues), 'businesses' => array_values($businesses)],
         ]);
+    }
+
+    /** Inherit processor identity only from one explicit, authorized receipt. */
+    public function withProcessorIdentity($actor, array $rows): array
+    {
+        $ids = collect($rows)->flatMap(fn ($r) => count($r['source_receipt_ids'] ?? []) === 1 ? $r['source_receipt_ids'] : [])->unique();
+        if ($ids->isEmpty()) return $rows;
+        $sources = $this->authorizedQuery($actor)->whereIn('id', $ids)->get(['id','charge_id','payment_intent_id'])->keyBy('id');
+        foreach ($rows as &$row) {
+            $links = $row['source_receipt_ids'] ?? [];
+            $source = count($links) === 1 ? $sources->get((int)$links[0]) : null;
+            if (!$source || ($row['method'] ?? '') !== 'online') continue;
+            $row['charge_id'] ??= $source->charge_id;
+            $row['payment_intent_id'] ??= $source->payment_intent_id;
+        }
+        return $rows;
     }
 
     /** Resolve documents from explicit receipt links, only for this authorized page. */

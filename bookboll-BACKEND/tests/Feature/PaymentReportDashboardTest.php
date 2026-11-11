@@ -48,6 +48,108 @@ function reportFixturePayment(Booking $b,string $type,float $amount,string $meth
     return Payment::withoutEvents(fn()=>Payment::create(['booking_id'=>$b->id,'user_id'=>$b->user_id,'type'=>$type,'amount'=>$amount,'method'=>$method,'status'=>$status,'currency'=>'QAR','date'=>'2026-11-10','payment_id'=>'qa-'.uniqid(),'financial_context'=>$b->financial_context]));
 }
 
+function sharedCheckoutFixture($venue, $customer): array {
+    $payments = [];
+    foreach ([[25,100],[20,80]] as [$deposit,$balance]) {
+        $b = reportFixtureBooking($venue,$customer);
+        $p = reportFixturePayment($b,'deposit',$deposit,'online','paid');
+        $p->forceFill(['charge_id'=>'ch_shared_checkout','payment_intent_id'=>'pi_shared_checkout'])->saveQuietly();
+        $payments[] = $p;
+        reportFixturePayment($b,'remaining',$balance,'cash','pending');
+    }
+    return $payments;
+}
+
+it('groups a shared online checkout before pagination and keeps arrival balances separate', function () {
+    $payments = sharedCheckoutFixture($this->externalVenue,$this->provider);
+    $this->actingAs($this->platform);
+    $base = '/api/admin/payments/dashboard?report_version=2&group_by=stripe&sort=amount&sort_dir=asc&records_per_page=1';
+    $first = $this->getJson($base)->assertOk()->assertJsonPath('data.payments.total',3)
+        ->assertJsonPath('data.payments.allocation_total',4)->assertJsonPath('data.summary.0.bookboll_received',45);
+    $group = $first->json('data.payments.data.0');
+    expect($group['row_kind'])->toBe('online_group')->and($group['amount'])->toEqual(45)
+        ->and($group['booking_count'])->toBe(2)->and($group['partial'])->toBeFalse()
+        ->and(array_sum(array_column(array_merge(...array_column($group['bookings'],'arrival_balances')),'amount')))->toEqual(180);
+    $second=$this->getJson($base.'&page=2')->assertOk()->json('data.payments.data.0');
+    $third=$this->getJson($base.'&page=3')->assertOk()->json('data.payments.data.0');
+    expect([$second['amount'],$third['amount']])->toEqual([80,100]);
+    $flat = $this->getJson('/api/admin/payments/dashboard?report_version=2&group_by=allocation')->assertOk();
+    expect($flat->json('data.payments.total'))->toBe(4)->and($flat->json('data.summary'))->toBe($first->json('data.summary'));
+    $this->getJson('/api/admin/payments/'.$payments[0]->id.'/details')->assertOk()
+        ->assertJsonPath('data.online_group.amount',45)->assertJsonPath('data.online_group.booking_count',2);
+});
+
+it('labels a filtered part of a shared payment and does not add unmatched fees into its total', function () {
+    $payments=sharedCheckoutFixture($this->externalVenue,$this->provider);
+    $this->actingAs($this->platform)->getJson('/api/admin/payments/dashboard?report_version=2&group_by=stripe&search='.$payments[0]->payment_id)
+        ->assertOk()->assertJsonPath('data.payments.total',1)->assertJsonPath('data.payments.allocation_total',1)
+        ->assertJsonPath('data.payments.data.0.partial',true)->assertJsonPath('data.payments.data.0.amount',25)
+        ->assertJsonPath('data.payments.data.0.booking_count',1)->assertJsonPath('data.payments.data.0.can_request_refund',false)
+        ->assertJsonPath('data.summary.0.platform_fees',25);
+});
+
+it('groups only authorized provider records and never exposes another business in context', function () {
+    sharedCheckoutFixture($this->externalVenue,$this->provider);
+    $foreign=reportFixtureBooking($this->ownVenue,$this->platform);
+    $p=reportFixturePayment($foreign,'deposit',900,'online','paid');
+    $p->forceFill(['charge_id'=>'ch_shared_checkout'])->saveQuietly();
+    reportFixturePayment($foreign,'remaining',400,'cash','pending');
+    $data=$this->actingAs($this->provider)->getJson('/api/admin/payments/dashboard?report_version=2&group_by=stripe&method=online')
+        ->assertOk()->assertJsonPath('data.payments.total',1)->json('data.payments.data.0');
+    expect($data['amount'])->toEqual(45)->and($data['scoped'])->toBeTrue()->and($data['booking_count'])->toBe(2)
+        ->and($data['can_request_refund'])->toBeFalse()->and(json_encode($data))->not->toContain('Owned fixture');
+});
+
+it('applies date status and amount filters before grouping and preserves flat summaries', function () {
+    $payments=sharedCheckoutFixture($this->externalVenue,$this->provider);
+    $payments[1]->forceFill(['date'=>'2026-11-09','status'=>'refunded'])->saveQuietly();
+    $this->actingAs($this->platform);
+    foreach (['from_date=2026-11-10&to_date=2026-11-10','status=paid','amount_min=25&amount_max=25'] as $filter) {
+        $base='/api/admin/payments/dashboard?report_version=2&method=online&'.$filter;
+        $group=$this->getJson($base.'&group_by=stripe')->assertOk()
+            ->assertJsonPath('data.payments.data.0.amount',25)->assertJsonPath('data.payments.data.0.partial',true)
+            ->assertJsonPath('data.payments.allocation_total',1);
+        $flat=$this->getJson($base.'&group_by=allocation')->assertOk();
+        expect($group->json('data.summary'))->toBe($flat->json('data.summary'));
+    }
+});
+
+it('groups conserving full-payment allocations without adding their gross receipt again', function () {
+    $b=reportFixtureBooking($this->externalVenue,$this->provider);
+    $root=reportFixturePayment($b,'full',100,'online','paid');
+    $root->forceFill(['charge_id'=>'ch_full_split'])->saveQuietly();
+    reportFixturePayment($b,'booking_commission',15,'online','paid');
+    reportFixturePayment($b,'booking_earning',85,'online','paid');
+    $this->actingAs($this->platform)->getJson('/api/admin/payments/dashboard?report_version=2&group_by=stripe')
+        ->assertOk()->assertJsonPath('data.payments.total',1)->assertJsonPath('data.payments.data.0.amount',100)
+        ->assertJsonPath('data.payments.data.0.allocation_count',2)->assertJsonPath('data.summary.0.bookboll_received',15);
+    $this->getJson('/api/admin/payments/dashboard?report_version=2&group_by=stripe&scope=bookboll')
+        ->assertOk()->assertJsonPath('data.payments.data.0.partial',true)->assertJsonPath('data.payments.data.0.amount',15);
+});
+
+it('never merges missing identities different currencies or distinct charge attempts', function () {
+    $payments=sharedCheckoutFixture($this->externalVenue,$this->provider);
+    $payments[1]->forceFill(['charge_id'=>'ch_other_attempt'])->saveQuietly();
+    $path='/api/admin/payments/dashboard?report_version=2&group_by=stripe&method=online&refresh=1';
+    $this->actingAs($this->platform)->getJson($path)->assertOk()->assertJsonPath('data.payments.total',2);
+    $unknown=reportFixturePayment(reportFixtureBooking($this->externalVenue,$this->provider),'deposit',10,'online','paid');
+    $unknown->forceFill(['payment_intent_id'=>'pi_shared_checkout'])->saveQuietly();
+    $this->getJson($path)->assertOk()->assertJsonPath('data.payments.total',3);
+    $unknown->forceFill(['payment_intent_id'=>null])->saveQuietly();
+    $payments[1]->forceFill(['charge_id'=>'ch_shared_checkout','currency'=>'PKR'])->saveQuietly();
+    $this->getJson($path)->assertOk()->assertJsonPath('data.payments.total',3);
+    foreach ($payments as $p) $p->forceFill(['charge_id'=>null,'payment_intent_id'=>null,'currency'=>'QAR'])->saveQuietly();
+    $this->getJson($path)->assertOk()->assertJsonPath('data.payments.total',3);
+});
+
+it('supports intent-only siblings and preserves mixed refunded status without guessing a paid total', function () {
+    $payments=sharedCheckoutFixture($this->externalVenue,$this->provider);
+    $payments[1]->forceFill(['charge_id'=>null,'status'=>'refunded'])->saveQuietly();
+    $this->actingAs($this->platform)->getJson('/api/admin/payments/dashboard?report_version=2&group_by=stripe&method=online')
+        ->assertOk()->assertJsonPath('data.payments.data.0.status','mixed')->assertJsonPath('data.payments.data.0.amount',45)
+        ->assertJsonPath('data.payments.data.0.can_request_refund',false)->assertJsonPath('data.summary.0.bookboll_received',25);
+});
+
 it('returns the same recorded staff author to booking history and payments',function(){
     $b=reportFixtureBooking($this->ownVenue,$this->provider,'manual_admin');
     $b->forceFill(['created_by'=>$this->platform->id,'creation_context'=>['version'=>1,'channel'=>'admin',
@@ -223,6 +325,7 @@ it('persists internal allocations for full online and full arrival payments with
         $p->update(['status'=>'paid']);
         $p->update(['status'=>'paid']); // Replayed status update must not duplicate allocations.
         expect($p->ownedAllocations()->count())->toBe(2);
+        if ($method === 'online') $p->forceFill(['charge_id'=>'ch_owned_full'])->saveQuietly();
     }
     $res = $this->actingAs($this->platform)->getJson('/api/admin/payments/dashboard?report_version=2');
     $res->assertOk()->assertJsonPath('data.payments.total',4);
@@ -231,6 +334,10 @@ it('persists internal allocations for full online and full arrival payments with
     expect((float)$res->json('data.summary.0.owned_venue_received'))->toBe(170.0);
     expect((float)$res->json('data.summary.0.owned_online'))->toBe(85.0);
     expect((float)$res->json('data.summary.0.owned_onsite'))->toBe(85.0);
+    $grouped=$this->getJson('/api/admin/payments/dashboard?report_version=2&group_by=stripe&method=online')->assertOk();
+    $grouped->assertJsonPath('data.payments.total',1)->assertJsonPath('data.payments.data.0.amount',100)
+        ->assertJsonPath('data.payments.data.0.allocation_count',2)->assertJsonPath('data.summary.0.bookboll_received',100)
+        ->assertJsonPath('data.summary.0.platform_fees',15)->assertJsonPath('data.summary.0.owned_venue_received',85);
     $fees=$this->getJson('/api/admin/payments/dashboard?report_version=2&category=owned_platform_fee');
     $fees->assertOk()->assertJsonPath('data.payments.total',2);
     expect((float)$fees->json('data.summary.0.bookboll_received'))->toBe(30.0);

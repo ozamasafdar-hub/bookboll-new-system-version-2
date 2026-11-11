@@ -17,6 +17,8 @@ Updated 11 November 2026. This is the current entry point for the Payments rebui
 
 ## Approved rules to preserve
 
+**Shared online payments:** [implementation and mandatory acceptance](docs/payments/SHARED_ONLINE_PAYMENTS.md). One Stripe charge may cover several bookings. Group authorized allocations before pagination, keep each booking's arrival balance separate, and never create an extra receipt. CSV and totals remain allocation-based. Release rule **P17_SHARED_ONLINE_PAYMENTS** is mandatory, including provider isolation, partial filters, receipt conservation and full-charge refund safety.
+
 Rates below describe historical policy, not a replacement for each booking's saved quote. Currency amounts must be calculated in integer minor units; never sum different currencies.
 
 | Rule | Required treatment |

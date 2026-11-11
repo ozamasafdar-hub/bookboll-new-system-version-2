@@ -79,6 +79,7 @@ onBeforeUnmount(() => { request++ })
         <p v-if="loading" class="pay-detail-note" role="status">Loading connected transactions…</p>
         <p v-if="error" class="pay-notice pay-error" role="alert">{{ error }} <button class="pay-link" @click="load()">Try again</button></p>
         <p v-if="current.review_reason" class="pay-notice">{{ current.review_reason }}</p>
+        <p v-if="data?.online_group" class="pay-shared-notice"><b>Part of one shared online payment</b><span>{{ money(current.amount,current.currency) }} is this entry’s portion of {{ money(data.online_group.amount,data.online_group.currency) }} across {{ data.online_group.booking_count }} {{ data.online_group.booking_count === 1 ? 'booking' : 'bookings' }}{{ data.online_group.scoped ? ' visible to your business' : '' }}. Arrival balances are separate.</span><small v-if="canRefund">A refund applies to the original shared Stripe charge. Review its full amount and connected bookings before confirming.</small></p>
         <div class="pay-detail-actions">
           <a v-if="receiptUrl" class="btn" :href="receiptUrl" target="_blank" rel="noopener noreferrer"><ReceiptText :size="16" /> {{ current.status === 'refunded' ? 'Stripe refund receipt' : 'Stripe receipt' }} <ArrowUpRight :size="14" /></a>
           <span v-else-if="isStripeOnlinePayment(current)" class="pay-muted-action"><ReceiptText :size="16" /> Stripe receipt not available</span>

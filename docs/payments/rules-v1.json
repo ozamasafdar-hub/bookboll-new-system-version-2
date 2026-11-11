@@ -146,6 +146,13 @@
       "implementation": ["bookboll-BACKEND/app/Services/VenueAgreementService.php"],
       "tests": ["bookboll-BACKEND/tests/Feature/VenueOperatingAgreementTest.php"],
       "production_acceptance": "Agreement storage/tests do not certify complete finance recognition or payments. Verify effective-date/proration/revenue-share calculations and no double cost before enabling profit claims."
+    },
+    {
+      "id": "P17_SHARED_ONLINE_PAYMENTS",
+      "rule": "One Stripe charge can cover several bookings. Group only authorized online allocations with the same recorded processor identity and currency, before pagination. Charge identity takes precedence over payment intent; do not merge distinct charge attempts or guess from customer/date/amount. Preserve the individual deposit, fee, venue-share and arrival records. A display parent is never a new receipt or an extra contribution to earnings. Filters and exports remain allocation-based; label partial/provider views without claiming the full Stripe amount. Arrival balances are separate and never included in the online amount. Refunds operate on the full original processor charge only after server preflight.",
+      "implementation": ["bookboll-BACKEND/app/Support/PaymentReportGroups.php", "bookboll-BACKEND/app/Services/PaymentReportService.php", "bookboll-BACKEND/app/Services/PaymentDetailService.php", "bookboll-new-system/admin/src/components/PaymentLedgerEntry.vue"],
+      "tests": ["bookboll-BACKEND/tests/Feature/PaymentReportDashboardTest.php", "bookboll-BACKEND/tests/Feature/PaymentDetailsAndRefundTest.php", "bookboll-BACKEND/tests/Feature/PaymentReleaseGateTest.php", "bookboll-new-system/admin/tests/paymentLedgerEntry.test.mjs"],
+      "production_acceptance": "Prove QAR 25 + 20 appears as one QAR 45 online payment with separate QAR 100/80 arrival balances. Test page boundaries, filtering one child, amount/date/status filters, two businesses in one charge, intent-only links, distinct charges, missing identities, currencies, full gross/fee/share conservation, refunds and unchanged allocation CSV totals. Include P17 in signed financial_regression passed_rule_ids."
     }
   ],
   "snapshot_identity_reference": {

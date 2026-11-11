@@ -4,6 +4,8 @@ Implemented 11 November 2026. This is an executable release gate, not a checklis
 
 ## What is enforced
 
+The policy now requires **17 rules**, including `P17_SHARED_ONLINE_PAYMENTS`. Signed regression evidence that omits shared-payment acceptance is rejected even if the other 16 rules passed. See [shared-payment acceptance](SHARED_ONLINE_PAYMENTS.md). This release changes the code and policy identity, invalidating approval for the previous build.
+
 - `PaymentReleaseGate` reads the approved rule inventory. Missing policy, migrations or database identity fail closed.
 - It independently checks persisted internal allocations against their original receipts: same currency, exact minor-unit total, valid/nonduplicate buckets, and zero platform allocation on confirmed staff bookings. This arithmetic check does not by itself prove all historical ownership, cash assertions or unallocated receipts are correct; the full reconciliation evidence is still mandatory.
 - A release approval must be signed with an **operations-owned RSA private key held outside the application/server**. Only the public key is installed on the app. There is no signing endpoint, dashboard approval checkbox or `PAYMENTS_ENABLED=true` bypass.

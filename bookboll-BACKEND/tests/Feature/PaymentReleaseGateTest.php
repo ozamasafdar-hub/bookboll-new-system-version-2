@@ -87,6 +87,15 @@ it('accepts matching verified evidence only when the runner is also complete', f
     expect($status['production_ready'])->toBeTrue()->and($status['refunds_ready'])->toBeTrue();
 });
 
+it('blocks a release whose signed regression evidence omits shared online payment acceptance', function () {
+    $policy = json_decode(file_get_contents(config('payment_release.policy_file')), true);
+    $oldRules = array_values(array_diff(array_column($policy['rules'],'id'), ['P17_SHARED_ONLINE_PAYMENTS']));
+    signReleaseFixture(['financial_regression'=>['passed_rule_ids'=>$oldRules]]);
+    $status = (new CompletedRunnerFixtureGate)->status();
+    expect($status['production_ready'])->toBeFalse()
+        ->and(collect($status['checks'])->keyBy('id')['financial_regression']['passed'])->toBeFalse();
+});
+
 it('rejects a tampered signature or artifact without trusting checked boxes', function () {
     signReleaseFixture();
     file_put_contents($this->evidencePath.'/financial_regression.json', '{}');

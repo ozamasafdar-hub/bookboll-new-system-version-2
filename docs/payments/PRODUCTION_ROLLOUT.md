@@ -88,6 +88,8 @@ Restoring the full backup is a cutover fallback **before reopening**. After new 
 
 ## 4. Acceptance evidence required before launch
 
+Include **P17_SHARED_ONLINE_PAYMENTS** and the [shared-checkout acceptance cases](SHARED_ONLINE_PAYMENTS.md): grouped pagination, filtered subtotals, separate arrival balances, provider isolation, receipt conservation, flat exports and full-charge refunds. Grouping is a read-only presentation change; do not merge or rewrite historical payments for it. The release gate rejects signed coverage that omits this rule.
+
 Use the rule IDs in `rules-v1.json` as a checklist with test result and artifact links. A passing unit suite is necessary but does not replace full-copy reconciliation.
 
 | Check | Required result |
