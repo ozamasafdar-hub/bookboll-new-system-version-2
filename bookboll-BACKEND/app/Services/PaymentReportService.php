@@ -39,7 +39,7 @@ final class PaymentReportService
         return $query;
     }
 
-    public function dashboard(Request $request, bool $selectionOnly = false)
+    public function dashboard(Request $request, bool $selectionOnly = false, bool $analyticsOnly = false)
     {
         if ($selectionOnly) abort_unless(\App\Support\PaymentBulkRules::allows($request->user()),403);
         $request->validate([
@@ -105,9 +105,10 @@ final class PaymentReportService
             return $this->withProcessorIdentity($actor, $rows);
         }, $request->boolean('refresh'));
         $mayRefund = \App\Support\PaymentRefundAccess::allows($actor);
-        $grouped = $request->input('group_by') === 'stripe';
+        $grouped = !$analyticsOnly && $request->input('group_by') === 'stripe';
         $groups = new PaymentReportGroups($rows);
         $matching = []; $selection = [];
+        $analytics = $analyticsOnly ? new \App\Support\PaymentReportAnalytics($rows, $request->query()) : null;
         foreach ($rows as &$row) {
             $row = $groups->decorate($row);
             $row['can_request_refund'] = $mayRefund
@@ -130,7 +131,8 @@ final class PaymentReportService
                 continue;
             }
             $totals->add($row);
-            if ($grouped) $matching[] = $row;
+            if ($analytics) $analytics->add($row);
+            elseif ($grouped) $matching[] = $row;
             else $pageRows->add($row);
             $matched++;
         }
@@ -174,6 +176,7 @@ final class PaymentReportService
             'group_by' => $grouped ? 'stripe' : 'allocation',
             'payments' => ['data' => $visible, 'total' => $entryCount, 'allocation_total'=>$matched, 'current_page' => $page, 'per_page' => $perPage],
             'summary' => $totals->result(), 'review_count' => $totals->reviewCount,
+            ...($analytics ? ['analytics'=>$analytics->result()] : []),
             'fee_split_count' => $totals->feeSplitCount, 'fee_split_statuses' => $totals->feeSplitStatuses,
             'filter_options' => ['currencies' => array_keys($currencies), 'venues' => array_values($venues), 'listings' => array_values($listings), 'businesses' => $businessOptions],
         ]);

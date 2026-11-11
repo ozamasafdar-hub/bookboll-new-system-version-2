@@ -17,6 +17,8 @@ import PaymentReleaseChecks from '../components/PaymentReleaseChecks.vue'
 import BookingDetailModal from '../components/BookingDetailModal.vue'
 import './payments.css'
 import './payment-bulk.css'
+import { paymentCards, paymentBreakdown } from '../lib/paymentMetrics.js'
+import ExternalBusinessTotals from '../components/ExternalBusinessTotals.vue'
 
 const { currentUser, can } = useCurrentUser()
 const { requirePremium } = usePremium()
@@ -106,26 +108,8 @@ function amounts(key) {
   if (!ready.value || error.value || invalid.value || loading.value) return ['—']
   return summary.value.length ? summary.value.map(s => money(s[key], s.currency)) : ['No recorded amount']
 }
-const cards = computed(() => platform.value ? [
-  ['total_sales','Total sales · GMV','Paid + pending sales across all businesses. Excludes cancelled and refunded payments.'],
-  ['bookboll_received','Bookboll received','Platform fees + Bookboll’s own-venue share after fees; each receipt counted once'],
-  ['platform_fees','Platform fees','External + own-venue fees, memberships and events'],
-  ['owned_venue_received','Own venues · revenue','Venue share after the internal platform fee'],
-  ['owned_pending','Own bookings · to collect','Unpaid platform fee + venue share'],
-] : [
-  ['provider_received','Your business received','Your share of recorded paid transactions'],
-  ['provider_received_offline','Collected directly','Cash, card at venue, cheque and bank transfer; includes staff-added bookings'],
-  ['provider_pending','Still to collect','Unpaid amounts belonging to your business'],
-  ['platform_fees','Bookboll fees','Recorded fees retained by Bookboll'],
-])
-const breakdown = computed(() => platform.value ? [
-  ['external_marketplace_fees','External venue fees · marketplace'], ['external_site_fees','External venue fees · provider websites'],
-  ['owned_marketplace_fees','Own venue platform fees · marketplace'], ['owned_site_fees','Own venue platform fees · own website'],
-  ['other_channel_fees','Booking fees · channel not recorded'], ['membership_fees','Provider membership fees'],
-  ['event_fees','Event host fees'],
-  ['owned_online','Own venue share · online'], ['owned_onsite','Own venue share · on site'],
-  ['owned_unallocated','Bookboll receipts · historical fee split missing'],
-] : [['provider_received_online','Online payments · your share'], ['provider_received_offline','Direct collections · your share'], ['provider_received_other','Other / unrecorded payment method']])
+const cards = computed(() => paymentCards(platform.value))
+const breakdown = computed(() => paymentBreakdown(platform.value))
 const canCollect = p => p.can_collect && can(CAP.ACCEPT_PAYMENTS) && p.recipient_kind === (platform.value ? 'bookboll' : 'provider')
 function viewBooking(p, collect = false) { selected.value = null; collectId.value = collect ? String(p.source_payment_id || p.id) : null; bookingId.value = String(p.booking_id) }
 async function exportRows() {
@@ -189,7 +173,7 @@ onBeforeUnmount(() => { ++requestId; clearTimeout(timer) })
         <dl><div v-for="[key,title] in breakdown" :key="key"><dt>{{ title }}</dt><dd><span v-for="amount in amounts(key)" :key="amount">{{ amount }}</span></dd></div></dl>
       </details>
       <details class="pay-panel pay-context pay-collapsible"><summary class="pay-panel-heading"><h2>{{ platform ? 'External businesses' : 'How payments are split' }}</h2><ChevronRight :size="16" /></summary>
-        <template v-if="platform"><h2>Sales sent to providers</h2><strong v-for="amount in amounts('provider_sales')" :key="amount">{{ amount }}</strong><p>Recorded booking value from the marketplace and provider websites, including their arrival balances.</p><hr /><h3>Only Bookboll’s share is your earnings</h3><p>Provider deposits are platform fees. For full online payments, only the recorded Bookboll fee belongs to the platform. Provider arrival payments stay with the provider.</p><p>Own venues are separate business units: customer bookings allocate the recorded platform fee first, then the rest to venue revenue. Manual staff bookings stay entirely with the venue. Rent and landlord revenue share are separate costs.</p><hr /><h3>Own bookings awaiting payment</h3><dl><div><dt>Platform fee to collect</dt><dd><span v-for="amount in amounts('owned_platform_pending')" :key="amount">{{ amount }}</span></dd></div><div><dt>Venue share to collect</dt><dd><span v-for="amount in amounts('owned_venue_pending')" :key="amount">{{ amount }}</span></dd></div><div><dt>Pending · split needs review</dt><dd><span v-for="amount in amounts('owned_unallocated_pending')" :key="amount">{{ amount }}</span></dd></div></dl></template>
+        <template v-if="platform"><ExternalBusinessTotals :amounts="amounts" /><hr /><h3>Own bookings awaiting payment</h3><dl><div><dt>Platform fee to collect</dt><dd><span v-for="amount in amounts('owned_platform_pending')" :key="amount">{{ amount }}</span></dd></div><div><dt>Venue share to collect</dt><dd><span v-for="amount in amounts('owned_venue_pending')" :key="amount">{{ amount }}</span></dd></div><div><dt>Pending · split needs review</dt><dd><span v-for="amount in amounts('owned_unallocated_pending')" :key="amount">{{ amount }}</span></dd></div></dl></template>
         <template v-else><h2>Your money, clearly separated</h2><h3>Deposit + arrival</h3><p>The online deposit is Bookboll’s fee. Collect the remaining balance from your customer at the venue.</p><hr /><h3>Full online payment</h3><p>Your share and Bookboll’s fee are separate records. Your online share is payment income; bank payout timing is shown in your connected payment account.</p><hr /><h3>Bookings added by your staff</h3><p>Recorded payments belong to your business. Skip payment creates no payment record and contributes no earnings here.</p></template>
       </details>
     </div>

@@ -174,8 +174,19 @@
       "implementation": ["bookboll-BACKEND/app/Services/PaymentBulkService.php","bookboll-BACKEND/app/Support/PaymentBulkRules.php","bookboll-new-system/admin/src/components/PaymentBulkDialog.vue","bookboll-new-system/admin/src/lib/paymentBulk.js"],
       "tests": ["bookboll-BACKEND/tests/Feature/PaymentBulkTest.php","bookboll-new-system/admin/tests/paymentBulk.test.mjs","bookboll-BACKEND/tests/Feature/PaymentReleaseGateTest.php"],
       "production_acceptance": "Apply payment_bulk_actions and payment_bulk_action_items migration. Prove admin/staff/provider and mixed provider-superadmin denial including all-filtered selection; filter parity beyond 500 rows; dependency-preserving batches; all four explicit methods and normalized audited results; missing/online method rejection; stale method/evidence rejection; batch atomicity, idempotent replay and visible partial failure; immutable/conserving allocation corrections; provider report parity; no partial-payment overcollection; source-change invalidation and release gate enforcement. Signed financial_regression passed_rule_ids must include P20 and the current policy checksum; older acceptance is insufficient. See docs/payments/BULK_PAYMENT_ACTIONS.md."
+    },
+    {
+      "id": "P21_PAYMENT_ANALYTICS_PARITY",
+      "rule": "Payment analytics and Payments must share the full authorized classified allocation dataset, filter predicate and minor-unit totals. Every currency/channel/method/venue/time breakdown must reconcile without receipt duplication or sampling. External businesses received includes paid staff-added bookings; external total sales includes paid and pending staff sales; sales sent through marketplace/site remains a separately labelled subset. Staff venue bookings never gain fees. No cross-currency summing, current-rate recalculation or bank-payout/profit claims.",
+      "implementation": ["bookboll-BACKEND/app/Support/PaymentReportAnalytics.php", "bookboll-BACKEND/app/Services/PaymentReportService.php", "bookboll-BACKEND/app/Support/PaymentReportTotals.php", "bookboll-new-system/admin/src/components/PaymentAnalytics.vue", "bookboll-new-system/admin/src/lib/paymentMetrics.js"],
+      "tests": ["bookboll-BACKEND/tests/Feature/PaymentReportDashboardTest.php", "bookboll-BACKEND/tests/Feature/PaymentReleaseGateTest.php", "bookboll-BACKEND/tests/Feature/PaymentReportCacheTest.php"],
+      "production_acceptance": "Compare both reports exactly under every filter and after mutations; reconcile every breakdown per currency, with explicit undated timeline disclosure. Include external and owned staff/customer cases, full/deposit splits, checkout siblings, pending/refunded/review exclusions, dependent listings, provider history and denied foreign scope. Require P21 in signed financial regression acceptance. See docs/payments/PAYMENT_ANALYTICS.md."
     }
   ],
+  "analytics_acceptance": {
+    "required_rule": "P21_PAYMENT_ANALYTICS_PARITY",
+    "guide": "docs/payments/PAYMENT_ANALYTICS.md"
+  },
   "snapshot_identity_reference": {
     "source": "bookboll_live_with_yopmail_testing_data.sql",
     "snapshot_date": "2026-11-04",

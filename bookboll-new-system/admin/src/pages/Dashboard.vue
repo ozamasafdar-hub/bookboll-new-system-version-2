@@ -1,5 +1,7 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import PaymentAnalytics from '../components/PaymentAnalytics.vue'
 import { loadAnalytics, loadAnalyticsAggregates } from '../lib/analytics.js'
 import { bookingFrequency } from '../lib/bookingFrequency.js'
 import { dateRangeError } from '../lib/finance.js'
@@ -32,6 +34,10 @@ const viewMode = computed(() => {
   return 'operations' // staff / viewer / legacy senior·junior·guard
 })
 const isViewOnly = computed(() => role.value === 'guard' || role.value === 'provider_viewer')
+const route = useRoute(), router = useRouter()
+const analyticsTab = computed(() => route.query.tab === 'payments' && can(CAP.ACCEPT_PAYMENTS) ? 'payments' : 'activity')
+function setAnalyticsTab(tab) { router.replace({query:{...route.query,tab:tab === 'payments' ? 'payments' : undefined}}) }
+let activityLoaded = false
 
 const roleInfo = computed(() => ROLE_INFO[role.value] || { label: role.value, tagline: '' })
 const firstName = computed(() => (currentUser.value?.full_name || '').split(' ')[0] || 'there')
@@ -125,6 +131,7 @@ const serverTotals = ref(null)
 const coverageIsComplete = computed(() => serverTotals.value?.coverage?.status === 'complete')
 
 async function load() {
+  activityLoaded = true
   loading.value = true
 
   // Asked for alongside the rows, not instead of them.
@@ -156,8 +163,9 @@ async function load() {
     runNotificationSweep(currentOwnerUserId.value)
   }
 }
-onMounted(load)
-watch(currentOwnerUserId, load)
+onMounted(() => { if (analyticsTab.value === 'activity') load() })
+watch(analyticsTab, tab => { if (tab === 'activity' && !activityLoaded) load() })
+watch(currentOwnerUserId, () => { activityLoaded = false; if (analyticsTab.value === 'activity') load() })
 
 // ── Money helper ────────────────────────────────────────────────────────────
 function money(n) { return `${Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}` }
@@ -785,10 +793,10 @@ const businessKpis = computed(() => {
   const myListings = listings.value.filter(l => ownedLocationIds.value?.has(l.location_id))
   const myPrograms = programs.value.filter(p => p.owner_user_id === currentOwnerUserId.value)
   return [
-    { label: 'My Revenue',        value: revenue.value, sub: revenue.sub,   icon: DollarSign, color: 'var(--info-ink)', bg: 'var(--info-bg)' },
+    { label: 'Booked sales value', value: revenue.value, sub: revenue.sub, icon: DollarSign, color: 'var(--info-ink)', bg: 'var(--info-bg)' },
     { label: 'My Bookings',       value: filteredBookings.value.length,  icon: BookOpen,   color: 'var(--info-ink)', bg: 'var(--info-bg)' },
     { label: 'Active Listings',   value: myListings.filter(l => l.status === 'active').length, icon: MapPin, color: 'var(--purple-ink)', bg: 'var(--purple-bg)' },
-    { label: 'Wallet Available',  value: [myWallet.value?.currency, money(myWallet.value?.available_balance)].filter(Boolean).join(' '), icon: WalletIcon, color: 'var(--positive-ink)', bg: 'var(--positive-bg)' },
+    { label: 'Active programs', value: myPrograms.filter(p => p.status === 'active').length, icon: GraduationCap, color: 'var(--positive-ink)', bg: 'var(--positive-bg)' },
   ]
 })
 
@@ -879,6 +887,10 @@ function fmtDate(d) { return d ? new Date(d + 'T00:00:00').toLocaleDateString('e
       <router-link v-else to="/calendar" class="btn btn-secondary"><Calendar :size="16" />View Calendar</router-link>
     </div>
 
+    <nav class="analytics-tabs" aria-label="Analytics views"><button :aria-pressed="analyticsTab === 'activity'" :class="{active:analyticsTab === 'activity'}" @click="setAnalyticsTab('activity')">Bookings &amp; activity</button><button v-if="can(CAP.ACCEPT_PAYMENTS)" :aria-pressed="analyticsTab === 'payments'" :class="{active:analyticsTab === 'payments'}" @click="setAnalyticsTab('payments')">Payments &amp; revenue</button></nav>
+    <PaymentAnalytics v-if="analyticsTab === 'payments'" :key="currentOwnerUserId || 'platform'" />
+    <template v-else>
+    <p v-if="can(CAP.ACCEPT_PAYMENTS)" class="activity-money-note">This view shows booking activity and booked sales value. For money received, platform fees and pending collections, <button @click="setAnalyticsTab('payments')">open Payments &amp; revenue</button>.</p>
     <!-- ── Analytics filters: same pattern as Bookings/Payments — a search bar
          with a filter ICON that OPENS the panel (bottom sheet on phones).
          Filters reshape EVERY number and list below (KPIs included). -->
@@ -1126,11 +1138,11 @@ function fmtDate(d) { return d ? new Date(d + 'T00:00:00').toLocaleDateString('e
       </div>
 
       <!-- ── Charts (all driven by the filters above) ── -->
-      <div class="viz-section-head"><span class="viz-section-title">Bookings &amp; revenue</span><span class="viz-section-sub">Revenue combines venue bookings, events and membership billing</span></div>
+      <div class="viz-section-head"><span class="viz-section-title">Bookings &amp; sales value</span><span class="viz-section-sub">Booked value before fees; payment collections are in Payments &amp; revenue</span></div>
       <div class="viz-grid">
         <div class="card viz-card">
           <div class="viz-head">
-            <div><div class="viz-title">Revenue</div><div class="viz-sub">{{ rangeLabelFor('revenue') }} · all sources · excludes cancelled</div></div>
+            <div><div class="viz-title">Booked sales value</div><div class="viz-sub">{{ rangeLabelFor('revenue') }} · all sources · excludes cancelled</div></div>
             <div class="viz-tools">
               <div v-if="chartCurrencies.length > 1" class="viz-chips">
                 <button v-for="c in chartCurrencies" :key="c" type="button" :class="{ on: chartCurrency === c }" @click="chartCurrency = c">{{ c }}</button>
@@ -1141,8 +1153,8 @@ function fmtDate(d) { return d ? new Date(d + 'T00:00:00').toLocaleDateString('e
           <TrendChart :points="revenueTrend" mode="line" :prefix="chartCurrency + ' '" :color="'#0d9488'" />
         </div>
         <div class="card viz-card">
-          <div class="viz-head"><div><div class="viz-title">Revenue by source</div><div class="viz-sub">Venues vs events vs memberships · {{ chartCurrency }}</div></div><ChartFilter v-model="chartFilters.revsrc" :dims="['range', 'venue', 'kind', 'channel']" :venue-options="locationOptions" :kind-options="KIND_OPTIONS" :channel-options="CHANNEL_OPTIONS" /></div>
-          <DonutChart :slices="sourceSlices" center-label="Revenue" />
+          <div class="viz-head"><div><div class="viz-title">Booked value by source</div><div class="viz-sub">Venues vs events vs memberships · {{ chartCurrency }}</div></div><ChartFilter v-model="chartFilters.revsrc" :dims="['range', 'venue', 'kind', 'channel']" :venue-options="locationOptions" :kind-options="KIND_OPTIONS" :channel-options="CHANNEL_OPTIONS" /></div>
+          <DonutChart :slices="sourceSlices" center-label="Booked value" />
         </div>
         <div class="card viz-card">
           <div class="viz-head"><div><div class="viz-title">Bookings</div><div class="viz-sub">{{ rangeLabelFor('bookings') }}</div></div><ChartFilter v-model="chartFilters.bookings" :venue-options="locationOptions" :status-options="STATUS_OPTIONS" :payment-options="PAYMENT_OPTIONS" :kind-options="KIND_OPTIONS" :channel-options="CHANNEL_OPTIONS" /></div>
@@ -1260,10 +1272,12 @@ function fmtDate(d) { return d ? new Date(d + 'T00:00:00').toLocaleDateString('e
       </div>
     </template>
     </template>
+    </template>
   </div>
 </template>
 
 <style scoped>
+.analytics-tabs{display:flex;gap:8px;border-bottom:1px solid var(--border);margin:4px 0 24px}.analytics-tabs button{padding:14px 16px;background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);font:inherit;font-size:14px;font-weight:600;cursor:pointer}.analytics-tabs button.active{border-color:var(--primary);color:var(--primary-ink,var(--primary))}.analytics-tabs button:focus-visible,.activity-money-note button:focus-visible{outline:2px solid var(--primary);outline-offset:3px}.activity-money-note{font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:18px}.activity-money-note button{font:inherit;color:var(--primary-ink,var(--primary));background:none;border:0;padding:0;text-decoration:underline;cursor:pointer}
 .role-pill { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; padding:2px 8px; border-radius:99px; margin-right:8px; vertical-align:middle; }
 
 .card-header { padding: 18px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }

@@ -13,6 +13,7 @@ const props = defineProps({
   mode:   { type: String, default: 'line' },    // 'line' | 'bars'
   color:  { type: String, default: '#0d9488' },
   prefix: { type: String, default: '' },        // value prefix, e.g. 'AED '
+  valueFormatter: { type: Function, default: null },
   height: { type: Number, default: 170 },
 })
 
@@ -29,7 +30,7 @@ function niceCeil(v) {
 }
 const yMax = computed(() => niceCeil(maxV.value))
 const yTicks = computed(() => [0, 0.5, 1].map(f => yMax.value * f))
-const fmt = (v) => props.prefix + Number(v || 0).toLocaleString('en-US', { maximumFractionDigits: v < 10 && v % 1 ? 1 : 0 })
+const fmt = (v) => props.valueFormatter ? props.valueFormatter(v) : props.prefix + Number(v || 0).toLocaleString('en-US', { maximumFractionDigits: v < 10 && v % 1 ? 1 : 0 })
 // Axis ticks stay compact and unprefixed (the tooltip carries the full value) —
 // a long "AED 2,000" clips against the left edge.
 const tickFmt = (v) => v >= 1000 ? `${+(v / 1000).toFixed(v % 1000 ? 1 : 0)}K` : String(Math.round(v))

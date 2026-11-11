@@ -70,7 +70,7 @@ class PaymentReleaseGate
         try {
             $policy = json_decode(file_get_contents(config('payment_release.policy_file')), true, 512, JSON_THROW_ON_ERROR);
             $rules = array_column($policy['rules'], 'id');
-            $add('policy', 'Approved business rules available', count($rules) >= 20 && in_array('P17_SHARED_ONLINE_PAYMENTS', $rules, true) && in_array('P18_CHECKOUT_BALANCES', $rules, true) && in_array('P19_PAYMENT_REVIEW_ACTIONS',$rules,true) && in_array('P20_SUPERADMIN_BULK_ACTIONS',$rules,true) && count($rules) === count(array_unique($rules)), 'The release must cover every rule, including superadmin bulk payment actions, in the versioned payment policy.');
+            $add('policy', 'Approved business rules available', count($rules) >= 21 && in_array('P17_SHARED_ONLINE_PAYMENTS', $rules, true) && in_array('P18_CHECKOUT_BALANCES', $rules, true) && in_array('P19_PAYMENT_REVIEW_ACTIONS',$rules,true) && in_array('P20_SUPERADMIN_BULK_ACTIONS',$rules,true) && in_array('P21_PAYMENT_ANALYTICS_PARITY',$rules,true) && count($rules) === count(array_unique($rules)), 'The release must cover every rule, including payment analytics parity, in the versioned payment policy.');
             $missing = array_diff(array_map(fn ($p) => basename($p, '.php'), glob(database_path('migrations/*.php'))),
                 Schema::hasTable('migrations') ? DB::table('migrations')->pluck('migration')->all() : []);
             $schemaReady = !$missing && Schema::hasTable('payment_refunds') && Schema::hasColumn('payments', 'payment_refund_id')

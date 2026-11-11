@@ -652,6 +652,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
         // Payments
         Route::middleware('capability:accept_payments')->group(function () {
+            Route::get('payments/analytics', \App\Http\Controllers\Admin\PaymentAnalyticsController::class);
             Route::post('payments/confirm', [PaymentController::class, 'confirmPayment'])->name('payments.confirm');
             Route::post('payments/generate-link', [PaymentController::class, 'generatePaymentLink'])->name('payments.generate-link');
             Route::post('payments/mark-booking-paid', [PaymentController::class, 'markBookingAsPaid'])->name('payments.mark-booking-paid');

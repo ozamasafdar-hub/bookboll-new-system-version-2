@@ -25,7 +25,7 @@ final class PaymentReportTotals
             'event_fees', 'membership_fees', 'owned_online', 'owned_onsite', 'owned_pending',
             'provider_received', 'provider_online', 'provider_arrival', 'provider_manual', 'provider_pending',
             'provider_received_online', 'provider_received_offline', 'provider_received_other',
-            'provider_sales', 'refunded',
+            'provider_sales', 'provider_total_sales', 'refunded',
             'owned_platform_fees', 'external_booking_fees', 'owned_venue_received', 'owned_venue_pending', 'owned_platform_pending',
             'external_marketplace_fees', 'external_site_fees', 'owned_marketplace_fees', 'owned_site_fees',
             'owned_unallocated', 'owned_unallocated_pending',
@@ -37,6 +37,9 @@ final class PaymentReportTotals
         // and unpaid balances. Only reconciled allocations reach this point;
         // their parent receipt must never be added a second time.
         if (in_array($status, ['paid', 'pending'], true)) $s['total_sales'] += $amount;
+        // All external-business sales, including staff-created bookings. Includes
+        // the fee and provider share once each; collected revenue is separate.
+        if ($row['operator'] === 'provider' && in_array($status, ['paid', 'pending'], true)) $s['provider_total_sales'] += $amount;
         $providerSale = $row['operator'] === 'provider' && in_array($row['channel'], ['marketplace', 'site'], true)
             && in_array($category, ['provider_booking_fee', 'provider_online', 'provider_arrival'], true);
         if ($providerSale && in_array($status, ['paid', 'pending'], true)) $s['provider_sales'] += $amount;

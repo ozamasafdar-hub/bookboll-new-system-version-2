@@ -65,6 +65,77 @@ function reportFixtureListing(Venue $venue, string $name): Listing {
     return Listing::create(['name'=>$name,'venue_id'=>$venue->id,'base_price'=>100,'capacity'=>4,'slot_duration'=>1,'payment_options'=>['deposit_remaining_on_arrival']]);
 }
 
+it('keeps payment analytics identical to the ledger including paid staff bookings and every breakdown', function () {
+    sharedCheckoutFixture($this->externalVenue,$this->provider);
+    $staff=reportFixtureBooking($this->externalVenue,$this->provider,'manual_admin');
+    reportFixturePayment($staff,'full',300,'cash','paid');
+    $pending=reportFixtureBooking($this->externalVenue,$this->provider,'manual_admin');
+    reportFixturePayment($pending,'full',40,'cash','pending');
+    $own=reportFixtureBooking($this->ownVenue,$this->platform,'manual_admin');
+    reportFixturePayment($own,'full',70,'cash','paid');
+    $refunded=reportFixtureBooking($this->externalVenue,$this->provider,'manual_admin');
+    reportFixturePayment($refunded,'full',9,'cash','refunded');
+    $pkr=reportFixtureBooking($this->externalVenue,$this->provider,'manual_admin');
+    reportFixturePayment($pkr,'full',50,'credit_card','paid')->forceFill(['currency'=>'PKR'])->saveQuietly();
+    $this->actingAs($this->platform);
+    $ledger=$this->getJson('/api/admin/payments/dashboard?report_version=2&group_by=stripe&records_per_page=1')->assertOk()->json('data');
+    $report=$this->getJson('/api/admin/payments/analytics')->assertOk()->json('data');
+    expect($report['summary'])->toBe($ledger['summary']);
+    expect($report['filter_options'])->toBe($ledger['filter_options']);
+    expect($report['payments']['data'])->toBe([]);
+    $qar=collect($report['summary'])->firstWhere('currency','QAR');
+    expect($qar['total_sales'])->toEqual(635)->and($qar['bookboll_received'])->toEqual(115)
+        ->and($qar['provider_total_sales'])->toEqual(565)->and($qar['provider_sales'])->toEqual(225)
+        ->and($qar['provider_received'])->toEqual(300)->and($qar['provider_manual'])->toEqual(300)
+        ->and($qar['provider_pending'])->toEqual(220)->and($qar['platform_fees'])->toEqual(45);
+    foreach (['timeline','channels','methods','venues'] as $group) {
+        foreach ($report['summary'] as $currency) foreach ($currency as $key=>$amount) {
+            if ($key === 'currency') continue;
+            $sum=collect($report['analytics'][$group])->sum(fn ($bucket) => collect($bucket['summary'])->firstWhere('currency',$currency['currency'])[$key] ?? 0);
+            expect($sum)->toEqual($amount,"$group / {$currency['currency']} / $key");
+        }
+    }
+    $admin=collect($report['analytics']['channels'])->firstWhere('key','admin');
+    foreach ($admin['summary'] as $row) expect($row['platform_fees'])->toEqual(0);
+    $card=collect($report['analytics']['methods'])->firstWhere('key','card');
+    expect($card['summary'][0]['provider_received'])->toEqual(50);
+});
+
+it('uses the ledger filters and permissions for payment analytics without leaking other businesses', function () {
+    sharedCheckoutFixture($this->externalVenue,$this->provider);
+    $staff=reportFixtureBooking($this->externalVenue,$this->provider,'manual_admin');
+    reportFixturePayment($staff,'full',300,'cash','paid');
+    $own=reportFixtureBooking($this->ownVenue,$this->platform,'manual_admin');
+    reportFixturePayment($own,'full',70,'cash','paid');
+    $this->actingAs($this->platform);
+    foreach (['status=paid','channel=admin','method=online','business_id=bookboll','business_id='.$this->business->id,'location_id='.$this->externalVenue->id,'from_date=2026-11-10&to_date=2026-11-10','from_date=2026-10-01&to_date=2026-10-31'] as $filter) {
+        $ledger=$this->getJson('/api/admin/payments/dashboard?report_version=2&'.$filter)->assertOk()->json('data.summary');
+        $this->getJson('/api/admin/payments/analytics?'.$filter)->assertOk()->assertJsonPath('data.summary',$ledger);
+    }
+    $provider=$this->actingAs($this->provider)->getJson('/api/admin/payments/analytics')->assertOk()
+        ->assertJsonPath('data.perspective','provider')->assertJsonPath('data.summary.0.total_sales',525)
+        ->assertJsonPath('data.summary.0.provider_received',300)->json('data');
+    expect(array_column($provider['analytics']['venues'],'key'))->toBe([(string)$this->externalVenue->id]);
+    $this->getJson('/api/admin/payments/analytics?business_id=bookboll')->assertOk()->assertJsonPath('data.summary',[]);
+    $this->getJson('/api/admin/payments/analytics?from_date=2026-11-11&to_date=2026-11-01')->assertUnprocessable();
+    $viewer=Role::findOrCreate('provider_viewer','web');
+    $this->provider->syncRoles([$viewer]);
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+    $this->actingAs($this->provider->fresh())->getJson('/api/admin/payments/analytics')->assertForbidden();
+});
+
+it('zero fills daily and monthly payment trends while preserving separate currencies', function () {
+    $booking=reportFixtureBooking($this->ownVenue,$this->platform,'manual_admin');
+    reportFixturePayment($booking,'full',70,'cash','paid');
+    $this->actingAs($this->platform);
+    $daily=$this->getJson('/api/admin/payments/analytics?from_date=2026-11-09&to_date=2026-11-11')->assertOk()->json('data.analytics');
+    expect($daily['grain'])->toBe('day')->and(array_column($daily['timeline'],'key'))->toBe(['2026-11-09','2026-11-10','2026-11-11']);
+    expect($daily['timeline'][0]['summary'])->toBe([])->and($daily['timeline'][1]['summary'][0]['bookboll_received'])->toEqual(70);
+    $monthly=$this->getJson('/api/admin/payments/analytics?from_date=2026-01-01&to_date=2026-12-31')->assertOk()->json('data.analytics');
+    expect($monthly['grain'])->toBe('month')->and($monthly['timeline'])->toHaveCount(12);
+    expect($monthly['timeline'][10]['summary'][0]['bookboll_received'])->toEqual(70);
+});
+
 it('filters listings across checkout allocations with stable scoped choices and totals', function () {
     $payments=sharedCheckoutFixture($this->externalVenue,$this->provider);
     $first=reportFixtureListing($this->externalVenue,'Court One');
@@ -272,6 +343,9 @@ it('groups conserving full-payment allocations without adding their gross receip
         ->assertOk()->assertJsonPath('data.payments.total',1)->assertJsonPath('data.payments.data.0.amount',100)
         ->assertJsonPath('data.payments.data.0.allocation_count',2)->assertJsonPath('data.summary.0.bookboll_received',15)
         ->assertJsonPath('data.summary.0.total_sales',100);
+    $this->getJson('/api/admin/payments/analytics')->assertOk()
+        ->assertJsonPath('data.summary.0.total_sales',100)->assertJsonPath('data.summary.0.provider_received',85)
+        ->assertJsonPath('data.analytics.methods.0.summary.0.bookboll_received',15);
     $this->getJson('/api/admin/payments/dashboard?report_version=2&group_by=stripe&scope=bookboll')
         ->assertOk()->assertJsonPath('data.payments.data.0.partial',true)->assertJsonPath('data.payments.data.0.amount',15);
 });
