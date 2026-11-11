@@ -128,11 +128,13 @@ const cascadedListingOptions = computed(() => scopedListings.value
   .filter(l => !filterVenue.value.length || filterVenue.value.includes(l.location_id))
   .map(l => ({ value: l.id, label: l.name })))
 watch(filterVenue, () => {
+  if (!locations.value.length) return // Keep deep-linked filters until lookup options arrive.
   if (!filterListing.value.length) return
   const ok = new Set(cascadedListingOptions.value.map(o => o.value))
   filterListing.value = filterListing.value.filter(id => ok.has(id))
 })
 watch(filterBusiness,()=>{
+  if (!locations.value.length) return
   const allowed=new Set(scopedLocations.value.map(v=>v.id))
   filterVenue.value=filterVenue.value.filter(id=>allowed.has(id))
   filterListing.value=filterListing.value.filter(id=>listings.value.some(l=>l.id===id && allowed.has(l.location_id)))
