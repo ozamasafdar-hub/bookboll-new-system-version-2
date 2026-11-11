@@ -61,12 +61,12 @@ final class BookingActivity
                 $series[]=['label'=>$label,'value'=>$indexed[$label] ?? 0];
             }
         }
-        $group = fn ($key) => $base()->selectRaw("$key AS label, COUNT(*) AS value")->groupBy($key)->orderByDesc('value')->get()
+        $group = fn ($key) => $base()->selectRaw("$key AS label, COUNT(*) AS value")->groupBy($key)->orderByDesc('value')->orderBy($key)->get()
             ->map(fn ($r)=>['label'=>$r->label ?: 'Not recorded','value'=>(int)$r->value])->all();
         $sales = $eligible()->selectRaw("COALESCE(NULLIF(currency,''),'Unknown') AS currency, SUM(total_price) AS amount")
             ->groupBy('currency')->orderBy('currency')->get()->map(fn ($r)=>['currency'=>$r->currency,'amount'=>(float)$r->amount])->all();
         $venues = $eligible()->selectRaw('venue_id, COUNT(*) AS bookings, COUNT(DISTINCT user_id) AS customers')
-            ->groupBy('venue_id')->orderByDesc('bookings')->get()->map(fn ($r)=>['id'=>(string)$r->venue_id,'bookings'=>(int)$r->bookings,'customers'=>(int)$r->customers])->all();
+            ->groupBy('venue_id')->orderByDesc('bookings')->orderBy('venue_id')->get()->map(fn ($r)=>['id'=>(string)$r->venue_id,'bookings'=>(int)$r->bookings,'customers'=>(int)$r->customers])->all();
         $identifiedByVenue=$identifiedQuery()->selectRaw('venue_id, COUNT(DISTINCT user_id) AS customers')->groupBy('venue_id')->pluck('customers','venue_id');
         foreach($venues as &$venue) $venue['customers']=(int)($identifiedByVenue[$venue['id']] ?? 0);
         unset($venue);
