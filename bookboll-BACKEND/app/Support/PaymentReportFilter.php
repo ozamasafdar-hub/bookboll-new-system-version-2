@@ -27,7 +27,7 @@ final class PaymentReportFilter
         }
         $search = trim((string) ($filters['search'] ?? ''));
         if ($search !== '') {
-            $haystack = implode(' ', array_map(fn ($key) => (string) ($row[$key] ?? ''), ['payment_id','booking_ref','booking_id','customer_name','customer_email','venue_name','listing_name','recipient_label','created_by_name']));
+            $haystack = implode(' ', array_map(fn ($key) => (string) ($row[$key] ?? ''), ['payment_id','checkout_reference','checkout_payment_reference','booking_ref','booking_id','customer_name','customer_email','venue_name','listing_name','recipient_label','created_by_name']));
             $position = function_exists('mb_stripos') ? mb_stripos($haystack, $search) : stripos($haystack, $search);
             if ($position === false) return false;
         }

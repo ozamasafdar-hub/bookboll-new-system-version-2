@@ -2440,6 +2440,7 @@ class BookingService
                 $createdBookings->push($booking);
             }
 
+            \App\Support\CheckoutReference::stamp($createdBookings);
             DB::commit();
 
             $bookingIds      = $createdBookings->pluck('id');

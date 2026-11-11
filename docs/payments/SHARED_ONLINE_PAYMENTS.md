@@ -1,31 +1,64 @@
-# Shared online payments
+# Checkout payments: one deposit and one remaining balance
 
-Implemented 11 November 2026. Required policy: `P17_SHARED_ONLINE_PAYMENTS`.
+Updated 11 November 2026. Required rules: **P17_SHARED_ONLINE_PAYMENTS** and **P18_CHECKOUT_BALANCES**. This supersedes the earlier design that left each slot's arrival balance as a separate table entry.
 
-## Interface and data contract
+## What the user sees
 
-Payments requests `GET /api/admin/payments/dashboard?report_version=2&group_by=stripe`. One shared Stripe payment appears as one expandable entry. Each booking retains its own online allocation, recipient, status and detail action. Separate arrival balances appear in the breakdown as context, explicitly excluded from the online amount; those records remain individually listed in the ledger. The details drawer explains when an entry is a portion of a shared payment.
+For bookings `BKN_2026_11_00420` and `BKN_2026_11_00421`, show two payments under the same checkout reference:
 
-Example: bookings `BKN_2026_11_00420` and `BKN_2026_11_00421` share a QAR 45 charge, split QAR 25 and QAR 20. Their QAR 100 and QAR 80 arrival balances belong to the provider. Never present QAR 225 as the online receipt, or count the QAR 45 parent on top of its children. The source snapshot has pending arrival balances; reviewed legacy reconciliation marks eligible balances collected in the workspace. Sharing a Stripe charge does not prove cash collection.
+| Checkout payment | Total | Booking allocations |
+|---|---:|---|
+| Online deposit | QAR 45 | QAR 25 + QAR 20 |
+| Remaining payment | QAR 180 | QAR 100 + QAR 80 |
 
-- This is presentation only. No new payment, database merge, charge, settlement or reconciliation is performed. Preserve individual IDs, amounts, dates, statuses and processor references.
-- Scope all rows to the actor first. Group online booking allocations by recorded charge ID and currency. An intent-only row may join the unique recorded charge for that intent. Multiple charge attempts remain separate; missing identifiers remain separate. Never guess from customer, timing, amount or receipt URL.
-- Conserving fee/share children inherit processor identity only from their single authorized receipt. The classifier excludes the gross parent before grouping its allocations. Do not infer identity across ambiguous multi-receipt links.
-- Apply allocation filters and calculate summaries first, then group before sorting/pagination. Group amount sorting uses the displayed subtotal; date sorting its latest included date, with original receipt IDs preserving same-day order. Different statuses display `Mixed statuses`. `payments.total` counts displayed entries and `payments.allocation_total` counts matching allocations. Summaries must match flat mode exactly.
-- A filtered subset returns `partial: true`, only matching online children, and `Matching allocations only`. Provider views label amounts as visible to that business. Never claim a visible subtotal is the processor's full charge, nor expose another business's records, amounts or counts. Restricted staff/country scoping still applies.
-- Context arrival balances can be outside filters but must be authorized and clearly excluded from the parent and summaries. They are also individually listed. Do not turn contextual balances into duplicate receipts.
-- CSV explicitly requests `group_by=allocation`, exports each individual allocation once, and never exports synthetic parents. Existing clients omitting `group_by` retain flat pagination.
-- Receipt/refund actions resolve through a real authorized child and existing server preflight. Only platform admins/superadmins can refund. Refund the full original processor charge, not just a displayed child's amount; arrival balances remain unchanged. Partial and provider group headers have no refund action. Child detail actions still require complete charge scope and preflight.
-- Cache identity changes with processor enrichment. Preserve actor/business/venue scoping and committed-mutation invalidation. Never share a provider's grouped result with another provider.
+Each phase has one checkout payment reference. The old per-slot PAY IDs are **original allocation references**, preserved in an audit disclosure and CSV. They are not additional invoices or charges. The details drawer opens the combined amount and links directly to the other payment in that checkout.
 
-## Mandatory acceptance
+Never count the QAR 45 or QAR 180 parent again on top of its children. Never present QAR 225 as an online charge. The source snapshot has pending arrival balances; previously approved legacy reconciliation marks eligible balances collected in Railway. Grouping itself changes no amounts, statuses or recipients and does not prove cash collection.
 
-1. QAR 25 + QAR 20 shows one QAR 45 entry even with a one-entry page size. Arrival records remain QAR 100 and QAR 80.
-2. Filter one payment ID, amount, date or status: only matching online allocations count; partial labels appear; flat/grouped summaries match.
-3. Full online receipts with external fee/share children and saved own-venue allocations count once. Check currencies, rounding, refunds and mixed status.
-4. Different charges, ambiguous intent attempts, missing processor references and different currencies do not collapse into one claimed charge.
-5. Providers/restricted staff cannot discover other businesses' bookings, amounts or balances through grouping, details or refunds.
-6. Full-charge refund preflight still checks permissions, processor amount, replay/idempotency and refund state. Use fake/test-mode processors only.
-7. CSV remains complete and flat; collapse/expand, keyboard activation and dark/light styling work.
+## Identity and schema
 
-Tests: `PaymentReportDashboardTest.php`, `PaymentDetailsAndRefundTest.php`, `PaymentReleaseGateTest.php`, `paymentLedgerEntry.test.mjs`. GitHub's payment workflow runs them. Signed `financial_regression.passed_rule_ids` must include **P17_SHARED_ONLINE_PAYMENTS**; old 16-rule evidence cannot unlock this release. Production must still compare summed booking allocations with actual processor charges independently. UI grouping is not processor certification.
+- Apply `2026_11_14_000001_add_booking_checkout_reference`: indexed nullable `bookings.checkout_reference` plus the `checkout_payment_collections` audit table.
+- New customer checkouts stamp every created slot with one server-generated CHK reference inside the booking transaction. Clients cannot choose this reference. Full online, deposit and full-arrival checkouts use it. The phase reference remains stable when the processor identity arrives.
+- Historical online allocations group by verified charge + currency. Intent-only records may join a unique known charge for that intent. Multiple attempts remain separate. A conserving fee/share allocation may inherit identity only from its single authorized gross receipt.
+- Historical remaining balances join only when their booking has exactly one verified deposit checkout. Missing or ambiguous identity stays separate. Never guess from customer, timing, amount or receipt URL.
+- Group remaining balances only for the same checkout, currency, collector/operator/business and customer. Different businesses must never receive a combined collect action.
+- Preserve original payments, invoices, processor references and amounts. No destructive merge or new money-bearing parent is needed. These canonical checkout payments aggregate existing ledger allocations.
+
+## Report, details and export
+
+The UI requests `GET /api/admin/payments/dashboard?report_version=2&group_by=stripe` (the parameter name is retained for compatibility). Response entries can be `online_group` or `remaining_group`, with `checkout_reference`, `payment_id` (the phase reference), `bookings[].allocations`, `paid_amount` and `pending_amount`.
+
+Scope records to the actor first. Apply allocation filters and compute summaries before grouping, then paginate groups. `payments.total` counts displayed entries; `allocation_total` counts matching ledger allocations. Filtered subtotals are labelled `partial`; provider amounts are explicitly scoped. Grouped and flat summaries must be identical. Group date sorting uses the latest included date and original receipt IDs to preserve same-day ordering.
+
+A QAR 180 remaining payment with QAR 100 collected and QAR 80 pending shows **Partly collected**, both amounts, and only QAR 80 available to collect. Paid/refunded or other mixed states remain explicitly mixed; the whole total must not be reported as received.
+
+CSV requests `group_by=allocation`, includes checkout and phase references, labels the old ID as the original allocation reference, and exports each allocation exactly once. Searching a checkout reference finds its linked payments. Details load all authorized siblings independently of the current table filter. Gross source receipts stay excluded from sums.
+
+## Record an outstanding balance
+
+Only the receiving business can record its offline balance: platform staff for Bookboll receipts, provider staff for their own business receipts, with `accept_payments` capability and current booking access.
+
+1. `GET /api/admin/payments/{sourceId}/collection-preview?row_id=...` resolves the complete remaining group and returns the outstanding amount, currency, underlying receipt IDs and a fingerprint.
+2. `POST /api/admin/payments/{sourceId}/collect-checkout` accepts that fingerprint, row_id and cash/card/cheque/wire_transfer.
+3. Lock the related bookings and payments; recheck permission, current status, recipient, amount and fingerprint. Refuse online, cancelled, already-settled, changed or ambiguous records.
+4. Reuse the booking collection logic in one outer transaction. Update all outstanding receipt allocations or none. Preserve already collected slots and fee allocations. Record the shared reference in booking history and one operation in `checkout_payment_collections`.
+5. Replaying the same operation returns its recorded result without another collection. A new review is required after any balance change.
+
+This action records money already received. It never charges Stripe, invents collection of pending records, discounts balances or triggers refunds.
+
+## Receipts and refunds
+
+A shared online payment has one Stripe receipt action and one platform-admin/superadmin refund action. Refund preflight still verifies full charge scope, amount, ownership and processor state. Refund the actual full processor charge, never a displayed subtotal. Arrival balances are unchanged. Providers never receive online refund permission. Railway does not execute real refunds.
+
+## Mandatory automated and rollout checks
+
+- Two entries (45 online, 180 remaining), pagination, shared checkout / distinct phase references, connected details and checkout search.
+- Filter one child/status/date/amount: only matching allocations count, partial labels appear, flat/grouped summaries agree.
+- Saved checkout references remain stable through Stripe confirmation; missing/ambiguous historical identities, different charges, currencies and collectors remain separate.
+- Own-venue internal fees, external fee/share splits and original gross receipts conserve amounts without double counting.
+- Provider and restricted-staff isolation applies to grouping, details, preview, collection, receipt and refund access.
+- Full and partial offline collection, unchanged paid slots, stale/cancelled rejection, transactional rollback and idempotent replay with a saved audit record.
+- CSV remains flat and complete; combined references, booking allocation disclosure, keyboard controls and dark/light styles work.
+- Full-charge refund regression tests use fake/test processors only.
+
+Tests: `PaymentReportDashboardTest.php`, `PaymentDetailsAndRefundTest.php`, `PaymentReleaseGateTest.php`, `paymentLedgerEntry.test.mjs`. GitHub CI runs these. The release gate requires **18 rules**, the checkout schema, and signed financial regression evidence covering P17 and P18. Previous 17-rule evidence is rejected. Changed code/schema/policy invalidates old signatures. The production migration runner and fresh-live-copy rehearsal remain mandatory independent blockers.

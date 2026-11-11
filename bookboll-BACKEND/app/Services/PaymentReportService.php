@@ -105,8 +105,10 @@ final class PaymentReportService
         }, $request->boolean('refresh'));
         $mayRefund = \App\Support\PaymentRefundAccess::allows($actor);
         $grouped = $request->input('group_by') === 'stripe';
+        $groups = new PaymentReportGroups($rows);
         $matching = [];
         foreach ($rows as &$row) {
+            $row = $groups->decorate($row);
             $row['can_request_refund'] = $mayRefund
                 && $row['method'] === 'online' && $row['status'] === 'paid'
                 && empty($row['refund_status'])
@@ -125,25 +127,25 @@ final class PaymentReportService
         unset($row);
         $entryCount = $matched;
         if ($grouped) {
-            $entries = (new PaymentReportGroups($rows))->entries($matching, $platform);
+            $entries = $groups->entries($matching, $platform);
             $entryCount = count($entries);
             foreach ($entries as $entry) $pageRows->add($entry);
         }
         $visible = $pageRows->rows();
         $documentRows = [];
         foreach ($visible as $entry) {
-            if (($entry['row_kind'] ?? '') !== 'online_group') $documentRows[] = $entry;
-            else foreach ($entry['bookings'] as $booking) foreach ($booking['online'] as $child) $documentRows[] = $child;
+            if (!isset($entry['bookings'])) $documentRows[] = $entry;
+            else foreach ($entry['bookings'] as $booking) foreach ($booking['allocations'] as $child) $documentRows[] = $child;
         }
         $documented = collect($this->withDocuments($actor, $documentRows))->keyBy('id');
         foreach ($visible as &$entry) {
-            if (($entry['row_kind'] ?? '') !== 'online_group') {
+            if (!isset($entry['bookings'])) {
                 $entry = $documented[$entry['id']];
                 continue;
             }
             $entry['anchor'] = $documented[$entry['anchor']['id']];
             foreach ($entry['bookings'] as &$booking) {
-                $booking['online'] = array_map(fn ($r) => $documented[$r['id']], $booking['online']);
+                $booking['allocations'] = array_map(fn ($r) => $documented[$r['id']], $booking['allocations']);
             }
             unset($booking);
         }
@@ -221,6 +223,8 @@ final class PaymentReportService
         if ($details) $row['notes'] = $payment->notes;
         return array_merge($row, [
             'booking_id' => $payment->booking_id ? (string) $payment->booking_id : null,
+            'checkout_reference' => $b?->checkout_reference,
+            'customer_id' => $customer?->id,
             'booking_ref' => $b?->booking_id ?: ($payment->booking_id ? '#'.$payment->booking_id : ''),
             'created_by_name' => $b?->creation_context['actor_name'] ?? null,
             'created_by_kind' => $b?->creation_context['actor_kind'] ?? 'unknown',

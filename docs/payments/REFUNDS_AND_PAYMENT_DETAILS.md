@@ -6,7 +6,7 @@ The [enforced release gate](ENFORCED_RELEASE_CHECKS.md) now blocks real refund a
 
 ## Interface and connected records
 
-Shared Stripe payments now have one expandable ledger parent and a per-booking breakdown; see [shared online payments](SHARED_ONLINE_PAYMENTS.md). A child detail drawer identifies its portion of the shared online amount. Refund preflight always covers the actual original full charge, never a filtered group subtotal, and never changes separate arrival balances.
+Checkout payments have one online entry and one remaining entry per collector/currency, with per-booking allocations; see [checkout payments](SHARED_ONLINE_PAYMENTS.md). The drawer shows the combined amount and links to the other phase. Old allocation IDs stay in the audit disclosure. Refund preflight covers the actual original full charge, never a filtered subtotal, and never changes the remaining payment. Offline remaining collection has a separate reviewed, atomic and replay-safe action for the receiving business.
 
 - Payments has a **Last month** calendar preset, including year boundaries and leap years. Both breakdown cards start collapsed. The large receipt-total equation was removed; the disjoint calculation is unchanged.
 - The detail drawer shows amount, recipient, status, collection date, creator/channel, saved rate and original receipt amount, followed by connected transactions. Connections load from the complete authorized booking, membership and Stripe payment history, independently of table pagination/filters.

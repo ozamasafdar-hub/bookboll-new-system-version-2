@@ -33,12 +33,22 @@ final class PaymentDetailService
             $links = $classified['source_receipt_ids'] ?? [];
             if (count($links) === 1) $anchor = $this->report->authorizedQuery($actor)->with('paymentRefund')->find((int)$links[0]) ?? $selected;
         }
-        $related = $this->report->authorizedQuery($actor)->where(function ($q) use ($selected, $anchor) {
+        $connectionAnchor = $anchor;
+        if (!$anchor->charge_id && !$anchor->payment_intent_id && $selected->booking_id) {
+            $deposits = $this->report->authorizedQuery($actor)->where('booking_id',$selected->booking_id)
+                ->where('type','deposit')->where('method','online')->get()
+                ->filter(fn ($p) => $p->charge_id || $p->payment_intent_id);
+            if ($deposits->map(fn ($p) => $p->charge_id ?: $p->payment_intent_id)->unique()->count() === 1)
+                $connectionAnchor = $deposits->first();
+        }
+        $related = $this->report->authorizedQuery($actor)->where(function ($q) use ($selected, $connectionAnchor) {
             $q->where('id', $selected->id);
             if ($selected->booking_id) $q->orWhere('booking_id', $selected->booking_id);
             if ($selected->subscription_id) $q->orWhere('subscription_id', $selected->subscription_id);
-            if ($anchor->charge_id) $q->orWhere('charge_id', $anchor->charge_id);
-            if ($anchor->payment_intent_id) $q->orWhere('payment_intent_id', $anchor->payment_intent_id);
+            if ($connectionAnchor->charge_id) $q->orWhere('charge_id', $connectionAnchor->charge_id);
+            if ($connectionAnchor->payment_intent_id) $q->orWhere('payment_intent_id', $connectionAnchor->payment_intent_id);
+            if ($selected->booking?->checkout_reference)
+                $q->orWhereHas('booking', fn ($b) => $b->where('checkout_reference',$selected->booking->checkout_reference));
         })->with(['booking.venue','booking.listing','booking.user','subscription.program.venue','user','ownedAllocations','paymentRefund'])->get();
         // A shared charge can have fee/share children without Stripe IDs. Include
         // those bookings' authorized siblings as well as their gross receipts.
@@ -84,10 +94,15 @@ final class PaymentDetailService
         unset($row);
         $current['stripe_receipt_url'] ??= StripeDocumentLink::sanitize($source->stripe_receipt_url);
         $allocations = array_values(array_filter($rows, fn ($r) => $r['row_kind'] !== 'receipt'));
-        $groups = (new \App\Support\PaymentReportGroups($allocations))->entries($allocations, AccessScope::isPlatform($actor));
-        $shared = collect($groups)->first(fn ($g) => ($g['row_kind'] ?? '') === 'online_group'
-            && collect($g['bookings'])->flatMap(fn ($b) => $b['online'])->contains(fn ($r) => (string)$r['id'] === (string)$current['id']));
-        return ['payment'=>$current, 'online_group'=>$shared ? array_intersect_key($shared, array_flip(['amount','currency','booking_count','scoped'])) : null,
+        $grouper = new \App\Support\PaymentReportGroups($allocations);
+        $groups = $grouper->entries($allocations, AccessScope::isPlatform($actor));
+        $shared = collect($groups)->first(fn ($g) => isset($g['bookings'])
+            && collect($g['bookings'])->flatMap(fn ($b) => $b['allocations'])->contains(fn ($r) => (string)$r['id'] === (string)$current['id']));
+        $current = $grouper->decorate($current);
+        return ['payment'=>$current, 'checkout_payment'=>$shared,
+            'checkout_payments'=>array_values(array_filter($groups, fn ($g) => isset($g['bookings']) && $g['id'] !== ($shared['id'] ?? null)
+                && $g['checkout_reference'] === ($shared['checkout_reference'] ?? null))),
+            'online_group'=>$shared && $shared['kind'] === 'online' ? array_intersect_key($shared, array_flip(['amount','currency','booking_count','scoped'])) : null,
             'connected_transactions'=>array_values(array_filter($rows, fn ($r) => (string)$r['id'] !== (string)$current['id'])),
             'refund_source_payment_id'=>$source->id,
             'can_request_refund'=>PaymentRefundAccess::allows($actor) && $source->method === 'online'

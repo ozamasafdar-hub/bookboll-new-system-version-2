@@ -70,11 +70,12 @@ class PaymentReleaseGate
         try {
             $policy = json_decode(file_get_contents(config('payment_release.policy_file')), true, 512, JSON_THROW_ON_ERROR);
             $rules = array_column($policy['rules'], 'id');
-            $add('policy', 'Approved business rules available', count($rules) >= 17 && in_array('P17_SHARED_ONLINE_PAYMENTS', $rules, true) && count($rules) === count(array_unique($rules)), 'The release must cover every rule, including shared online payment grouping, in the versioned payment policy.');
+            $add('policy', 'Approved business rules available', count($rules) >= 18 && in_array('P17_SHARED_ONLINE_PAYMENTS', $rules, true) && in_array('P18_CHECKOUT_BALANCES', $rules, true) && count($rules) === count(array_unique($rules)), 'The release must cover every rule, including checkout deposits and remaining payments, in the versioned payment policy.');
             $missing = array_diff(array_map(fn ($p) => basename($p, '.php'), glob(database_path('migrations/*.php'))),
                 Schema::hasTable('migrations') ? DB::table('migrations')->pluck('migration')->all() : []);
             $schemaReady = !$missing && Schema::hasTable('payment_refunds') && Schema::hasColumn('payments', 'payment_refund_id')
-                && Schema::hasTable('payment_allocations') && Schema::hasTable('payment_release_identity');
+                && Schema::hasTable('payment_allocations') && Schema::hasTable('payment_release_identity')
+                && Schema::hasColumn('bookings','checkout_reference') && Schema::hasTable('checkout_payment_collections');
             $add('schema', 'Required database migrations installed', $schemaReady, $schemaReady ? 'Required payment tables and migrations are installed.' : 'Apply the missing schema migrations before release.');
             if ($schemaReady) $identity = $this->identity();
             $workspace = $this->workspace();

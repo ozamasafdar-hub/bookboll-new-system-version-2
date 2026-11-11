@@ -17,6 +17,16 @@ class PaymentDetailController extends Controller
     {
         return sendSuccess('Review full Stripe refund', $refunds->preview($request->user(), $id));
     }
+    public function collectionPreview(Request $request, int $id, \App\Services\CheckoutPaymentCollection $collections)
+    {
+        $request->validate(['row_id'=>'nullable|string|max:100']);
+        return sendSuccess('Review remaining payment', $collections->preview($request->user(), $id, $request->input('row_id')));
+    }
+    public function collectCheckout(Request $request, int $id, \App\Services\CheckoutPaymentCollection $collections)
+    {
+        $data = $request->validate(['row_id'=>'nullable|string|max:100','fingerprint'=>'required|string|size:64','method'=>'required|in:cash,card,cheque,wire_transfer']);
+        return sendSuccess('Remaining payment recorded', $collections->collect($request->user(), $id, $data));
+    }
     public function refund(Request $request, int $id, PaymentRefundService $refunds)
     {
         $data = $request->validate(['fingerprint'=>'required|string|size:64', 'reason'=>'required|in:requested_by_customer,duplicate,fraudulent']);

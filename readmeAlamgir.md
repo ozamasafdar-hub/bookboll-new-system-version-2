@@ -17,7 +17,7 @@ Updated 11 November 2026. This is the current entry point for the Payments rebui
 
 ## Approved rules to preserve
 
-**Shared online payments:** [implementation and mandatory acceptance](docs/payments/SHARED_ONLINE_PAYMENTS.md). One Stripe charge may cover several bookings. Group authorized allocations before pagination, keep each booking's arrival balance separate, and never create an extra receipt. CSV and totals remain allocation-based. Release rule **P17_SHARED_ONLINE_PAYMENTS** is mandatory, including provider isolation, partial filters, receipt conservation and full-charge refund safety.
+**Checkout payments:** [implementation and mandatory acceptance](docs/payments/SHARED_ONLINE_PAYMENTS.md). A checkout with two slots now shows **one deposit payment and one remaining payment**: QAR 45 online (25 + 20 allocations), QAR 180 remaining (100 + 80 allocations). Use one checkout reference and one reference per phase; keep old per-slot IDs in the audit breakdown. Apply the new checkout-reference/collection-audit migration. New checkouts save a common reference; old ones require verified processor evidence. Remaining collection is one reviewed, atomic and replay-safe operation by the receiving business. Totals and CSV count allocations once. Enforced rules **P17_SHARED_ONLINE_PAYMENTS** and **P18_CHECKOUT_BALANCES** are mandatory; previous 17-rule release evidence cannot unlock this build.
 
 Rates below describe historical policy, not a replacement for each booking's saved quote. Currency amounts must be calculated in integer minor units; never sum different currencies.
 

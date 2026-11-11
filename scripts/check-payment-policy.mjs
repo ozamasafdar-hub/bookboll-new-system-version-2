@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const policy = JSON.parse(readFileSync(resolve(root, 'docs/payments/rules-v1.json'), 'utf8'))
 const ids = policy.rules.map(rule => rule.id)
-if (ids.length < 17 || !ids.includes('P17_SHARED_ONLINE_PAYMENTS') || new Set(ids).size !== ids.length) throw new Error('Payment policy rules are missing or duplicated, including shared online payments.')
+if (ids.length < 18 || !ids.includes('P17_SHARED_ONLINE_PAYMENTS') || !ids.includes('P18_CHECKOUT_BALANCES') || new Set(ids).size !== ids.length) throw new Error('Payment policy rules are missing or duplicated, including checkout payments and balances.')
 for (const rule of policy.rules) {
   if (!rule.rule || !rule.production_acceptance || !rule.implementation?.length || !rule.tests?.length) throw new Error(`Incomplete rule: ${rule.id}`)
   for (const file of [...rule.implementation, ...rule.tests]) {

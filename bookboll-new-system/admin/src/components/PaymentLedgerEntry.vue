@@ -3,42 +3,39 @@ import { computed, ref } from 'vue'
 import { ChevronRight, ReceiptText, RotateCcw } from 'lucide-vue-next'
 import { paymentCategories, channelOptions, methodOptions, statusOptions, labelFor, money } from '../lib/paymentReport.js'
 import { stripeInvoiceUrl, isStripeOnlinePayment } from '../lib/stripeInvoice.js'
+import CheckoutPaymentBreakdown from './CheckoutPaymentBreakdown.vue'
 
 const props = defineProps({ payment:Object, canRefund:Boolean, canCollect:Function })
 const emit = defineEmits(['details','booking'])
 const p = computed(() => props.payment)
 const expanded = ref(false)
-const grouped = computed(() => p.value.row_kind === 'online_group')
+const grouped = computed(() => ['online_group','remaining_group'].includes(p.value.row_kind))
 const category = row => labelFor(paymentCategories,row.category)
-const status = row => row.status === 'mixed' ? 'Mixed statuses' : labelFor(statusOptions,row.status)
+const status = row => row.status === 'partially_paid' ? 'Partly collected' : row.status === 'mixed' ? 'Mixed statuses' : labelFor(statusOptions,row.status)
 const hasFee = row => ['provider_booking_fee','owned_platform_fee','provider_membership_fee','event_fee'].includes(row.category)
-const reference = row => row.payment_id || '#' + row.id
-const sharedReceipt = computed(() => stripeInvoiceUrl(p.value.anchor) || p.value.bookings?.flatMap(b => b.online).map(stripeInvoiceUrl).find(Boolean))
+const reference = row => row.checkout_payment_reference || row.payment_id || '#' + row.id
+const sharedReceipt = computed(() => stripeInvoiceUrl(p.value.anchor) || p.value.bookings?.flatMap(b => b.allocations).map(stripeInvoiceUrl).find(Boolean))
+const collectGroup = computed(() => p.value.kind === 'remaining' && !p.value.partial && p.value.bookings.flatMap(b => b.allocations).some(r => props.canCollect(r)))
 const details = (row, refund = false) => emit('details',row,refund)
 </script>
 
 <template>
   <template v-if="grouped">
     <tr class="pay-online-group" :class="{ 'is-expanded':expanded }">
-      <td><button class="pay-group-toggle" :aria-expanded="expanded" :aria-controls="p.id" @click="expanded = !expanded"><ChevronRight :size="16" /><span>One online payment</span></button><small>{{ p.payment_date || 'Date not recorded' }}</small><small>{{ p.booking_count }} {{ p.booking_count === 1 ? 'booking' : 'bookings' }} · {{ p.allocation_count }} allocations shown</small></td>
+      <td><button class="pay-link pay-checkout-reference" @click="details(p.anchor)">{{ p.payment_id }}</button><small>{{ p.payment_date || 'Date not recorded' }}</small><button class="pay-group-toggle" :aria-expanded="expanded" :aria-controls="p.id" @click="expanded = !expanded"><ChevronRight :size="16" /><span>{{ p.booking_count }} {{ p.booking_count === 1 ? 'booking' : 'bookings' }} · view split</span></button></td>
       <td><b>{{ p.customer_name }}</b><small>{{ p.venue_name }}</small></td>
       <td>{{ p.channel === 'mixed' ? 'Multiple channels' : labelFor(channelOptions,p.channel) }}</td>
-      <td><b>{{ p.recipient_label }}</b><small>{{ p.partial ? 'Matching allocations only' : p.scoped ? 'Amounts visible to your business' : 'Combined online allocations' }}</small><small>Expand for the booking breakdown</small></td>
-      <td>Online payment<small>Shared Stripe payment</small></td>
-      <td class="pay-number"><b>{{ money(p.amount,p.currency) }}</b><small>{{ p.partial || p.scoped ? 'Online amount shown' : 'Combined online amount' }}</small></td>
-      <td><span class="pay-status" :class="'pay-status-' + p.status">{{ status(p) }}</span></td>
-      <td><div class="pay-row-actions"><a v-if="sharedReceipt" class="pay-icon" :href="sharedReceipt" target="_blank" rel="noopener noreferrer" :aria-label="p.status === 'refunded' ? 'Shared Stripe refund receipt' : 'Shared Stripe receipt'" :title="p.status === 'refunded' ? 'Shared Stripe refund receipt' : 'Shared Stripe receipt'"><ReceiptText :size="16" /></a><button v-if="canRefund && p.can_request_refund" class="pay-icon pay-refund-button" aria-label="Review refund of shared online payment" title="Review refund of the full shared payment" @click="details(p.anchor,true)"><RotateCcw :size="15" /></button></div></td>
+      <td><b>{{ p.title }}</b><small>{{ p.recipient_label }}</small><small v-if="p.partial || p.scoped">{{ p.partial ? 'Matching allocations only' : 'Amounts visible to your business' }}</small></td>
+      <td>{{ labelFor(methodOptions,p.method) }}<small>{{ p.kind === 'online' ? 'One Stripe payment' : 'One checkout balance' }}</small></td>
+      <td class="pay-number"><b>{{ money(p.amount,p.currency) }}</b><small v-if="p.status === 'partially_paid'">{{ money(p.paid_amount,p.currency) }} collected<br>{{ money(p.pending_amount,p.currency) }} pending</small></td>
+      <td><span class="pay-status" :class="'pay-status-' + p.status">{{ status(p) }}</span><button v-if="collectGroup" class="pay-link pay-collect" @click="details(p.anchor)">Record payment</button></td>
+      <td><div class="pay-row-actions"><button class="pay-icon" :aria-label="'Details for ' + p.title" title="Payment details" @click="details(p.anchor)"><ChevronRight :size="18" /></button><a v-if="sharedReceipt && p.kind === 'online'" class="pay-icon" :href="sharedReceipt" target="_blank" rel="noopener noreferrer" :aria-label="p.status === 'refunded' ? 'Stripe refund receipt' : 'Stripe receipt'" :title="p.status === 'refunded' ? 'Stripe refund receipt' : 'Stripe receipt'"><ReceiptText :size="16" /></a><button v-if="canRefund && p.can_request_refund" class="pay-icon pay-refund-button" aria-label="Review refund of shared online payment" title="Review refund of the full shared payment" @click="details(p.anchor,true)"><RotateCcw :size="15" /></button></div></td>
     </tr>
     <tr v-if="expanded" class="pay-group-expanded"><td colspan="8"><div :id="p.id" class="pay-group-content">
-      <p class="pay-group-explanation">{{ p.partial ? 'Only allocations matching your filters are included in the amount above.' : p.scoped ? 'Only records accessible to your business are shown; this may be part of a larger Stripe payment.' : 'These allocations belong to the same Stripe payment. They are portions of the amount above, not additional charges.' }}</p>
-      <div class="pay-booking-breakdowns"><section v-for="booking in p.bookings" :key="booking.id" class="pay-booking-breakdown">
-        <header><button v-if="booking.online[0].can_view_booking !== false" class="pay-link" @click="emit('booking',booking.online[0])">{{ booking.reference }}</button><b v-else>{{ booking.reference }}</b><small>{{ booking.listing_name || booking.venue_name }}</small></header>
-        <div v-for="row in booking.online" :key="row.id" class="pay-group-allocation"><div><b>{{ row.type === 'deposit' ? 'Online deposit' : category(row) }}</b><small>{{ category(row) }} · {{ row.recipient_label }}</small><small v-if="hasFee(row) && row.fee_rate != null">{{ row.fee_rate }}% {{ row.allocation_basis === 'owner_confirmed_legacy_20pct' ? 'owner-confirmed historical rate' : 'recorded rate' }}</small><button class="pay-link" @click="details(row)">{{ reference(row) }}</button></div><div><b>{{ money(row.amount,row.currency) }}</b><span class="pay-status" :class="'pay-status-' + row.status">{{ status(row) }}</span></div></div>
-        <div v-if="booking.arrival_balances.length" class="pay-group-arrivals"><p>Separate arrival balance <small>Not included in the online amount. Also listed separately in payment records.</small></p><div v-for="row in booking.arrival_balances" :key="row.id" class="pay-group-allocation"><div><b>{{ row.recipient_label }}</b><small>{{ labelFor(methodOptions,row.method) }}</small><button class="pay-link" @click="details(row)">View balance details</button><button v-if="canCollect(row)" class="pay-link pay-collect" @click="emit('booking',row,true)">Record payment</button></div><div><b>{{ money(row.amount,row.currency) }}</b><span class="pay-status" :class="'pay-status-' + row.status">{{ status(row) }}</span></div></div></div>
-      </section></div>
+      <p class="pay-group-explanation">{{ p.partial ? 'Only allocations matching your filters are included in the amount above.' : p.scoped ? 'These are the booking allocations visible to your business.' : 'One payment for this checkout. The amounts below are each booking’s share of the total.' }}</p>
+      <CheckoutPaymentBreakdown :payment="p" @booking="row => emit('booking',row)" />
     </div></td></tr>
-  </template>
-  <tr v-else>
+  </template>  <tr v-else>
     <td><button class="pay-link" @click="details(p)">{{ reference(p) }}</button><small>{{ p.payment_date || 'Date not recorded' }}</small><small v-if="p.booking_ref">{{ p.booking_ref }}</small></td>
     <td><b>{{ p.customer_name }}</b><small>{{ p.venue_name }}</small><small v-if="p.listing_name">{{ p.listing_name }}</small></td>
     <td>{{ labelFor(channelOptions,p.channel) }}<small v-if="p.created_by_name">Created by {{ p.created_by_name }}</small><small v-if="p.channel === 'admin'">No platform fee</small></td>

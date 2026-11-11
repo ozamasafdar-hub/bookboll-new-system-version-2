@@ -60,23 +60,106 @@ function sharedCheckoutFixture($venue, $customer): array {
     return $payments;
 }
 
-it('groups a shared online checkout before pagination and keeps arrival balances separate', function () {
+it('shows one deposit and one remaining payment per checkout before pagination', function () {
     $payments = sharedCheckoutFixture($this->externalVenue,$this->provider);
     $this->actingAs($this->platform);
     $base = '/api/admin/payments/dashboard?report_version=2&group_by=stripe&sort=amount&sort_dir=asc&records_per_page=1';
-    $first = $this->getJson($base)->assertOk()->assertJsonPath('data.payments.total',3)
+    $first = $this->getJson($base)->assertOk()->assertJsonPath('data.payments.total',2)
         ->assertJsonPath('data.payments.allocation_total',4)->assertJsonPath('data.summary.0.bookboll_received',45);
     $group = $first->json('data.payments.data.0');
     expect($group['row_kind'])->toBe('online_group')->and($group['amount'])->toEqual(45)
         ->and($group['booking_count'])->toBe(2)->and($group['partial'])->toBeFalse()
-        ->and(array_sum(array_column(array_merge(...array_column($group['bookings'],'arrival_balances')),'amount')))->toEqual(180);
+        ->and($group['payment_id'])->toStartWith('CHK-')->and($group['payment_id'])->toContain('-ONLINE-');
     $second=$this->getJson($base.'&page=2')->assertOk()->json('data.payments.data.0');
-    $third=$this->getJson($base.'&page=3')->assertOk()->json('data.payments.data.0');
-    expect([$second['amount'],$third['amount']])->toEqual([80,100]);
+    expect($second['amount'])->toEqual(180)->and($second['row_kind'])->toBe('remaining_group')
+        ->and($second['checkout_reference'])->toBe($group['checkout_reference'])
+        ->and($second['payment_id'])->toContain('-BAL-');
     $flat = $this->getJson('/api/admin/payments/dashboard?report_version=2&group_by=allocation')->assertOk();
     expect($flat->json('data.payments.total'))->toBe(4)->and($flat->json('data.summary'))->toBe($first->json('data.summary'));
     $this->getJson('/api/admin/payments/'.$payments[0]->id.'/details')->assertOk()
-        ->assertJsonPath('data.online_group.amount',45)->assertJsonPath('data.online_group.booking_count',2);
+        ->assertJsonPath('data.online_group.amount',45)->assertJsonPath('data.online_group.booking_count',2)
+        ->assertJsonPath('data.checkout_payments.0.amount',180);
+    $this->getJson('/api/admin/payments/'.$second['anchor']['id'].'/details')->assertOk()
+        ->assertJsonPath('data.checkout_payment.amount',180)->assertJsonPath('data.checkout_payments.0.amount',45);
+    $this->getJson('/api/admin/payments/dashboard?report_version=2&group_by=stripe&search='.$group['checkout_reference'])
+        ->assertOk()->assertJsonPath('data.payments.total',2);
+});
+
+it('collects one checkout balance atomically with one review and an idempotent audit record', function () {
+    sharedCheckoutFixture($this->externalVenue,$this->provider);
+    $balance = Payment::where('type','remaining')->first();
+    $base='/api/admin/payments/'.$balance->id;
+    $this->actingAs($this->platform)->getJson($base.'/collection-preview')->assertForbidden();
+    $this->actingAs($this->provider);
+    $review=$this->getJson($base.'/collection-preview')->assertOk()->assertJsonPath('data.amount',180)->json('data');
+    $body=['fingerprint'=>$review['fingerprint'],'method'=>'cash'];
+    $this->postJson($base.'/collect-checkout',$body)->assertOk()->assertJsonPath('data.already_recorded',false);
+    $this->postJson($base.'/collect-checkout',$body)->assertOk()->assertJsonPath('data.already_recorded',true);
+    expect(Payment::where('type','remaining')->where('status','paid')->count())->toBe(2);
+    $this->assertDatabaseCount('checkout_payment_collections',1);
+    $this->getJson('/api/admin/payments/dashboard?report_version=2&group_by=stripe&method=cash')
+        ->assertOk()->assertJsonPath('data.payments.total',1)->assertJsonPath('data.payments.data.0.amount',180)
+        ->assertJsonPath('data.payments.data.0.status','paid')->assertJsonPath('data.summary.0.provider_received',180);
+});
+
+it('rolls back every slot if any receipt in a checkout collection fails', function () {
+    sharedCheckoutFixture($this->externalVenue,$this->provider);
+    $balance=Payment::where('type','remaining')->first();
+    $base='/api/admin/payments/'.$balance->id;
+    $this->actingAs($this->provider);
+    $review=$this->getJson($base.'/collection-preview')->assertOk()->json('data');
+    $real=app(\App\Services\BookingService::class);
+    $calls=0;
+    $mock=\Mockery::mock(\App\Services\BookingService::class);
+    $mock->shouldReceive('dashboardCollect')->twice()->andReturnUsing(function ($request,$bookingId,$paymentId) use ($real,&$calls) {
+        return ++$calls === 2 ? sendError('Collection changed',[],409) : $real->dashboardCollect($request,$bookingId,$paymentId);
+    });
+    app()->instance(\App\Services\BookingService::class,$mock);
+    $this->postJson($base.'/collect-checkout',['fingerprint'=>$review['fingerprint'],'method'=>'cash'])->assertStatus(409);
+    expect(Payment::where('type','remaining')->where('status','pending')->count())->toBe(2);
+    $this->assertDatabaseCount('checkout_payment_collections',0);
+});
+
+it('shows a partly collected checkout and rejects stale or cancelled collection reviews', function () {
+    sharedCheckoutFixture($this->externalVenue,$this->provider);
+    $balances=Payment::where('type','remaining')->orderBy('id')->get();
+    $this->actingAs($this->provider);
+    $base='/api/admin/payments/'.$balances[1]->id;
+    $old=$this->getJson($base.'/collection-preview')->assertOk()->json('data.fingerprint');
+    $balances[0]->forceFill(['status'=>'paid'])->saveQuietly();
+    $this->getJson('/api/admin/payments/dashboard?report_version=2&group_by=stripe&method=cash')->assertOk()
+        ->assertJsonPath('data.payments.data.0.status','partially_paid')->assertJsonPath('data.payments.data.0.paid_amount',100)
+        ->assertJsonPath('data.payments.data.0.pending_amount',80);
+    $this->postJson($base.'/collect-checkout',['fingerprint'=>$old,'method'=>'cash'])->assertStatus(409);
+    $review=$this->getJson($base.'/collection-preview')->assertOk()->assertJsonPath('data.amount',80)->json('data');
+    $balances[1]->booking->forceFill(['status'=>'cancelled'])->saveQuietly();
+    $this->postJson($base.'/collect-checkout',['fingerprint'=>$review['fingerprint'],'method'=>'cash'])->assertStatus(409);
+    expect($balances[1]->fresh()->status)->toBe('pending');
+    $this->assertDatabaseCount('checkout_payment_collections',0);
+});
+
+it('does not merge remaining balances collected by different operators', function () {
+    sharedCheckoutFixture($this->externalVenue,$this->provider);
+    $other=reportFixtureBooking($this->ownVenue,$this->provider);
+    $p=reportFixturePayment($other,'deposit',10,'online','paid');
+    $p->forceFill(['charge_id'=>'ch_shared_checkout','payment_intent_id'=>'pi_shared_checkout'])->saveQuietly();
+    reportFixturePayment($other,'remaining',40,'cash','pending');
+    $rows=$this->actingAs($this->platform)->getJson('/api/admin/payments/dashboard?report_version=2&group_by=stripe&method=cash')
+        ->assertOk()->assertJsonPath('data.payments.total',2)->json('data.payments.data');
+    expect(collect($rows)->pluck('amount')->sort()->values()->all())->toEqual([40,180]);
+});
+
+it('stamps new checkout slots with one stable reference before Stripe confirmation', function () {
+    $payments=sharedCheckoutFixture($this->externalVenue,$this->provider);
+    $bookings=Booking::whereIn('id',array_map(fn ($p)=>$p->booking_id,$payments))->get();
+    $reference=\App\Support\CheckoutReference::stamp($bookings);
+    expect($bookings->map(fn ($b)=>$b->fresh()->checkout_reference)->unique()->all())->toBe([$reference]);
+    foreach ($payments as $p) $p->forceFill(['charge_id'=>null,'payment_intent_id'=>null])->saveQuietly();
+    $path='/api/admin/payments/dashboard?report_version=2&group_by=stripe&method=online';
+    $before=$this->actingAs($this->platform)->getJson($path)->assertOk()->assertJsonPath('data.payments.total',1)->json('data.payments.data.0');
+    foreach ($payments as $p) $p->forceFill(['charge_id'=>'ch_later','payment_intent_id'=>'pi_later'])->saveQuietly();
+    $after=$this->getJson($path)->assertOk()->json('data.payments.data.0');
+    expect($after['payment_id'])->toBe($before['payment_id'])->and($after['checkout_reference'])->toBe($reference);
 });
 
 it('labels a filtered part of a shared payment and does not add unmatched fees into its total', function () {

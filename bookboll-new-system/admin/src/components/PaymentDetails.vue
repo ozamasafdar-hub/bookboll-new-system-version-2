@@ -1,7 +1,8 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { X, ArrowLeft, ArrowUpRight, Link2, ReceiptText, RotateCcw, RefreshCw, ChevronRight } from 'lucide-vue-next'
-import { fetchPaymentDetails, previewPaymentRefund, requestPaymentRefund, refreshPaymentRefund } from '../lib/payments.js'
+import { fetchPaymentDetails, previewPaymentRefund, requestPaymentRefund, refreshPaymentRefund, previewCheckoutCollection, collectCheckoutPayment } from '../lib/payments.js'
+import CheckoutPaymentBreakdown from './CheckoutPaymentBreakdown.vue'
 import { money, paymentCategories, channelOptions, methodOptions, statusOptions, labelFor } from '../lib/paymentReport.js'
 import { safeStripeUrl, stripeInvoiceUrl, isStripeOnlinePayment } from '../lib/stripeInvoice.js'
 import { dialogFocus as vDialogFocus } from '../lib/dialogFocus.js'
@@ -11,8 +12,14 @@ const emit = defineEmits(['close','booking','changed'])
 const active = ref(props.payment), data = ref(null), loading = ref(false), error = ref('')
 const refundOpen = ref(false), refundPreview = ref(null), refundBusy = ref(false), refundError = ref(''), reason = ref('requested_by_customer')
 const history = ref([])
+const collection = ref(null), collectionBusy = ref(false), collectionError = ref(''), collectionMethod = ref('cash')
 let request = 0
 const current = computed(() => data.value?.payment || active.value)
+const checkout = computed(() => data.value?.checkout_payment)
+const display = computed(() => checkout.value || current.value)
+const checkoutConnections = computed(() => data.value?.checkout_payments || [])
+const mayCollectCheckout = computed(() => checkout.value?.kind === 'remaining' && checkout.value.bookings.flatMap(b => b.allocations).some(props.canCollectPayment))
+const status = row => row.status === 'partially_paid' ? 'Partly collected' : row.status === 'mixed' ? 'Mixed statuses' : labelFor(statusOptions,row.status)
 const connected = computed(() => data.value?.connected_transactions || [])
 const refund = computed(() => data.value?.refund)
 const sourceId = computed(() => data.value?.refund_source_payment_id || active.value.source_payment_id || active.value.id)
@@ -24,6 +31,7 @@ async function load(row = active.value) {
   const id = ++request
   active.value = row; data.value = null; error.value = ''; loading.value = true
   refundOpen.value = false; refundPreview.value = null; refundError.value = ''
+  collection.value = null; collectionError.value = ''
   try {
     const response = await fetchPaymentDetails(row.source_payment_id || row.id, row.id)
     if (id !== request) return
@@ -65,7 +73,26 @@ async function refreshRefund() {
   } catch(e) { refundError.value = e.message }
   finally { refundBusy.value = false }
 }
-function close() { if (!refundBusy.value) emit('close') }
+async function reviewCollection() {
+  collectionBusy.value = true; collectionError.value = ''
+  try {
+    const response = await previewCheckoutCollection(current.value.source_payment_id || current.value.id,current.value.id)
+    if (!response.success) throw new Error(response.message)
+    collection.value = response.data
+  } catch(e) { collectionError.value = e.message }
+  finally { collectionBusy.value = false }
+}
+async function confirmCollection() {
+  if (!collection.value || collectionBusy.value) return
+  collectionBusy.value = true; collectionError.value = ''
+  try {
+    const response = await collectCheckoutPayment(current.value.source_payment_id || current.value.id, {row_id:current.value.id, fingerprint:collection.value.fingerprint, method:collectionMethod.value})
+    if (!response.success) throw new Error(response.message)
+    await load(); emit('changed')
+  } catch(e) { collectionError.value = e.message; collection.value = null }
+  finally { collectionBusy.value = false }
+}
+function close() { if (!refundBusy.value && !collectionBusy.value) emit('close') }
 onMounted(async () => { await load(); if (props.startRefund) await openRefund() })
 onBeforeUnmount(() => { request++ })
 </script>
@@ -73,13 +100,13 @@ onBeforeUnmount(() => { request++ })
 <template>
   <Teleport to="body"><div class="pay-overlay" @click.self="close">
     <section v-dialog-focus="close" class="pay-detail pay-detail-expanded" role="dialog" aria-modal="true" aria-labelledby="payment-detail-title" :aria-busy="loading">
-      <header class="pay-detail-header"><div><button v-if="history.length" class="pay-link pay-back" :disabled="refundBusy" @click="back"><ArrowLeft :size="14" /> Back to payment</button><h2 id="payment-detail-title">Payment details</h2><p>{{ current.payment_id || '#' + current.id }}</p></div><button class="pay-icon" :disabled="refundBusy" aria-label="Close payment details" @click="close"><X :size="20" /></button></header>
+      <header class="pay-detail-header"><div><button v-if="history.length" class="pay-link pay-back" :disabled="refundBusy || collectionBusy" @click="back"><ArrowLeft :size="14" /> Back to payment</button><h2 id="payment-detail-title">Payment details</h2><p>{{ display.checkout_payment_reference || display.payment_id || '#' + display.id }}</p></div><button class="pay-icon" :disabled="refundBusy || collectionBusy" aria-label="Close payment details" @click="close"><X :size="20" /></button></header>
       <div class="pay-detail-body">
-        <div class="pay-detail-hero"><div><span>{{ category(current) }}</span><strong>{{ money(current.amount,current.currency) }}</strong><p>{{ current.recipient_label }}</p></div><div class="pay-detail-state"><span class="pay-status" :class="'pay-status-' + current.status">{{ labelFor(statusOptions,current.status) }}</span><small>{{ current.payment_date || 'Date not recorded' }}</small></div></div>
+        <div class="pay-detail-hero"><div><span>{{ checkout ? checkout.title : category(current) }}</span><strong>{{ money(display.amount,display.currency) }}</strong><p>{{ display.recipient_label }}</p><small v-if="checkout?.status === 'partially_paid'">{{ money(checkout.paid_amount,checkout.currency) }} collected · {{ money(checkout.pending_amount,checkout.currency) }} pending</small></div><div class="pay-detail-state"><span class="pay-status" :class="'pay-status-' + display.status">{{ status(display) }}</span><small>{{ display.payment_date || 'Date not recorded' }}</small></div></div>
         <p v-if="loading" class="pay-detail-note" role="status">Loading connected transactions…</p>
         <p v-if="error" class="pay-notice pay-error" role="alert">{{ error }} <button class="pay-link" @click="load()">Try again</button></p>
         <p v-if="current.review_reason" class="pay-notice">{{ current.review_reason }}</p>
-        <p v-if="data?.online_group" class="pay-shared-notice"><b>Part of one shared online payment</b><span>{{ money(current.amount,current.currency) }} is this entry’s portion of {{ money(data.online_group.amount,data.online_group.currency) }} across {{ data.online_group.booking_count }} {{ data.online_group.booking_count === 1 ? 'booking' : 'bookings' }}{{ data.online_group.scoped ? ' visible to your business' : '' }}. Arrival balances are separate.</span><small v-if="canRefund">A refund applies to the original shared Stripe charge. Review its full amount and connected bookings before confirming.</small></p>
+        <p v-if="checkout" class="pay-detail-note">Checkout {{ checkout.checkout_reference }} · {{ checkout.booking_count }} bookings. Each booking’s share is shown below.</p>
         <div class="pay-detail-actions">
           <a v-if="receiptUrl" class="btn" :href="receiptUrl" target="_blank" rel="noopener noreferrer"><ReceiptText :size="16" /> {{ current.status === 'refunded' ? 'Stripe refund receipt' : 'Stripe receipt' }} <ArrowUpRight :size="14" /></a>
           <span v-else-if="isStripeOnlinePayment(current)" class="pay-muted-action"><ReceiptText :size="16" /> Stripe receipt not available</span>
@@ -101,21 +128,30 @@ onBeforeUnmount(() => { request++ })
         </section>
         <p v-else-if="refundError" class="pay-notice pay-error" role="alert">{{ refundError }}</p>
 
-        <section class="pay-detail-section"><h3>Booking &amp; collection</h3><dl class="pay-detail-facts">
+        <section v-if="checkout" class="pay-detail-section"><h3>Booking allocations</h3><CheckoutPaymentBreakdown :payment="checkout" @booking="row => !collectionBusy && emit('booking',row,false)" /></section>
+        <section v-if="mayCollectCheckout" class="pay-detail-section">
+          <h3>Record the remaining payment</h3><p class="pay-detail-note">Record money already received on site. This does not charge a card.</p>
+          <button v-if="!collection" class="btn primary" :disabled="collectionBusy" @click="reviewCollection">{{ collectionBusy ? 'Checking balance…' : 'Review outstanding balance' }}</button>
+          <template v-else><p><strong>{{ money(collection.amount,collection.currency) }}</strong> outstanding across {{ collection.booking_count }} bookings</p><label class="pay-collection-method">Received by<select v-model="collectionMethod" :disabled="collectionBusy"><option value="cash">Cash</option><option value="card">Card terminal</option><option value="wire_transfer">Bank transfer</option><option value="cheque">Cheque</option></select></label><div class="pay-actions"><button class="btn" :disabled="collectionBusy" @click="collection = null">Cancel</button><button class="btn primary" :disabled="collectionBusy" @click="confirmCollection">{{ collectionBusy ? 'Recording…' : `Record ${money(collection.amount,collection.currency)} received` }}</button></div></template>
+        </section>
+        <p v-if="collectionError" class="pay-notice pay-error" role="alert">{{ collectionError }}</p>
+        <section v-if="checkout && checkoutConnections.length" class="pay-detail-section"><div class="pay-connected-heading"><h3><Link2 :size="17" /> Other payment in this checkout</h3></div><div class="pay-connections"><button v-for="p in checkoutConnections" :key="p.id" class="pay-connection" :disabled="refundBusy || collectionBusy" @click="inspect(p.anchor)"><div><b>{{ p.title }}</b><small>{{ p.payment_id }}</small><small>{{ p.booking_count }} bookings · {{ p.recipient_label }}</small></div><div class="pay-connection-value"><b>{{ money(p.amount,p.currency) }}</b><span class="pay-status" :class="'pay-status-' + p.status">{{ status(p) }}</span></div><ChevronRight :size="16" /></button></div></section>
+
+        <section v-if="!checkout" class="pay-detail-section"><h3>Booking &amp; collection</h3><dl class="pay-detail-facts">
           <div><dt>Customer</dt><dd>{{ current.customer_name }}</dd></div><div><dt>Venue</dt><dd>{{ current.venue_name }}<small v-if="current.listing_name">{{ current.listing_name }}</small></dd></div>
           <div><dt>Booking</dt><dd><button v-if="current.booking_id && current.can_view_booking !== false" class="pay-link" :disabled="refundBusy" @click="emit('booking',current,false)">{{ current.booking_ref || '#' + current.booking_id }}</button><span v-else>{{ current.booking_ref || '—' }}</span></dd></div><div><dt>Payment method</dt><dd>{{ labelFor(methodOptions,current.method) }}</dd></div>
           <div><dt>Booking channel</dt><dd>{{ labelFor(channelOptions,current.channel) }}</dd></div><div><dt>Booking created by</dt><dd>{{ current.created_by_name || 'Not recorded' }}<small v-if="current.created_by_kind === 'staff'">Staff booking · no platform fee</small></dd></div>
           <div v-if="current.fee_rate != null"><dt>{{ current.allocation_basis === 'owner_confirmed_legacy_20pct' ? 'Historical fee policy' : 'Saved platform fee rate' }}</dt><dd>{{ current.fee_rate }}%</dd></div><div v-if="current.receipt_amount != null"><dt>Original receipt amount</dt><dd>{{ money(current.receipt_amount,current.currency) }}</dd></div>
         </dl></section>
 
-        <section v-if="!loading && !error" class="pay-detail-section"><div class="pay-connected-heading"><h3><Link2 :size="17" /> Connected transactions</h3><span>{{ connected.length }}</span></div><p class="pay-detail-note">Original receipts, fee splits and other payments linked to this booking or Stripe payment.</p>
+        <section v-if="!checkout && !loading && !error" class="pay-detail-section"><div class="pay-connected-heading"><h3><Link2 :size="17" /> Connected transactions</h3><span>{{ connected.length }}</span></div><p class="pay-detail-note">Original receipts, fee splits and other payments linked to this booking or Stripe payment.</p>
           <div v-if="connected.length" class="pay-connections"><button v-for="p in connected" :key="p.id" class="pay-connection" :disabled="refundBusy" @click="inspect(p)"><div><span class="pay-connection-relation">{{ p.row_kind === 'receipt' ? 'Original receipt · split below' : p.relationship }}</span><b>{{ category(p) }}</b><small>{{ p.payment_id || '#' + p.id }} · {{ p.recipient_label }}<template v-if="p.booking_ref"> · {{ p.booking_ref }}</template></small></div><div class="pay-connection-value"><b>{{ money(p.amount,p.currency) }}</b><span class="pay-status" :class="'pay-status-' + p.status">{{ labelFor(statusOptions,p.status) }}</span></div><ChevronRight :size="16" /></button></div>
           <p v-else class="pay-connections-empty">No connected transactions recorded.</p>
         </section>
         <details v-if="current.notes" class="pay-detail-note"><summary>Original payment note</summary><p>{{ current.notes }}</p></details>
         <p v-if="current.can_view_booking === false" class="pay-detail-note">This historical payment belongs to your business. The venue is now managed by another operator.</p>
       </div>
-      <footer class="pay-detail-footer"><button class="btn" :disabled="refundBusy" @click="close">Close</button><button v-if="canCollectPayment(current) && !loading" class="btn primary" :disabled="refundBusy" @click="emit('booking',current,true)">Record payment</button></footer>
+      <footer class="pay-detail-footer"><button class="btn" :disabled="refundBusy || collectionBusy" @click="close">Close</button><button v-if="!checkout && canCollectPayment(current) && !loading" class="btn primary" :disabled="refundBusy" @click="emit('booking',current,true)">Record payment</button></footer>
     </section>
   </div></Teleport>
 </template>

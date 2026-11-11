@@ -4,7 +4,7 @@ Implemented 11 November 2026. This is an executable release gate, not a checklis
 
 ## What is enforced
 
-The policy now requires **17 rules**, including `P17_SHARED_ONLINE_PAYMENTS`. Signed regression evidence that omits shared-payment acceptance is rejected even if the other 16 rules passed. See [shared-payment acceptance](SHARED_ONLINE_PAYMENTS.md). This release changes the code and policy identity, invalidating approval for the previous build.
+The policy now requires **18 rules**, including `P17_SHARED_ONLINE_PAYMENTS` and `P18_CHECKOUT_BALANCES`. Signed regression evidence that omits checkout-balance acceptance is rejected even if the previous 17 rules passed. The schema check also requires the booking checkout reference and collection audit table. See [checkout-payment acceptance](SHARED_ONLINE_PAYMENTS.md). Changed code, schema and policy invalidate approval for the previous build.
 
 - `PaymentReleaseGate` reads the approved rule inventory. Missing policy, migrations or database identity fail closed.
 - It independently checks persisted internal allocations against their original receipts: same currency, exact minor-unit total, valid/nonduplicate buckets, and zero platform allocation on confirmed staff bookings. This arithmetic check does not by itself prove all historical ownership, cash assertions or unallocated receipts are correct; the full reconciliation evidence is still mandatory.

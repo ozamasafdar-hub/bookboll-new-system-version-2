@@ -114,7 +114,7 @@ async function exportRows() {
     if (!collected.length) { pushToast('No matching payments to export.', 'info'); return }
     // Spreadsheet formulas must not execute when customer-supplied names are opened in Excel.
     const safe = value => /^[=+\-@\t\r]/.test(String(value ?? '')) ? "'" + value : value
-    const columns = [['id','Allocation record'],['source_payment_id','Original payment record'],['allocation_id','Saved internal allocation'],['payment_id','Payment'],['booking_ref','Booking'],['payment_date','Payment date'],['customer_name','Customer'],['venue_name','Venue'],['recipient_label','Recipient'],['category','Allocation'],['channel','Booking channel'],['created_by_name','Booking created by'],['method','Method'],['currency','Currency'],['amount','Amount'],['status','Status'],['fee_rate','Recorded fee %'],['review_reason','Review note']]
+    const columns = [['id','Allocation record'],['source_payment_id','Original payment record'],['allocation_id','Saved internal allocation'],['checkout_reference','Checkout'],['checkout_payment_reference','Checkout payment'],['payment_id','Original allocation reference'],['booking_ref','Booking'],['payment_date','Payment date'],['customer_name','Customer'],['venue_name','Venue'],['recipient_label','Recipient'],['category','Allocation'],['channel','Booking channel'],['created_by_name','Booking created by'],['method','Method'],['currency','Currency'],['amount','Amount'],['status','Status'],['fee_rate','Recorded fee %'],['review_reason','Review note']]
     downloadCSV(collected, columns.map(([key,label]) => ({ label, fn:r => safe(r[key]) })), 'payment_allocations')
   } catch (e) { pushToast(e.message, 'error') }
   finally { exporting.value = false }
@@ -159,7 +159,7 @@ onBeforeUnmount(() => { ++requestId; clearTimeout(timer) })
     </div>
 
     <section class="pay-ledger" aria-labelledby="ledger-heading" :aria-busy="loading">
-      <div class="pay-ledger-heading"><div><h2 id="ledger-heading">Payment records</h2><p>{{ ready ? 'Shared online payments are grouped. Expand one to see each booking’s allocations and separate arrival balance.' : 'Existing records · allocation verification pending' }}</p></div><span>{{ total.toLocaleString() }} entries · {{ allocationTotal.toLocaleString() }} allocations</span></div>
+      <div class="pay-ledger-heading"><div><h2 id="ledger-heading">Payment records</h2><p>{{ ready ? 'One checkout payment for the deposit and one for the remaining balance. Expand either to see each booking’s share.' : 'Existing records · allocation verification pending' }}</p></div><span>{{ total.toLocaleString() }} entries · {{ allocationTotal.toLocaleString() }} allocations</span></div>
       <div class="pay-tools"><div class="pay-search"><Search :size="17" /><input v-model="filters.search" type="search" maxlength="150" aria-label="Search payments" placeholder="Search payment, booking, customer or venue…" /></div><button class="btn" :aria-expanded="advanced" aria-controls="payment-filters" @click="advanced = !advanced"><SlidersHorizontal :size="16" /> Filters</button><button class="pay-link" @click="reset">Reset</button></div>
       <div v-if="advanced" id="payment-filters" class="pay-advanced">
         <div class="pay-filter"><span>Status</span><MultiSelect v-model="filters.status" :options="statusOptions" placeholder="All statuses" /></div><div class="pay-filter"><span>Payment method</span><MultiSelect v-model="filters.method" :options="methodOptions" placeholder="All methods" /></div>
