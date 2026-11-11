@@ -81,4 +81,5 @@
 @media(max-width:600px){.pay-detail-header{padding:18px}.pay-detail-body{padding:20px 18px}.pay-detail-footer{padding:14px 18px}.pay-detail-hero strong{font-size:28px}.pay-detail-hero{align-items:flex-start}.pay-detail-state{max-width:115px}.pay-detail .pay-detail-facts{gap:18px}.pay-connection{padding:12px;gap:9px}.pay-connection-value b{font-size:12px}.pay-refund-state{flex-direction:column}.pay-detail-actions .btn{flex:1;justify-content:center}}
 .pay-link.pay-checkout-reference { font-size:11px; overflow-wrap:anywhere; max-width:190px; text-align:left; }
 .pay-collection-method { display:flex; flex-direction:column; gap:6px; margin:14px 0; max-width:260px; }
+.pay-booking-breakdowns .pay-booking-breakdown > header { display:flex; flex-direction:column; align-items:flex-start; gap:6px; }
 .pay-status.pay-status-partially_paid { color:var(--warning-ink,#845900); background:var(--warning-bg,#fff3d8); border-color:var(--warning-border,#e8cf96); }
