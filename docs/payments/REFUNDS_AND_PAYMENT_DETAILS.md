@@ -2,6 +2,8 @@
 
 Implemented 11 November 2026. This extends the Payments report; it does not run historical corrections or enable Stripe in the Railway workspace.
 
+The [enforced release gate](ENFORCED_RELEASE_CHECKS.md) now blocks real refund attempts until signed release and Stripe acceptance evidence matches the deployed code/database. The platform role checks and all per-payment reversal guards remain mandatory after that gate passes.
+
 ## Interface and connected records
 
 - Payments has a **Last month** calendar preset, including year boundaries and leap years. Both breakdown cards start collapsed. The large receipt-total equation was removed; the disjoint calculation is unchanged.

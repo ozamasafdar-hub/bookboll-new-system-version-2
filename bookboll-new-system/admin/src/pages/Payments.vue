@@ -11,6 +11,7 @@ import { stripeInvoiceUrl, isStripeOnlinePayment } from '../lib/stripeInvoice.js
 import { paymentCategories, channelOptions, methodOptions, statusOptions, labelFor, money, periodDates, filterError, queryFilters, legacyPaymentRows } from '../lib/paymentReport.js'
 import MultiSelect from '../components/MultiSelect.vue'
 import PaymentDetails from '../components/PaymentDetails.vue'
+import PaymentReleaseChecks from '../components/PaymentReleaseChecks.vue'
 import BookingDetailModal from '../components/BookingDetailModal.vue'
 import './payments.css'
 
@@ -129,6 +130,8 @@ onBeforeUnmount(() => { ++requestId; clearTimeout(timer) })
       <div><h1>Payments</h1><p>{{ platform ? 'Bookboll earnings, venue collections and provider sales.' : 'Your collections, outstanding balances and Bookboll fees.' }}</p></div>
       <div class="pay-actions"><button class="btn" :disabled="loading" @click="load(true)"><RefreshCw :size="15" /> Refresh</button><button v-if="can(CAP.EXPORT_PAYMENTS)" class="btn" :disabled="exporting || !ready || loading || !!invalid" @click="exportRows"><Download :size="15" /> {{ exporting ? 'Exporting…' : 'Export CSV' }}</button></div>
     </header>
+
+    <PaymentReleaseChecks v-if="canRefund" />
 
     <section class="pay-period" aria-label="Payment reporting period">
       <label>Period<select v-model="period" @change="setPeriod"><option value="all">All time</option><option value="today">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="month">This month</option><option value="last_month">Last month</option><option value="custom">Custom dates</option></select></label>

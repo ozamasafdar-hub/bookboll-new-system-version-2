@@ -10,9 +10,9 @@ Updated 11 November 2026. Start with [the current developer handoff](../../readm
 | Guarded workspace dry-run/apply correction commands | One immutable plan covering ownership, creator evidence, historical cash assertions and fee allocations in dependency order |
 | Transfer v3 fingerprints and before/after audit; correction audit tables | Full-batch audit, protected approval artifact, resumable checkpoints, verification and compensating reversal across all phases |
 | Regression tests and successful Railway snapshot correction | Fresh production-copy rehearsal, restore/reversal rehearsal, live writer and test-mode processor verification |
-| Current rule inventory and this checklist | Enforced CI/deployment checks tying the approved plan to the exact code, rules, schema and source database |
+| Enforced runtime/startup gate, policy checks and CI regression workflow | Genuine signed release evidence for the exact code, rules, schema and source database; protected CI configuration owned by operations |
 
-The rule inventory is **not consumed by the application**. The release checklist is **not yet an automated deployment block**. Do not describe either as implemented automation. Do not bypass the existing `bookboll_preview` guards: their services assume imported ownership context and some commands are intentionally preview-specific.
+The rule inventory is now consumed by the [enforced release gate](ENFORCED_RELEASE_CHECKS.md) for policy identity and complete rule coverage. Production remains blocked until the unfinished runner and actual release evidence exist. This gate does not execute or certify the historical migration by itself. Do not bypass the existing `bookboll_preview` guards: their services assume imported ownership context and some commands are intentionally preview-specific.
 
 ## 1. Freeze a release and identify the source
 
@@ -123,6 +123,6 @@ If a gate fails, keep writes closed until recovery is complete; do not bypass ev
 
 ## Who does what, and what must be supplied later
 
-Alamgir or the deployment owner implements the production runner/release gate and provides the actual source connection, deployment method, backup/restore facility and test-mode processor setup. Osama reviews the final business identity mapping, scoped historical assertions and the dry-run totals/remaining exceptions. Already confirmed fee/manual/deposit policies do not need to be remembered or re-decided from chat.
+Alamgir implements the production runner and supplies genuine test/reconciliation artifacts. The deployment owner supplies the actual source connection, deployment method, backup/restore facility, test-mode processor setup and external approval key. The release gate is implemented; its checks must pass rather than be removed. Osama reviews the final business identity mapping, scoped historical assertions and the dry-run totals/remaining exceptions. Already confirmed fee/manual/deposit policies do not need to be remembered or re-decided from chat.
 
 After each further project change, update the inventory and acceptance cases, create a new policy version when eligibility or accounting meaning changes, and rehearse again. Applied policy versions and audit evidence are immutable. Updating this documentation alone never changes historical payments.

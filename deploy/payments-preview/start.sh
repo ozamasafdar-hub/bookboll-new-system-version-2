@@ -29,6 +29,7 @@ php artisan payments:reconcile-owned-history --apply
 php artisan payments:reconcile-retained-deposits --apply
 php artisan workspace:sync-media
 php artisan payments:warm-report
+php artisan payments:release-check --allow-workspace
 chown -R www-data:www-data storage bootstrap/cache
 php-fpm -D
 exec nginx -g 'daemon off;'

@@ -27,6 +27,7 @@ class DiscardUnpaidHostedGames extends Command
 
     public function handle(StripeService $stripe, CustomerGameService $games): int
     {
+        if ($this->option('apply')) app(\App\Support\PaymentReleaseGate::class)->assertReady();
         $timeout = (int) (Setting::where('key', 'deposit_payment_timeout_minutes')->value('value') ?: 10);
         $grace   = max(0, (int) Setting::where('key', 'payment_timeout_grace_minutes')->value('value'));
 

@@ -21,6 +21,7 @@ final class PaymentRefundService
     {
         abort_unless(PaymentRefundAccess::allows($actor), 403, 'Only Bookboll platform admins and superadmins can refund online payments.');
         abort_if(config('preview.enabled'), 409, 'Stripe refunds are disabled in this Railway workspace. No money will be moved.');
+        app(\App\Support\PaymentReleaseGate::class)->assertReady('refunds');
     }
 
     private function charge(Payment $payment): array

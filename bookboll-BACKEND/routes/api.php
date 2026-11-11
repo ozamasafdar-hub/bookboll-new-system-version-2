@@ -656,6 +656,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::post('payments/generate-link', [PaymentController::class, 'generatePaymentLink'])->name('payments.generate-link');
             Route::post('payments/mark-booking-paid', [PaymentController::class, 'markBookingAsPaid'])->name('payments.mark-booking-paid');
             Route::get('payments/dashboard', [PaymentController::class, 'dashboard'])->name('payments.dashboard');
+            Route::get('payments/release-checks', [\App\Http\Controllers\Admin\PaymentReleaseController::class, 'show']);
             Route::get('payments/{id}/details', [\App\Http\Controllers\Admin\PaymentDetailController::class, 'show'])->whereNumber('id');
             Route::get('payments/{id}/refund-preview', [\App\Http\Controllers\Admin\PaymentDetailController::class, 'preview'])->whereNumber('id');
             Route::post('payments/{id}/refund', [\App\Http\Controllers\Admin\PaymentDetailController::class, 'refund'])->whereNumber('id')->middleware('throttle:10,1');

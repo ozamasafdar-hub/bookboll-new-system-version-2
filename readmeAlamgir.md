@@ -11,7 +11,9 @@ Updated 11 November 2026. This is the current entry point for the Payments rebui
 3. Build and rehearse the production plan/apply/verify/reverse runner on a freshly restored copy of the live database. Compare row-level changes and per-currency totals before applying to production.
 4. Apply only the reviewed plan, record every change, then verify totals, permissions, replay safety and new booking paths before reopening writes.
 
-**Current status:** classification services, snapshot corrections and regression tests exist. A portable production migration runner, production rehearsal and automated release gate do **not** yet exist. The JSON inventory is documentation; it does not execute rules. The current correction commands intentionally restrict writes to the Railway workspace database. Removing those guards is not the production implementation.
+**Enforced release gate:** [Payment release checks](docs/payments/ENFORCED_RELEASE_CHECKS.md) now block production writes and processor mutations until externally signed evidence matches the code, policy, schema and database. Platform admins see the checks on Payments; there is no dismiss/approve button. Refund prerequisites are enforced separately. `php artisan payments:release-check` exits nonzero when blocked, and Railway startup runs the guarded workspace check.
+
+**Still incomplete:** a portable production plan/apply/verify/reverse runner and fresh-live-copy rehearsal. These are explicit blockers, not completed checkboxes. The JSON inventory now supplies the gate's policy identity and required test coverage; it does not perform historical migration. Workspace correction commands remain restricted to the workspace database. Removing those guards is not a production implementation.
 
 ## Approved rules to preserve
 

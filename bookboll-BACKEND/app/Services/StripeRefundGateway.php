@@ -9,6 +9,7 @@ class StripeRefundGateway
     private function client(): StripeClient
     {
         abort_if(config('preview.enabled'), 409, 'Stripe refunds are disabled in this Railway workspace. No money will be moved.');
+        app(\App\Support\PaymentReleaseGate::class)->assertReady('refunds');
         $secret = trim((string) config('services.stripe.secret'));
         abort_if($secret === '', 409, 'Stripe is not connected to this environment.');
         return new StripeClient($secret);

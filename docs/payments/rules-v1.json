@@ -2,11 +2,11 @@
   "schema_version": 1,
   "policy_version": "bookboll-payments-historical-v1",
   "updated_on": "2026-11-11",
-  "purpose": "Versioned inventory of approved policy, implementation references and production acceptance obligations. Not executable configuration.",
+  "purpose": "Versioned inventory of approved policy, implementation references and production acceptance obligations. Consumed by the release gate for identity and required rule coverage; does not mutate historical data.",
   "status": {
-    "application_reads_this_file": false,
+    "application_reads_this_file": true,
     "production_plan_apply_verify_reverse_runner_implemented": false,
-    "production_release_gate_automated": false,
+    "production_release_gate_automated": true,
     "production_rehearsal_completed": false,
     "production_data_changed_by_this_handoff": false
   },
@@ -194,7 +194,10 @@
     "historical_fee_split_count": 0
   },
   "production_gate": {
-    "state": "required_not_implemented",
+    "state": "enforced_pending_production_evidence",
+    "implementation": "bookboll-BACKEND/app/Support/PaymentReleaseGate.php",
+    "checks_command": "php artisan payments:release-check --scope=refunds",
+    "evidence_contract": "docs/payments/ENFORCED_RELEASE_CHECKS.md",
     "instructions": "docs/payments/PRODUCTION_ROLLOUT.md",
     "required_artifacts": [
       "Exact code/schema/policy identity and verified live database identity",

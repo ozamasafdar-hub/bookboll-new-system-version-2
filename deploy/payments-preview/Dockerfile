@@ -16,9 +16,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends nginx mariadb-c
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 WORKDIR /app
 COPY bookboll-BACKEND/ ./
+COPY docs/payments/ /docs/payments/
 RUN mkdir -p bootstrap/cache storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs \
     && composer install --no-dev --prefer-dist --no-interaction --no-scripts --optimize-autoloader \
     && chown -R www-data:www-data storage bootstrap/cache
+RUN php tests/payment-report-rules.php
 COPY --from=frontend /build/dist /app/public/admin-preview
 COPY bookboll_live_with_yopmail_testing_data.sql /opt/bookboll-snapshot.sql
 COPY deploy/payments-preview/nginx.conf /etc/nginx/nginx.conf

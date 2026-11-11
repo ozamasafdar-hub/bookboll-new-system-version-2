@@ -34,6 +34,7 @@ class ReleaseWalletHolds extends Command
 
     public function handle(WalletPayoutService $wallets): int
     {
+        if ($this->option('apply')) app(\App\Support\PaymentReleaseGate::class)->assertReady();
         $apply    = (bool) $this->option('apply');
         $days     = max(0, (int) $this->option('days'));
         $walletId = $this->option('wallet') ?: null;

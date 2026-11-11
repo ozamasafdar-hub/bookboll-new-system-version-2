@@ -1,0 +1,59 @@
+name: Payment release checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  payment-regressions:
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: isolated-ci-only
+          MARIADB_DATABASE: bookboll_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    env:
+      APP_ENV: testing
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: bookboll_test
+      DB_USERNAME: root
+      DB_PASSWORD: isolated-ci-only
+      CACHE_STORE: array
+      MAIL_MAILER: array
+      QUEUE_CONNECTION: sync
+      TELESCOPE_ENABLED: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql, mbstring, gd, intl, zip, bcmath
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/check-payment-policy.mjs
+      - run: composer install --no-interaction --prefer-dist --no-scripts
+        working-directory: bookboll-BACKEND
+      - run: php artisan package:discover --ansi
+        working-directory: bookboll-BACKEND
+      - name: Financial rules and access regression tests
+        working-directory: bookboll-BACKEND
+        run: |
+          php tests/payment-report-rules.php
+          php vendor/bin/pest tests/Feature/PaymentReleaseGateTest.php tests/Feature/PaymentDetailsAndRefundTest.php tests/Feature/StripeRefundGatewayTest.php tests/Feature/PaymentReportDashboardTest.php tests/Feature/PaymentReportCacheTest.php tests/Feature/VenueTransferTest.php tests/Feature/BookingCreatorReconciliationTest.php tests/Feature/HistoricalOwnedFeeReconciliationTest.php tests/Feature/HistoricalRetainedDepositReconciliationTest.php tests/Feature/StripeMultiBookingSettlementTest.php
+      - run: npm ci
+        working-directory: bookboll-new-system/admin
+      - run: node --test tests/paymentReport.test.mjs tests/bookingCreator.test.mjs tests/stripeInvoice.test.js
+        working-directory: bookboll-new-system/admin
+      - run: npm run build
+        working-directory: bookboll-new-system/admin

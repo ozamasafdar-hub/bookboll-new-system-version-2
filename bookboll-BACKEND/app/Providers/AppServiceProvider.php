@@ -20,6 +20,11 @@ use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
+    public function register(): void
+    {
+        $this->app->scoped(\App\Support\PaymentReleaseGate::class);
+    }
+
     public function boot(): void
     {
         Paginator::useTailwind();
@@ -34,6 +39,16 @@ class AppServiceProvider extends ServiceProvider
         Payment::observe(PaymentObserver::class);
         \Illuminate\Support\Facades\DB::listen(\App\Support\PaymentReportCache::written(...));
         if (config('preview.workspace')) \App\Support\WorkspaceIntegrations::disableOutbound();
+        else \Stripe\ApiRequestor::setHttpClient(new \App\Support\ReleaseGuardedStripeClient(new \Stripe\HttpClient\CurlClient()));
+        // Workers cannot continue financial bookkeeping during an unverified
+        // cutover. Throw before the job runs; do not delete/acknowledge its work.
+        \Illuminate\Support\Facades\Queue::before(function () {
+            app(\App\Support\PaymentReleaseGate::class)->assertReady();
+        });
+        \Illuminate\Support\Facades\Queue::looping(function () {
+            try { app(\App\Support\PaymentReleaseGate::class)->assertReady(); return true; }
+            catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) { return false; }
+        });
 
         Gate::define('viewLogViewer', function ($user = null) {
             return $user?->hasRole('super_admin') ?? false;

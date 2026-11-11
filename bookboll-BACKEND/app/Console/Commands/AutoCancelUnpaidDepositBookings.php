@@ -21,6 +21,7 @@ class AutoCancelUnpaidDepositBookings extends Command
 
     public function handle(): int
     {
+        app(\App\Support\PaymentReleaseGate::class)->assertReady();
         $timeoutMinutes = (int) (Setting::where('key', 'deposit_payment_timeout_minutes')->value('value') ?: 10);
 
         if ($timeoutMinutes <= 0) {
