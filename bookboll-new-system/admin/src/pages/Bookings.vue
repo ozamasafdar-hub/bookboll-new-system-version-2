@@ -1,7 +1,12 @@
 <script setup>
 import ExportDialog from '../components/ExportDialog.vue'
 import AdminAppDownloadButton from '../components/AdminAppDownloadButton.vue'
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import BookingActivitySummary from '../components/BookingActivitySummary.vue'
+import BookingActivityCharts from '../components/BookingActivityCharts.vue'
+import { periods, periodDates, purposes, dateError, statusLabel, activityChannelLabel, bookingPaymentLabel } from '../lib/bookingActivity.js'
+import { money } from '../lib/paymentReport.js'
 import { bookingRefLabel } from '../lib/bookingRef.js'
 import {
   fetchBookingsDashboard, fetchBookingsForExport, cancelDashboardBooking, firstError,
@@ -15,7 +20,7 @@ import { useJurisdiction } from '../lib/jurisdiction.js'
 import { downloadCSV } from '../lib/useExport.js'
 import { usePremium } from '../lib/premium.js'
 import { CAP } from '../lib/permissions.js'
-import { kindOptions, channelOptions, matchKind, matchChannel, kindLabel, channelLabel } from '../lib/bookingMeta.js'
+import { kindOptions, channelOptions, matchKind, matchChannel, kindLabel, channelLabel, bookingCreatorLabel } from '../lib/bookingMeta.js'
 import BookingDetailModal from '../components/BookingDetailModal.vue'
 import NewBookingDrawer from '../components/NewBookingDrawer.vue'
 import MultiSelect from '../components/MultiSelect.vue'
@@ -26,6 +31,17 @@ import { fmt12, fmtRange12 } from '../lib/slots.js'
 import { notifyBookingCancelled } from '../customer/notificationDispatch.js'
 
 const { role, can, isSuperAdmin, isCountryAdmin, currentOwnerUserId, scopeLocations, scopeListings, assignedListingIds } = useCurrentUser()
+const props=defineProps({analytics:{type:Boolean,default:false}})
+const route=useRoute(), router=useRouter()
+const activity=ref(null), loadError=ref(''), period=ref('all'), dateBasis=ref('booking')
+const filterPurpose=ref([]), filterBusiness=ref([]), businessOptions=ref([])
+const invalidDates=computed(()=>dateError(filterDateFrom.value,filterDateTo.value) || dateError(filterCreatedFrom.value,filterCreatedTo.value))
+function setPeriod() { if(period.value !== 'custom') [filterDateFrom.value,filterDateTo.value]=periodDates(period.value) }
+function openRecords() {
+  const params=queryParams(), query={}
+  for(const [key,value] of Object.entries(params)) if(value && !['page','per_page','with_activity','analytics_only'].includes(key)) query[key]=Array.isArray(value) ? value.join(',') : value
+  router.push({path:'/bookings',query})
+}
 const canExport = computed(() => can(CAP.EXPORT_BOOKINGS))
 const { isPremium, requirePremium } = usePremium()   // exports are a Premium feature for providers
 const isPlatformAdmin = computed(() => isSuperAdmin.value || isCountryAdmin.value || role.value === 'platform_staff')
@@ -40,13 +56,9 @@ const ownedLocationIds = computed(() => {
   return new Set(scopeLocations(owned).map(l => l.id))
 })
 // Scoped option lists for the filter dropdowns
-const scopedLocations = computed(() =>
-  ownedLocationIds.value ? locations.value.filter(l => ownedLocationIds.value.has(l.id)) : locations.value
-)
-const scopedListings = computed(() => {
-  const base = ownedLocationIds.value ? listings.value.filter(l => ownedLocationIds.value.has(l.location_id)) : listings.value
-  return scopeListings(base)   // further narrow to assigned listings, if any
-})
+// The API already applies business, jurisdiction and listing access, including ownerless businesses.
+const scopedLocations = computed(() => locations.value.filter(v=>!filterBusiness.value.length || filterBusiness.value.includes(v.operator_type === 'bookboll' ? 'bookboll' : String(v.business_id))))
+const scopedListings = computed(() => listings.value)
 // Visible listing ids — used to scope bookings when the user is pinned to listings.
 const scopedListingIdSet = computed(() => new Set(scopedListings.value.map(l => l.id)))
 
@@ -83,9 +95,9 @@ const jCities = computed(() => scopeCities(cities.value))
 // see — a single-country provider gets just their country, not the whole platform
 // list. Falls back to the jurisdiction lists while data loads.
 const fbCountries = computed(() => {
-  const used = new Set(countryOpts.value)
+  const used = new Set([...countryOpts.value,...locations.value.map(l=>l.country_id)].filter(Boolean))
   const rows = jCountries.value.filter(c => used.has(String(c.id)))
-  return rows.length ? rows : jCountries.value
+  return rows
 })
 const fbCities = computed(() => {
   const used = new Set(cityOpts.value)
@@ -112,12 +124,18 @@ const filterCreatedTo   = ref('')
 // Listing options cascade with the Venue picks (and stale picks are pruned) so a
 // contradictory venue+listing pair can never silently return zero rows.
 const cascadedListingOptions = computed(() => scopedListings.value
+  .filter(l=>scopedLocations.value.some(v=>v.id===l.location_id))
   .filter(l => !filterVenue.value.length || filterVenue.value.includes(l.location_id))
   .map(l => ({ value: l.id, label: l.name })))
 watch(filterVenue, () => {
   if (!filterListing.value.length) return
   const ok = new Set(cascadedListingOptions.value.map(o => o.value))
   filterListing.value = filterListing.value.filter(id => ok.has(id))
+})
+watch(filterBusiness,()=>{
+  const allowed=new Set(scopedLocations.value.map(v=>v.id))
+  filterVenue.value=filterVenue.value.filter(id=>allowed.has(id))
+  filterListing.value=filterListing.value.filter(id=>listings.value.some(l=>l.id===id && allowed.has(l.location_id)))
 })
 
 // Currency + payment-method filters (currency only shown to multi-currency viewers)
@@ -181,6 +199,11 @@ const cancelling        = ref(false)
 // a row, which is what used to make the 15k customer payload necessary.
 function queryParams() {
   return {
+    with_activity:1,
+    analytics_only:props.analytics ? 1 : undefined,
+    purpose:filterPurpose.value,
+    business_id:filterBusiness.value,
+    date_basis:dateBasis.value,
     page: page.value,
     per_page: perPage.value,
     search: search.value.trim(),
@@ -205,18 +228,24 @@ function queryParams() {
 
 let loadSeq = 0
 async function load() {
+  clearTimeout(searchTimer)
+  if(invalidDates.value) { ++loadSeq; loading.value=false; activity.value=null; bookings.value=[]; return }
   loading.value = true
+  loadError.value=''
   // Filters change fast (typing, clicking chips); only the newest response may win,
   // or a slow earlier request can overwrite a newer one.
   const seq = ++loadSeq
   const res = await fetchBookingsDashboard(queryParams())
   if (seq !== loadSeq) return
   if (!res.success) {
-    pushToast(res.message || 'Could not load bookings.', 'error')
+    loadError.value=firstError(res,'Could not load bookings.')
+    activity.value=null; bookings.value=[]; total.value=0
     loading.value = false
     return
   }
   const d = res.data || {}
+  activity.value=d.activity
+  businessOptions.value=d.business_options || []
   bookings.value  = d.bookings || []
   total.value     = d.pagination?.total ?? bookings.value.length
   lastPage.value  = d.pagination?.last_page ?? 1
@@ -236,12 +265,19 @@ async function load() {
 function countryOfBooking(bk) { return bk?.country_id || null }
 function cityOfBooking(bk)    { return bk?.city_id || null }
 
-onMounted(load)
+onMounted(()=>{
+  const arrays={status:filterStatus,payment_status:filterPayment,payment_method:filterMethod,currency:filterCurrency,kind:filterKind,channel:filterChannel,listing_id:filterListing,venue_id:filterVenue,country_id:filterCountry,city_id:filterCity,purpose:filterPurpose,business_id:filterBusiness}
+  for(const [key,target] of Object.entries(arrays)) if(route.query[key]) target.value=String(route.query[key]).split(',').filter(Boolean)
+  for(const [key,target] of Object.entries({search,date_from:filterDateFrom,date_to:filterDateTo,created_from:filterCreatedFrom,created_to:filterCreatedTo,date_basis:dateBasis})) if(route.query[key]) target.value=String(route.query[key])
+  if(filterDateFrom.value || filterDateTo.value) period.value='custom'
+  load()
+})
+onBeforeUnmount(()=>{ ++loadSeq; clearTimeout(searchTimer) })
 
 // ── Lookups ───────────────────────────────────────────────────────────────────
 // Names ride on the row itself now (the server joins them), so these take the
 // booking rather than an id — no lookup list required to render a cell.
-const customerName = (b) => b?.customer_name || '—'
+const customerName = (b) => b?.customer_name || 'Walk-in / customer not recorded'
 const listingName  = (b) => b?.listing_name  || '—'
 const locationName = (b) => b?.location_name || '—'
 
@@ -266,6 +302,8 @@ const activeFilterCount = computed(() => {
   if (filterDateTo.value)         n++
   if (filterCreatedFrom.value)    n++
   if (filterCreatedTo.value)      n++
+  if (filterPurpose.value.length) n++
+  if (filterBusiness.value.length) n++
   return n
 })
 
@@ -277,6 +315,7 @@ function resetFilters() {
   filterDateFrom.value = filterDateTo.value = ''
   filterCreatedFrom.value = filterCreatedTo.value = ''
   search.value = ''
+  filterPurpose.value=[]; filterBusiness.value=[]; period.value='all'; dateBasis.value='booking'
 }
 
 // ── Jurisdiction-scoped base (no user filters) ────────────────────────────────
@@ -309,16 +348,14 @@ function goPage(p) {
 // Any filter or sort change restarts at page 1 and refetches. Search is debounced
 // so typing does not fire a request per keystroke.
 let searchTimer = null
-watch(search, () => {
-  clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => { page.value = 1; load() }, 300)
-})
 watch([
+  search,filterPurpose,filterBusiness,dateBasis,
   filterStatus, filterPayment, filterKind, filterChannel, filterMethod, filterCurrency,
   filterListing, filterVenue, filterCountry, filterCity,
   filterDateFrom, filterDateTo, filterCreatedFrom, filterCreatedTo,
   sortCol, sortDir, perPage,
-], () => { page.value = 1; load() })
+], () => { ++loadSeq; loading.value=true; page.value=1; clearTimeout(searchTimer); searchTimer=setTimeout(load,250) },{deep:true,flush:'sync'})
+watch(currentOwnerUserId,()=>{ resetFilters(); load() })
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 function fmtDateTime(iso) {
@@ -406,11 +443,10 @@ async function exportCSV(useFilters) {
   exporting.value = false
   if (!res.success) { pushToast(res.message || 'Could not prepare the export.', 'error'); return }
   const rows = res.data?.bookings || []
-  if (res.data?.truncated) {
-    pushToast(`Export capped at ${rows.length.toLocaleString()} rows — narrow the filters for the rest.`, 'error')
-  }
   downloadCSV(rows, [
     { label: 'ID',             key: 'id' },
+    { label: 'Booking reference', fn:bookingRefLabel },
+    { label: 'Record purpose', key:'record_purpose' },
     { label: 'Record Date',    fn: r => r.created_at?.slice(0,10) },
     { label: 'Booking Date',   key: 'booking_date' },
     { label: 'Customer',       fn: r => customerName(r) },
@@ -425,7 +461,9 @@ async function exportCSV(useFilters) {
     { label: 'Payment Status', key: 'payment_status' },
     { label: 'Payment Method', key: 'payment_method' },
     { label: 'Type',           fn: b => kindLabel(b) },
-    { label: 'Booked via',     fn: b => channelLabel(b) },
+    { label: 'Booked via',     fn: b => activityChannelLabel(b.report_channel) },
+    { label: 'Created by',     fn:bookingCreatorLabel },
+    { label: 'Recorded receipts',fn:b=>b.recorded_payment_summary?.paid ?? '' },
     { label: 'Notes',          key: 'notes' },
   ], 'bookings')
   showExportModal.value = false
@@ -435,19 +473,27 @@ async function exportCSV(useFilters) {
 
 <template>
   <ExportDialog :open="showExportModal" title="Export bookings" noun="bookings" :filtered-count="total" :all-count="scopeTotal" :busy="exporting" @close="showExportModal = false" @export="exportCSV" />
-  <div class="page">
-    <div class="page-header">
+  <div :class="['booking-workspace',{'page':!analytics}]">
+    <div v-if="!analytics" class="page-header">
       <div>
         <h1 class="page-title">Bookings</h1>
-        <div class="page-subtitle">Manage your listing bookings and payments</div>
+        <div class="page-subtitle">Reservations, customers and who created each booking.</div>
       </div>
       <div class="bk-head-actions">
         <AdminAppDownloadButton />
-        <button v-if="canExport" class="btn btn-secondary" @click="showExportModal = true"><Download :size="16" />Export<span v-if="!isPremium" class="prem-lock">Premium</span></button>
+        <button v-if="canExport" class="btn btn-secondary" :disabled="loading || !!invalidDates || !!loadError" @click="showExportModal = true"><Download :size="16" />Export<span v-if="!isPremium" class="prem-lock">Premium</span></button>
         <button v-if="can(CAP.MANAGE_BOOKINGS)" class="btn btn-primary" @click="showNewBooking = true"><Plus :size="16" />New Booking</button>
       </div>
     </div>
 
+    <section class="bk-period" aria-label="Booking report filters">
+      <label>Period<select v-model="period" aria-label="Booking period" @change="setPeriod"><option v-for="[value,label] in periods" :key="value" :value="value">{{ label }}</option></select></label>
+      <label>Date basis<select v-model="dateBasis" aria-label="Booking date basis"><option value="booking">Reservation date</option><option value="created">Date booked</option></select></label>
+      <template v-if="period === 'custom'"><label>From<input type="date" v-model="filterDateFrom" aria-label="Booking date from" /></label><label>To<input type="date" v-model="filterDateTo" :min="filterDateFrom || undefined" aria-label="Booking date to" /></label></template>
+      <div class="bk-period-actions"><button class="btn btn-secondary" :disabled="loading" @click="load"><RotateCcw :size="14" /> Refresh</button><button v-if="analytics" class="btn btn-secondary" @click="openRecords">View matching bookings</button></div>
+      <p>Every total follows your filters.<br />One record per reserved slot.</p>
+    </section>
+    <BookingActivitySummary :data="activity" :busy="loading || !!loadError || !!invalidDates" />
     <FilterBar
       v-model:search="search"
       v-model:country="filterCountry"
@@ -455,17 +501,19 @@ async function exportCSV(useFilters) {
       :countries="fbCountries"
       :cities="fbCities"
       :extra-count="activeFilterCount - (filterCountry.length ? 1 : 0) - (filterCity.length ? 1 : 0)"
-      search-placeholder="Search customer, listing or ID…"
+      search-placeholder="Search booking, customer, staff, venue or listing…"
       @clear="resetFilters"
     >
         <div class="bk-filter-grid">
+          <div class="bk-filter-field"><label>Record type</label><MultiSelect v-model="filterPurpose" :options="purposes" placeholder="Bookings and slot blocks" /></div>
+          <div v-if="isPlatformAdmin" class="bk-filter-field"><label>Business</label><MultiSelect v-model="filterBusiness" :options="businessOptions" placeholder="All businesses" /></div>
           <div class="bk-filter-field">
             <label>Booking Status</label>
             <MultiSelect
               v-model="filterStatus"
               placeholder="All statuses"
               :options="[
-                { value: 'confirmed',    label: 'Confirmed' },
+                { value: 'confirmed',    label: 'Confirmed / completed' },
                 { value: 'cancelled',    label: 'Cancelled' },
                 { value: 'no_show',      label: 'No Show' },
                 { value: 'pending',      label: 'Pending' },
@@ -501,7 +549,7 @@ async function exportCSV(useFilters) {
             <MultiSelect
               v-model="filterChannel"
               placeholder="All channels"
-              :options="channelOptions(['marketplace', 'provider_site', 'manual'])"
+              :options="channelOptions(['marketplace', 'provider_site', 'manual','unknown'])"
             />
           </div>
           <div class="bk-filter-field">
@@ -530,14 +578,6 @@ async function exportCSV(useFilters) {
             />
           </div>
           <div class="bk-filter-field">
-            <label>Booking Date From</label>
-            <input type="date" v-model="filterDateFrom" aria-label="Booking date from" />
-          </div>
-          <div class="bk-filter-field">
-            <label>Booking Date To</label>
-            <input type="date" v-model="filterDateTo" aria-label="Booking date to" />
-          </div>
-          <div class="bk-filter-field">
             <label>Record Date From</label>
             <input type="date" v-model="filterCreatedFrom" aria-label="Record date from" />
           </div>
@@ -547,8 +587,19 @@ async function exportCSV(useFilters) {
           </div>
         </div>
     </FilterBar>
+    <div class="bk-quick" aria-label="Quick booking filters">
+      <button :class="{on:!filterPurpose.length && !filterChannel.length && !filterPayment.length}" @click="filterPurpose=[]; filterChannel=[]; filterPayment=[]">All records</button>
+      <button :class="{on:filterPurpose.includes('booking')}" @click="filterPurpose=['booking']">Customer bookings</button>
+      <button :class="{on:filterChannel.includes('manual')}" @click="filterChannel=['manual']">Added by staff</button>
+      <button :class="{on:filterPurpose.includes('provider_slot_block')}" @click="filterPurpose=['provider_slot_block']">Slot blocks</button>
+      <button :class="{on:filterPayment.includes('pending')}" @click="filterPayment=['pending','deposit_paid']">Payment outstanding</button>
+    </div>
 
-    <div class="card" style="padding: 0;">
+    <p v-if="invalidDates || loadError" class="bk-error" role="alert">{{ invalidDates || loadError }} <button v-if="loadError" class="btn" @click="load">Try again</button></p>
+    <template v-if="analytics"><p v-if="loading" class="bk-report-state" role="status">Loading booking activity…</p><BookingActivityCharts v-else-if="activity && !invalidDates && !loadError" :data="activity" :locations="locations" :date-basis="dateBasis" @venue="filterVenue=[$event]" @records="openRecords" /></template>
+
+    <div v-else-if="!invalidDates && !loadError" class="card bk-records" style="padding: 0;">
+      <div class="bk-records-head"><div><h2>Booking records</h2><p>{{ loading ? 'Loading…' : `${total.toLocaleString()} matching records` }} · Membership schedule blocks are in Calendar.</p></div><router-link to="/dashboard">Activity analytics</router-link></div>
 
       <!-- ── Table ──────────────────────────────────────────────────────────── -->
       <div class="table-wrap">
@@ -589,8 +640,8 @@ async function exportCSV(useFilters) {
                 :message="isFiltering ? 'No bookings match your search or filters. Try adjusting them.' : 'Bookings will appear here once they are created.'"
                 :action-label="can(CAP.MANAGE_BOOKINGS) ? 'New Booking' : ''" @action="showNewBooking = true" />
             </td></tr>
-            <tr v-for="b in paginated" :key="b.id" class="row-clickable" @click="viewingId=b.id">
-              <td><span class="mono">{{ bookingRefLabel(b) }}</span></td>
+            <tr v-for="b in (loading ? [] : paginated)" :key="b.id" class="row-clickable" @click="viewingId=b.id">
+              <td><button class="bk-ref" @click.stop="viewingId=b.id">{{ bookingRefLabel(b) }}</button><small v-if="b.record_purpose === 'provider_slot_block'" class="cell-sub bk-block">Slot block · no sale</small><small v-else-if="b.origin === 'customer_game'" class="cell-sub">Event reservation</small></td>
               <td>
                 <div class="record-date">{{ fmtDateTime(b.created_at) }}</div>
               </td>
@@ -607,17 +658,17 @@ async function exportCSV(useFilters) {
                 <div>{{ b.booking_date }}</div>
                 <div class="cell-sub">{{ fmtRange12(b.start_time, b.end_time) }}</div>
               </td>
-              <td style="font-weight:500;">{{ `${currencyOf(b)} ${b.total}` }}</td>
+              <td class="bk-amount"><template v-if="b.record_purpose === 'provider_slot_block'">—<small class="cell-sub">Payment skipped</small></template><template v-else>{{ money(b.total,currencyOf(b)) }}<small class="cell-sub">Booking value</small></template></td>
               <td>
-                <span v-if="b.origin === 'class_program'" class="badge badge-program">Program</span>
-                <span v-else-if="b.origin === 'customer_game'" class="badge badge-game">🎮 Game</span>
-                <span v-else-if="b.origin === 'provider_site'" class="badge badge-site">Provider site</span>
-                <span v-else class="badge" :class="b.origin?.startsWith('bookboll')?'badge-info':'badge-neutral'">{{ channelLabel(b) }}</span>
+                <span class="bk-channel">{{ activityChannelLabel(b.report_channel) }}</span>
+                <small class="cell-sub">Created by {{ bookingCreatorLabel(b) }}</small>
+                <small v-if="b.report_channel === 'admin'" class="cell-sub">No platform fee</small>
               </td>
-              <td><span class="badge" :class="statusBadge(b.booking_status)">{{ b.booking_status }}</span></td>
+              <td><span class="badge" :class="statusBadge(b.booking_status)">{{ b.booking_status === 'confirmed' ? 'Confirmed' : statusLabel(b.booking_status) }}</span></td>
               <td>
-                <span v-if="b.origin !== 'class_program'" class="badge" :class="statusBadge(b.payment_status)">{{ b.payment_status }}</span>
-                <span v-else class="muted-text">—</span>
+                <span class="badge" :class="statusBadge(b.payment_status)">{{ statusLabel(b.payment_status) }}</span>
+                <small v-if="b.recorded_payment_summary?.paid != null && b.record_purpose !== 'provider_slot_block'" class="cell-sub">{{ money(b.recorded_payment_summary.paid,b.recorded_payment_summary.currency) }} received</small>
+                <small v-else-if="b.recorded_payment_summary?.status === 'Needs review'" class="cell-sub">Receipt allocation needs review</small>
               </td>
               <td>
                 <div class="row-actions">
@@ -655,7 +706,7 @@ async function exportCSV(useFilters) {
 
     <BookingDetailModal
       :bookingId="viewingId"
-      @close="viewingId = null"
+      @close="viewingId = null; load()"
       @viewBooking="viewingId = $event"
     />
 
@@ -717,6 +768,10 @@ async function exportCSV(useFilters) {
 </template>
 
 <style scoped>
+.bk-quick{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 18px}.bk-quick button{border:1px solid var(--border);background:var(--surface);color:var(--muted);padding:8px 12px;border-radius:7px;font-size:12px;cursor:pointer}.bk-quick button.on{border-color:var(--primary);color:var(--primary);background:color-mix(in srgb,var(--primary) 8%,var(--surface))}
+.bk-period{display:flex;align-items:end;flex-wrap:wrap;gap:14px;padding:20px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.bk-period label{display:grid;gap:7px;font-size:12px;font-weight:600}.bk-period select,.bk-period input{min-height:38px;padding:8px 12px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;font:inherit}.bk-period p{margin:0 0 2px auto;text-align:right;font-size:11px;line-height:1.6;color:var(--muted)}.bk-period-actions{display:flex;gap:10px}.bk-error{padding:16px;background:var(--surface);border:1px solid #d65b62;border-radius:8px}.bk-report-state{padding:35px;text-align:center;color:var(--muted)}.bk-records-head{display:flex;align-items:center;justify-content:space-between;padding:20px;border-bottom:1px solid var(--border)}.bk-records-head h2{margin:0 0 5px;font-size:16px}.bk-records-head p{margin:0;font-size:12px;color:var(--muted)}.bk-records-head a,.bk-ref{font-size:12px;color:var(--primary);background:none;border:0;cursor:pointer;text-align:left;padding:0}.bk-ref{font-weight:650;text-decoration:underline;text-underline-offset:3px}.bk-records small.cell-sub{display:block;max-width:190px;line-height:1.5;margin-top:5px}.bk-channel{font-size:12px;font-weight:600}.bk-amount{white-space:nowrap;font-weight:650;font-variant-numeric:tabular-nums}.bk-block{color:var(--muted)}.booking-workspace :focus-visible{outline:2px solid var(--primary);outline-offset:3px}.bk-records .row-clickable:hover{background:color-mix(in srgb,var(--primary) 5%,var(--surface))}.bk-records .badge{font-size:11px;white-space:nowrap}.bk-records .table-wrap table{min-width:1100px}
+@media(max-width:800px){.bk-period p{text-align:left;margin-left:0}.bk-period{padding:16px}.bk-period-actions{flex-wrap:wrap}.bk-records-head{gap:14px;align-items:start}.bk-records-head a{flex-shrink:0}}
 /* ── Page header actions ──────────────────────────────────────────────────── */
 .bk-head-actions { display: flex; gap: 10px; }
 

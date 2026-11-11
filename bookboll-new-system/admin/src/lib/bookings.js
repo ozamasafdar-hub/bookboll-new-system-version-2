@@ -32,7 +32,18 @@ export async function fetchBookingLookups({ withCustomers = false } = {}) {
 
 /** Every row matching the current filters, for CSV export (not just this page). */
 export async function fetchBookingsForExport(params = {}) {
-  return fetchBookingsDashboard({ ...params, export: 1, page: undefined, per_page: undefined })
+  const rows = [], seen = new Set()
+  let after = 0, through
+  do {
+    const res = await fetchBookingsDashboard({ ...params, with_activity:undefined, export:1, after_id:after, through_id:through, page:undefined, per_page:undefined })
+    if (!res.success) return res
+    through ??= res.data?.through_id
+    for (const row of res.data?.bookings || []) if (!seen.has(row.id)) { seen.add(row.id); rows.push(row) }
+    const next = res.data?.next_after_id
+    if (next && Number(next) <= after) return {success:false,message:'Export could not advance. Try again.'}
+    after = Number(next) || 0
+  } while (after)
+  return {success:true,data:{bookings:rows,truncated:false}}
 }
 
 export async function fetchBookingCrm(id) {

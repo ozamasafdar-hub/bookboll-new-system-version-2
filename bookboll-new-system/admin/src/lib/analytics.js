@@ -13,8 +13,8 @@ const EMPTY = {
   subscriptions: [], subPayments: [], games: [], gameJoins: [],
 }
 
-export async function loadAnalytics() {
-  const res = await apiFetch('/admin/dashboard/analytics')
+export async function loadAnalytics({programsOnly=false}={}) {
+  const res = await apiFetch('/admin/dashboard/analytics',{query:programsOnly ? {programs_only:1} : {}})
   if (!res.success) return { ...EMPTY, error: res.message || 'Analytics could not be loaded.' }
   const d = res.data || {}
   return {

@@ -45,27 +45,28 @@ class AdminAnalyticsService
 
         $venues   = $this->venues($venueIds);
         $vIds     = $venues->pluck('id')->all();
-        $bookings = $this->bookings($venueIds);
+        $programsOnly=$request->boolean('programs_only');
+        $bookings = $programsOnly ? collect() : $this->bookings($venueIds);
         $programs = $this->programs($venueIds, $ownerId, $isPlatform);
         $progIds  = $programs->pluck('id')->all();
         $subs     = $this->subscriptions($progIds);
-        $games    = $isPlatform ? $this->games() : collect();
+        $games    = $isPlatform ? $this->games($user) : collect();
 
         return sendSuccess('Analytics fetched successfully', [
             'bookings'      => $bookings,
-            'customers'     => $this->customers($bookings, $isPlatform),
-            'providers'     => $this->providers($user, $ownerId, $isPlatform),
-            'listings'      => $this->listings($vIds),
+            'customers'     => $programsOnly ? [] : $this->customers($bookings, $isPlatform),
+            'providers'     => $programsOnly ? [] : $this->providers($user, $ownerId, $isPlatform),
+            'listings'      => $programsOnly ? [] : $this->listings($vIds),
             'locations'     => $venues,
             'programs'      => $programs,
-            'wallets'       => $this->wallets($ownerId, $isPlatform),
-            'withdrawals'   => $this->withdrawals($ownerId, $isPlatform),
+            'wallets'       => $programsOnly ? [] : $this->wallets($ownerId, $isPlatform),
+            'withdrawals'   => $programsOnly ? [] : $this->withdrawals($ownerId, $isPlatform),
             'cities'        => $this->cities($venues, $games),
             'countries'     => $this->countries(),
             'subscriptions' => $subs,
-            'sub_payments'  => $this->subscriptionPayments($subs->pluck('id')->all()),
+            'sub_payments'  => $programsOnly ? [] : $this->subscriptionPayments($subs->pluck('id')->all()),
             'games'         => $games,
-            'game_joins'    => $isPlatform ? $this->gameJoins() : [],
+            'game_joins'    => $isPlatform ? $this->gameJoins($games->pluck('id')->all()) : [],
         ]);
     }
 
@@ -229,16 +230,8 @@ class AdminAnalyticsService
     protected function programs(?array $venueIds, ?int $ownerId, bool $isPlatform)
     {
         return ClassProgram::query()
-            ->when(! $isPlatform, function ($q) use ($venueIds, $ownerId) {
-                // A programme can exist before its venue is set, so match on either.
-                $q->where(function ($w) use ($venueIds, $ownerId) {
-                    $w->where('mapped_owner_user_id', $ownerId)
-                        ->orWhere('owner_user_id', (string) $ownerId);
-                    if ($venueIds) {
-                        $w->orWhereIn('venue_id', $venueIds);
-                    }
-                });
-            })
+            ->when(!AccessScope::isGlobal(auth()->user()),fn($q)=>$q->whereIn('id',AccessScope::scopedProgramIds(auth()->user(),$venueIds ?? [])))
+            ->when(AccessScope::pinnedProgramIds(auth()->user()),fn($q,$pins)=>$q->whereIn('id',$pins))
             ->get(['id', 'name', 'currency', 'owner_user_id', 'mapped_owner_user_id', 'venue_id', 'approval_status', 'status'])
             ->map(fn (ClassProgram $p) => [
                 'id'              => (string) $p->id,
@@ -323,9 +316,10 @@ class AdminAnalyticsService
             ]);
     }
 
-    protected function games()
+    protected function games($user)
     {
         return HostedGame::query()
+            ->when(AccessScope::jurisdictionCountryIds($user)!==null,fn($q)=>$q->whereIn('country_id',AccessScope::jurisdictionCountryIds($user)))
             ->get(['id', 'sport', 'game_date', 'status', 'max_players', 'country_id', 'city_id', 'created_at'])
             ->map(fn (HostedGame $g) => [
                 'id'          => (string) $g->id,
@@ -340,9 +334,10 @@ class AdminAnalyticsService
             ]);
     }
 
-    protected function gameJoins()
+    protected function gameJoins(array $gameIds)
     {
         return GameJoinRequest::query()
+            ->whereIn('game_id',$gameIds)
             ->get(['id', 'game_id', 'status'])
             ->map(fn (GameJoinRequest $j) => [
                 'id'      => (string) $j->id,

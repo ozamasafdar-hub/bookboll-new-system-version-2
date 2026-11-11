@@ -181,6 +181,21 @@
       "implementation": ["bookboll-BACKEND/app/Support/PaymentReportAnalytics.php", "bookboll-BACKEND/app/Services/PaymentReportService.php", "bookboll-BACKEND/app/Support/PaymentReportTotals.php", "bookboll-new-system/admin/src/components/PaymentAnalytics.vue", "bookboll-new-system/admin/src/lib/paymentMetrics.js"],
       "tests": ["bookboll-BACKEND/tests/Feature/PaymentReportDashboardTest.php", "bookboll-BACKEND/tests/Feature/PaymentReleaseGateTest.php", "bookboll-BACKEND/tests/Feature/PaymentReportCacheTest.php"],
       "production_acceptance": "Compare both reports exactly under every filter and after mutations; reconcile every breakdown per currency, with explicit undated timeline disclosure. Include external and owned staff/customer cases, full/deposit splits, checkout siblings, pending/refunded/review exclusions, dependent listings, provider history and denied foreign scope. Require P21 in signed financial regression acceptance. See docs/payments/PAYMENT_ANALYTICS.md."
+    },
+    {
+      "id": "P22_BOOKING_ACTIVITY_PARITY",
+      "rule": "Booking records, exports and activity charts use one authorized query and immutable creation channels. Count bookings once, separately from payment allocations. Pending, confirmed and completed commercial reservations are activity; cancellations, no-shows, refunds, skipped-payment blocks and membership schedule blocks are excluded from booking value and frequency. Exclude the shared walk-in account from both sides of frequency. Preserve saved currency and separate reservation date from creation date.",
+      "production_acceptance": "Compare full table/summary/chart/export totals under identical filters beyond 5000 rows, including staff channels, custom dates, ownerless provider businesses and listing pins. Prove no transferred historical finances leak to the new owner; existing payment totals stay unchanged.",
+      "implementation": [
+        "bookboll-BACKEND/app/Support/BookingActivity.php",
+        "bookboll-BACKEND/app/Services/BookingService.php",
+        "bookboll-new-system/admin/src/pages/Bookings.vue",
+        "bookboll-new-system/admin/src/pages/Dashboard.vue"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/BookingActivityTest.php",
+        "bookboll-new-system/admin/tests/bookingActivity.test.mjs"
+      ]
     }
   ],
   "analytics_acceptance": {

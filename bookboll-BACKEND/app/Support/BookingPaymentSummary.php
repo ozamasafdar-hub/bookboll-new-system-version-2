@@ -8,13 +8,15 @@ final class BookingPaymentSummary
 {
     public static function fromBooking(Booking $booking): ?array
     {
-        $payments = $booking->payments()->with('ownedAllocations')->get();
+        $booking->loadMissing('payments.ownedAllocations');
+        $payments = $booking->payments;
         if ($payments->isEmpty()) return null;
         $data = $payments->map(fn ($p) => array_merge($p->getAttributes(), [
             'financial_context'=>$p->financial_context ?? [], 'owned_allocations'=>$p->ownedAllocations->toArray(),
         ]))->all();
         $rows = array_filter(PaymentReportRules::rows($data, array_merge($booking->getAttributes(), [
             'financial_context'=>$booking->financial_context ?? [],
+            'creation_context'=>$booking->creation_context ?? [],
         ])), fn ($row) => $row['row_kind'] !== 'receipt');
         $currencies = array_values(array_unique(array_column($rows, 'currency')));
         if (count($currencies) !== 1 || !$currencies[0]) return null;

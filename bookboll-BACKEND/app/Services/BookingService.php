@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Support\AccessScope;
+use App\Support\BookingActivity;
 use App\Support\Capabilities;
 use App\Support\HourPeriods;
 use App\Models\AddOn;
@@ -4383,7 +4384,24 @@ class BookingService
      */
     public function dashboard(Request $request)
     {
+        $request->validate([
+            'date_from'=>'nullable|date_format:Y-m-d', 'date_to'=>'nullable|date_format:Y-m-d'.($request->filled('date_from') ? '|after_or_equal:date_from' : ''),
+            'created_from'=>'nullable|date_format:Y-m-d', 'created_to'=>'nullable|date_format:Y-m-d'.($request->filled('created_from') ? '|after_or_equal:created_from' : ''),
+            'date_basis'=>'nullable|in:booking,created', 'search'=>'nullable|string|max:200',
+        ]);
         $filters = $this->dashboardFilters($request);
+        \Illuminate\Support\Facades\Validator::make($filters,[
+            'status.*'=>'in:confirmed,completed,pending,cancelled,no_show',
+            'payment_status.*'=>'in:paid,fully_paid,pending,deposit_paid,skipped,refunded,unpaid',
+            'channel.*'=>'in:marketplace,provider_site,manual,site,admin,unknown,auto',
+            'kind.*'=>'in:venue,event,membership', 'purpose.*'=>'in:booking,provider_slot_block,needs_review',
+            'business_id.*'=>['regex:/^(bookboll|[1-9][0-9]*)$/'],
+            'venue_id.*'=>'integer|min:1','listing_id.*'=>'integer|min:1','country_id.*'=>'integer|min:1','city_id.*'=>'integer|min:1',
+            'sort'=>'in:created_at,booking_date,total,booking_status,payment_status,customer,listing',
+        ])->validate();
+        if ($request->boolean('export') && !AccessScope::isGlobal($request->user()) && !$request->user()->can(Capabilities::EXPORT_BOOKINGS)) {
+            return sendError('You do not have permission to export bookings.',[],403);
+        }
 
         // The drawer and the detail modal want the pickers, not the table.
         if ($request->boolean('lookups_only')) {
@@ -4392,13 +4410,30 @@ class BookingService
 
         $query = $this->dashboardBookingQuery($filters);
 
+        $activity = $request->boolean('with_activity') || $request->boolean('analytics_only')
+            ? BookingActivity::summarize($query,$filters) : null;
+        $lookups = $this->dashboardLookups($request->boolean('with_customers'));
+        $metadata = [
+            'activity'=>$activity, 'filters'=>$filters,
+            'perspective'=>AccessScope::isPlatform($request->user()) ? 'platform' : 'provider',
+            'business_options'=>$this->bookingBusinessOptions($lookups['locations']),
+            'currency_options'=>$this->bookingCurrencyOptions(),
+        ];
+        if ($request->boolean('analytics_only')) return sendSuccess('Booking activity',array_merge($lookups,$metadata));
+
         // Export asks for every matching row; the table asks for one page.
         if ($request->boolean('export')) {
-            $rows = $query->limit(self::EXPORT_MAX)->get();
+            // Explicit cursor batches: the caller downloads every match, never a silently capped file.
+            $through=$request->filled('through_id') ? max(0,(int)$request->input('through_id')) : (int)(clone $query)->reorder()->max('bookings.id');
+            $query->where('bookings.id','<=',$through);
+            $query->reorder()->where('bookings.id','>',max(0,(int)$request->input('after_id',0)))->orderBy('bookings.id');
+            $rows = $query->limit(1000)->get();
 
             return sendSuccess('Bookings fetched', [
                 'bookings'  => $this->mapDashboardBookings($rows),
-                'truncated' => $rows->count() >= self::EXPORT_MAX,
+                'next_after_id' => $rows->count() === 1000 ? (int)$rows->last()->id : null,
+                'through_id'=>$through,
+                'truncated' => false,
             ]);
         }
 
@@ -4406,7 +4441,7 @@ class BookingService
         $page    = $query->paginate($perPage, ['*'], 'page', max(1, (int) $request->input('page', 1)));
 
         return sendSuccess('Bookings fetched', array_merge(
-            $this->dashboardLookups($request->boolean('with_customers')),
+            $lookups, $metadata,
             [
                 'bookings'   => $this->mapDashboardBookings(collect($page->items())),
                 'pagination' => [
@@ -4420,7 +4455,7 @@ class BookingService
                 // Filter options must reflect the caller's WHOLE scope, not what
                 // happens to be on this page — otherwise the dropdowns change as you
                 // page through. A single-country provider still sees just their own.
-                'currency_options' => $this->scopedCurrencyOptions(),
+                'currency_options' => $this->bookingCurrencyOptions(),
                 'country_options'  => $this->scopedGeoIds('country'),
                 'city_options'     => $this->scopedGeoIds('city'),
                 // Everything in scope ignoring filters — the export dialog offers
@@ -4447,6 +4482,9 @@ class BookingService
             'currency'       => $arr($request->input('currency')),
             'kind'           => $arr($request->input('kind')),
             'channel'        => $arr($request->input('channel')),
+            'purpose'        => $arr($request->input('purpose')),
+            'business_id'    => $arr($request->input('business_id')),
+            'date_basis'     => (string)$request->input('date_basis','booking'),
             'listing_id'     => $arr($request->input('listing_id')),
             'venue_id'       => $arr($request->input('venue_id')),
             'country_id'     => $arr($request->input('country_id')),
@@ -4460,23 +4498,23 @@ class BookingService
         ];
     }
 
-    /** How many rows one export may pull, so a runaway export cannot exhaust memory. */
-    private const EXPORT_MAX = 20000;
-
     /** The scoped, filtered, sorted query behind the bookings table. */
     protected function dashboardBookingQuery(array $f)
     {
         $query = $this->bookingModel::query()
-            ->with(['user:id,name,email,phone', 'listing:id,name,venue_id', 'venue:id,name,city_id,currency_override', 'payments', 'promocode']);
+            ->with(['user:id,name,email,phone', 'listing:id,name,venue_id', 'venue:id,name,city_id,country_id,currency_override,owner_user_id', 'payments.ownedAllocations', 'promocode']);
 
         // Membership calendar blocks are reservations, not customer bookings.
         if (Schema::hasColumn('bookings', 'origin')) {
             $query->where(fn ($q) => $q->whereNull('origin')->orWhere('origin', '!=', 'class_program'));
         }
+        $query->where(fn($q)=>$q->whereNull('bookings.record_purpose')->orWhere('bookings.record_purpose','!=','membership_session'));
 
         $this->applyDashboardScope($query);
         $this->applyDashboardFilters($query, $f);
         $this->applyDashboardSort($query, $f['sort'], $f['sort_dir']);
+        $query->select('bookings.*')->selectRaw(BookingActivity::channelSql().' AS activity_channel')
+            ->selectRaw(BookingActivity::purposeSql().' AS activity_purpose');
 
         return $query;
     }
@@ -4495,11 +4533,17 @@ class BookingService
             return;
         }
 
-        AccessScope::applyVenue($query, 'venue_id', $user);
+        AccessScope::applyVenue($query, 'bookings.venue_id', $user);
+        // Match CRM access: acquiring a venue does not expose another business's old booking finances.
+        if (!AccessScope::isPlatform($user)) {
+            $business=AccessScope::businessId($user) ?? -1;
+            $query->where(fn($q)=>$q->whereNull('bookings.financial_context')->orWhereRaw('JSON_LENGTH(bookings.financial_context) = 0')
+                ->orWhere(fn($w)=>$w->where('bookings.financial_context->operator','provider')->where('bookings.financial_context->business_id',$business)));
+        }
 
         $listingIds = AccessScope::pinnedListingIds($user);
         if ($listingIds) {
-            $query->whereIn('listing_id', $listingIds);
+            $query->whereIn('bookings.listing_id', $listingIds);
         }
     }
 
@@ -4508,13 +4552,14 @@ class BookingService
         if ($f['search'] !== '') {
             $term = '%'.$f['search'].'%';
             $query->where(function ($q) use ($term, $f) {
-                $q->whereHas('user', fn ($u) => $u->where('name', 'LIKE', $term))
+                $q->whereHas('user', fn ($u) => $u->where('name', 'LIKE', $term)->orWhere('email','LIKE',$term)->orWhere('phone','LIKE',$term))
                     ->orWhereHas('listing', fn ($l) => $l->where('name', 'LIKE', $term))
                     ->orWhereHas('venue', fn ($v) => $v->where('name', 'LIKE', $term))
-                    ->orWhere('booking_id', 'LIKE', $term);
+                    ->orWhere('bookings.booking_id', 'LIKE', $term)
+                    ->orWhere('bookings.creation_context->actor_name','LIKE',$term);
                 // The table shows the numeric id, so an all-digits search matches it.
                 if (ctype_digit($f['search'])) {
-                    $q->orWhere('id', (int) $f['search']);
+                    $q->orWhere('bookings.id', (int) $f['search']);
                 }
             });
         }
@@ -4528,11 +4573,22 @@ class BookingService
             if (in_array(BookingStatus::CONFIRMED, $statuses, true)) {
                 $statuses[] = BookingStatus::COMPLETED;
             }
-            $query->whereIn('status', array_values(array_unique($statuses)));
+            $query->whereIn('bookings.status', array_values(array_unique($statuses)));
         }
-        if ($f['payment_method']) { $query->whereIn('payment_method', $f['payment_method']); }
-        if ($f['listing_id'])     { $query->whereIn('listing_id', $f['listing_id']); }
-        if ($f['venue_id'])       { $query->whereIn('venue_id', $f['venue_id']); }
+        if ($f['payment_method']) { $query->whereIn('bookings.payment_method', $f['payment_method']); }
+        if ($f['listing_id'])     { $query->whereIn('bookings.listing_id', $f['listing_id']); }
+        if ($f['venue_id'])       { $query->whereIn('bookings.venue_id', $f['venue_id']); }
+        if ($f['purpose']) $query->whereIn(DB::raw(BookingActivity::purposeSql()),$f['purpose']);
+        if ($f['business_id']) {
+            $query->whereHas('venue',function($v) use ($f) {
+                $v->where(function($owners) use($f) {
+                    foreach($f['business_id'] as $id) {
+                        if ($id === 'bookboll') $owners->orWhereRaw("COALESCE(operator_type, IF(business_id IS NOT NULL OR owner_user_id IS NOT NULL,'provider','bookboll')) = 'bookboll'");
+                        elseif (ctype_digit((string)$id)) $owners->orWhere('business_id',$id);
+                    }
+                });
+            });
+        }
 
         // The table shows fully_paid as "paid", payment_skipped as "skipped", and a
         // refunded booking as "refunded" whatever its stored status — so the filter
@@ -4541,10 +4597,10 @@ class BookingService
             $query->where(function ($q) use ($f) {
                 foreach ($f['payment_status'] as $s) {
                     match ($s) {
-                        'paid'     => $q->orWhere(fn ($w) => $w->where('payment_status', BookingPaymentStatus::FULLY_PAID)->whereNull('refunded_at')),
-                        'skipped'  => $q->orWhere(fn ($w) => $w->where('payment_status', BookingPaymentStatus::PAYMENT_SKIPPED)->whereNull('refunded_at')),
-                        'refunded' => $q->orWhereNotNull('refunded_at'),
-                        default    => $q->orWhere(fn ($w) => $w->where('payment_status', $s)->whereNull('refunded_at')),
+                        'paid'     => $q->orWhere(fn ($w) => $w->where('bookings.payment_status', BookingPaymentStatus::FULLY_PAID)->whereNull('bookings.refunded_at')),
+                        'skipped'  => $q->orWhere(fn ($w) => $w->where('bookings.payment_status', BookingPaymentStatus::PAYMENT_SKIPPED)->whereNull('bookings.refunded_at')),
+                        'refunded' => $q->orWhereNotNull('bookings.refunded_at'),
+                        default    => $q->orWhere(fn ($w) => $w->where('bookings.payment_status', $s)->whereNull('bookings.refunded_at')),
                     };
                 }
             });
@@ -4552,28 +4608,22 @@ class BookingService
 
         // Kind still comes from origin; channel uses recorded creation evidence.
         if ($f['kind'])    { $this->whereOrigin($query, $f['kind'], self::KIND_ORIGINS, ['customer_game', 'class_program']); }
-        if ($f['channel']) {
-            $query->where(function ($q) use ($f) {
-                $codes = array_map(fn ($v) => ['manual'=>'admin','provider_site'=>'site'][$v] ?? $v, $f['channel']);
-                $q->whereIn('creation_context->channel', $codes)->orWhere(function ($legacy) use ($f) {
-                    $legacy->whereNull('creation_context');
-                    $this->whereOrigin($legacy, $f['channel'], self::CHANNEL_ORIGINS, ['provider_site','manual_admin','manual','class_program']);
-                });
-            });
-        }
+        if ($f['channel']) $query->whereIn(DB::raw(BookingActivity::channelSql()),array_map(fn($v)=>['manual'=>'admin','provider_site'=>'site'][$v] ?? $v,$f['channel']));
 
         // Geography and currency are properties of the VENUE, so they resolve to a
         // venue-id set once rather than joining on every row.
-        foreach ([['country_id', 'country'], ['city_id', 'city'], ['currency', 'currency']] as [$key, $kind]) {
+        foreach ([['country_id', 'country'], ['city_id', 'city']] as [$key, $kind]) {
             if ($f[$key]) {
-                $query->whereIn('venue_id', $this->venueIdsBy($kind, $f[$key]));
+                $query->whereIn('bookings.venue_id', $this->venueIdsBy($kind, $f[$key]));
             }
         }
 
-        if ($f['date_from'] !== '')    { $query->whereDate('date', '>=', $f['date_from']); }
-        if ($f['date_to'] !== '')      { $query->whereDate('date', '<=', $f['date_to']); }
-        if ($f['created_from'] !== '') { $query->whereDate('created_at', '>=', $f['created_from']); }
-        if ($f['created_to'] !== '')   { $query->whereDate('created_at', '<=', $f['created_to']); }
+        if ($f['currency']) $query->whereIn(DB::raw("COALESCE(NULLIF(bookings.currency,''),'Unknown')"),$f['currency']);
+        $dateColumn=$f['date_basis'] === 'created' ? 'bookings.created_at' : 'bookings.date';
+        if ($f['date_from'] !== '')    { $query->whereDate($dateColumn, '>=', $f['date_from']); }
+        if ($f['date_to'] !== '')      { $query->whereDate($dateColumn, '<=', $f['date_to']); }
+        if ($f['created_from'] !== '') { $query->whereDate('bookings.created_at', '>=', $f['created_from']); }
+        if ($f['created_to'] !== '')   { $query->whereDate('bookings.created_at', '<=', $f['created_to']); }
     }
 
     /** venue/event/membership and marketplace/provider_site/manual/auto → raw origins. */
@@ -4601,10 +4651,10 @@ class BookingService
         $query->where(function ($q) use ($selected, $map, $namedOrigins) {
             foreach ($selected as $value) {
                 if (isset($map[$value])) {
-                    $q->orWhereIn('origin', $map[$value]);
+                    $q->orWhereIn('bookings.origin', $map[$value]);
                 } else {
                     // the catch-all member of this dimension
-                    $q->orWhere(fn ($w) => $w->whereNull('origin')->orWhereNotIn('origin', $namedOrigins));
+                    $q->orWhere(fn ($w) => $w->whereNull('bookings.origin')->orWhereNotIn('bookings.origin', $namedOrigins));
                 }
             }
         });
@@ -4613,16 +4663,16 @@ class BookingService
     protected function applyDashboardSort($query, string $sort, string $dir): void
     {
         match ($sort) {
-            'booking_date'   => $query->orderBy('date', $dir)->orderBy('start_time', $dir),
-            'total'          => $query->orderBy('total_price', $dir),
-            'booking_status' => $query->orderBy('status', $dir),
-            'payment_status' => $query->orderBy('payment_status', $dir),
+            'booking_date'   => $query->orderBy('bookings.date', $dir)->orderBy('bookings.start_time', $dir),
+            'total'          => $query->orderBy('bookings.total_price', $dir),
+            'booking_status' => $query->orderBy('bookings.status', $dir),
+            'payment_status' => $query->orderBy('bookings.payment_status', $dir),
             // Sorting by a related name needs the join the table's column implies.
             'customer'       => $query->leftJoin('users', 'users.id', '=', 'bookings.user_id')
                                     ->orderBy('users.name', $dir)->select('bookings.*'),
             'listing'        => $query->leftJoin('listings', 'listings.id', '=', 'bookings.listing_id')
                                     ->orderBy('listings.name', $dir)->select('bookings.*'),
-            default          => $query->orderBy('created_at', $dir),
+            default          => $query->orderBy('bookings.created_at', $dir),
         };
         // A stable tiebreak, so paging never repeats or skips a row.
         $query->orderBy('bookings.id', $dir);
@@ -4713,6 +4763,7 @@ class BookingService
         if (! $booking) {
             return '';
         }
+        if ($booking->currency) return (string)$booking->currency;
         // Load the venue by id rather than reusing a loaded relation: venues that
         // arrive via scopedVenues() are hydrated from a narrow column list with no
         // country_id, so the relation can look complete while the field needed to
@@ -4766,6 +4817,22 @@ class BookingService
             ->all();
     }
 
+    protected function bookingCurrencyOptions(): array
+    {
+        $query=Booking::query(); $this->applyDashboardScope($query);
+        return $query->selectRaw("DISTINCT COALESCE(NULLIF(currency,''),'Unknown') AS code")->orderBy('code')->get()
+            ->map(fn($row)=>['value'=>$row->code,'label'=>$row->code])->all();
+    }
+
+    protected function bookingBusinessOptions($locations): array
+    {
+        $ids=collect($locations)->pluck('business_id')->filter()->unique();
+        $options=\App\Models\Business::whereIn('id',$ids)->orderBy('name')->get(['id','name'])
+            ->map(fn($row)=>['value'=>(string)$row->id,'label'=>$row->name])->all();
+        if (collect($locations)->contains(fn($row)=>$row['operator_type'] === 'bookboll')) array_unshift($options,['value'=>'bookboll','label'=>'Bookboll own venues']);
+        return $options;
+    }
+
     /**
      * Map a page of bookings, adding the names, currency and geography the table shows
      * and filters on. Without these the page would still need the full customer,
@@ -4780,7 +4847,7 @@ class BookingService
         return collect($rows)->map(function (Booking $b) use ($venues) {
             $venue = $b->relationLoaded('venue') ? $b->venue : ($venues[$b->venue_id] ?? null);
 
-            $currency = $venue ? $this->venueCurrency($venue) : '';
+            $currency = $b->currency ?: '';
 
             return array_merge($this->mapDashboardBooking($b, $currency), [
                 'customer_name'  => $b->user?->name,
@@ -4788,6 +4855,9 @@ class BookingService
                 'customer_phone' => $b->user?->phone,
                 'listing_name'   => $b->listing?->name,
                 'location_name'  => $venue?->name,
+                'record_purpose' => $b->activity_purpose,
+                'report_channel' => $b->activity_channel,
+                'recorded_payment_summary'=>\App\Support\BookingPaymentSummary::fromBooking($b),
                 'currency'       => $currency,
                 'city_id'        => $venue?->city_id ? (string) $venue->city_id : null,
                 'country_id'     => $venue && $this->venueCountryId($venue) ? (string) $this->venueCountryId($venue) : null,
@@ -4817,7 +4887,7 @@ class BookingService
 
         // One resolution for the booking and its payments, so a row can never
         // disagree with the total it belongs to.
-        $payCur = $booking->venue ? $this->venueCurrency($booking->venue) : null;
+        $payCur = $booking->currency ?: null;
         $mapped = $this->mapDashboardBooking($booking, $payCur ?: null);
         $mapped['recorded_payment_summary'] = \App\Support\BookingPaymentSummary::fromBooking($booking);
 
@@ -5442,7 +5512,7 @@ class BookingService
     protected function dashboardLookups(bool $withCustomers = false): array
     {
         $venueCols = ['id', 'name', 'status'];
-        foreach (['city_id', 'country_id', 'created_by', 'currency_override'] as $col) {
+        foreach (['city_id', 'country_id', 'created_by', 'currency_override', 'owner_user_id','business_id','operator_type'] as $col) {
             if (Schema::hasColumn('venues', $col)) {
                 $venueCols[] = $col;
             }
@@ -5459,6 +5529,7 @@ class BookingService
 
         $listingQuery = Listing::with(['sportsCategory:id,name', 'addOns'])->orderBy('name');
         AccessScope::applyVenue($listingQuery, 'venue_id', auth()->user());
+        if ($pins=AccessScope::pinnedListingIds(auth()->user())) $listingQuery->whereIn('id',$pins);
         $listings = $listingQuery
             ->get()
             ->map(fn(Listing $l) => $this->mapDashboardListing($l))
@@ -5632,6 +5703,8 @@ class BookingService
             'city_id'           => isset($v->city_id) && $v->city_id ? (string) $v->city_id : null,
             'country_id'        => isset($v->country_id) && $v->country_id ? (string) $v->country_id : null,
             'owner_user_id'     => $ownerId ? (string) $ownerId : null,
+            'business_id'      => $v->business_id ? (string)$v->business_id : null,
+            'operator_type'    => $v->operator_type ?: (($v->business_id || $v->owner_user_id) ? 'provider' : 'bookboll'),
             'currency_override' => $v->currency_override ?: null,
         ];
     }
@@ -5640,6 +5713,7 @@ class BookingService
     {
         $allowed = AccessScope::allowedVenueIds(auth()->user());
         if ($allowed !== null && !in_array((int)$booking->venue_id, $allowed, true)) return false;
+        if (($pins=AccessScope::pinnedListingIds(auth()->user())) && !in_array((int)$booking->listing_id,$pins,true)) return false;
         if (!AccessScope::isPlatform(auth()->user()) && !empty($booking->financial_context)) {
             return ($booking->financial_context['operator'] ?? '') === 'provider'
                 && (int)($booking->financial_context['business_id'] ?? 0) === (int)(AccessScope::businessId(auth()->user()) ?? -1);
