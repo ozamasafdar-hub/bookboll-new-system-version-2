@@ -18,4 +18,5 @@ export const previewPaymentReview = (id, body) => apiFetch(`/admin/payments/${id
 export const savePaymentReview = (id, body) => apiFetch(`/admin/payments/${id}/review`, { method:'POST', body })
 export const previewPaymentBulk = body => apiFetch('/admin/payments/bulk-preview', { method:'POST', body })
 export const savePaymentBulk = body => apiFetch('/admin/payments/bulk-action', { method:'POST', body })
+export const fetchPaymentBulkSelection = query => apiFetch('/admin/payments/bulk-selection', { query })
 

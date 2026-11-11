@@ -20,18 +20,28 @@ final class PaymentBulkService
         $sourceIds = collect($ids)->map(fn ($id) => (int)explode(':',$id)[0])->unique()->sort()->values();
         $payments = $this->report->authorizedQuery($actor)->with(['booking','ownedAllocations','paymentRefund'])->whereIn('id',$sourceIds)->orderBy('id')->get();
         abort_unless($payments->count() === $sourceIds->count(),404,'One or more selected payments are unavailable.');
-        $rows=[]; $base=[]; $evidence=[];
+        $bookingIds=$payments->pluck('booking_id')->filter()->unique();
+        $subscriptionIds=$payments->pluck('subscription_id')->filter()->unique();
+        $siblings=Payment::where(fn ($q) => $q->whereIn('id',$sourceIds)->orWhereIn('booking_id',$bookingIds)->orWhereIn('subscription_id',$subscriptionIds))
+            ->with('ownedAllocations')->orderBy('id')->get();
+        $groupKey=fn ($p) => $p->booking_id ? 'b'.$p->booking_id : ($p->subscription_id ? 's'.$p->subscription_id : 'p'.$p->id);
+        $groups=$siblings->groupBy($groupKey);
+        $rows=[]; $base=[]; $evidence=[]; $classified=[]; $original=[];
         foreach ($payments as $p) {
-            $siblings = $p->booking_id ? Payment::where('booking_id',$p->booking_id)->with('ownedAllocations')->orderBy('id')->get()
-                : ($p->subscription_id ? Payment::where('subscription_id',$p->subscription_id)->with('ownedAllocations')->orderBy('id')->get() : collect([$p]));
-            $raw=$siblings->map(fn ($s) => $this->report->raw($s))->all();
-            $b=$p->booking ? array_merge($p->booking->getAttributes(),['financial_context'=>$p->booking->financial_context ?? [],'creation_context'=>$p->booking->creation_context ?? []]) : [];
-            $evidence[$p->id]=['payments'=>$raw,'booking'=>$b,'refund'=>$p->paymentRefund?->getAttributes()];
+            $key=$groupKey($p);
+            if (!isset($classified[$key])) {
+                $raw=$groups[$key]->map(fn ($s) => $this->report->raw($s))->all();
+                $b=$p->booking ? array_merge($p->booking->getAttributes(),['financial_context'=>$p->booking->financial_context ?? [],'creation_context'=>$p->booking->creation_context ?? []]) : [];
+                $evidence['groups'][$key]=['payments'=>$raw,'booking'=>$b];
+                $classified[$key]=PaymentReportRules::rows($raw,$b);
+                foreach ($raw as &$s) unset($s['financial_context']['allocation_corrections']);
+                unset($s);
+                $original[$key]=PaymentReportRules::rows($raw,$b);
+            }
+            $evidence['refunds'][$p->id]=$p->paymentRefund?->getAttributes();
             $pick=fn ($r) => $r['row_kind'] !== 'receipt' && (int)($r['source_payment_id'] ?? $r['id']) === $p->id;
-            foreach (array_filter(PaymentReportRules::rows($raw,$b),$pick) as $r) $rows[(string)$r['id']]=$r;
-            foreach ($raw as &$s) unset($s['financial_context']['allocation_corrections']);
-            unset($s);
-            foreach (array_filter(PaymentReportRules::rows($raw,$b),$pick) as $r) $base[(string)$r['id']]=$r;
+            foreach (array_filter($classified[$key],$pick) as $r) $rows[(string)$r['id']]=$r;
+            foreach (array_filter($original[$key],$pick) as $r) $base[(string)$r['id']]=$r;
         }
         foreach ($ids as $id) abort_unless(isset($rows[$id]),409,'A selected allocation changed. Refresh and select it again.');
         return [$payments->keyBy('id'),$rows,$base,$evidence];
@@ -54,7 +64,6 @@ final class PaymentBulkService
             if ($data['action'] === 'mark_paid') {
                 if ($row['status'] !== 'pending') $reason='Only pending payments can be marked paid.';
                 elseif ($p->method === 'online' || $p->charge_id || $p->payment_intent_id) $reason='Online payments must be confirmed by Stripe.';
-                elseif (!in_array($p->method,['cash','card','credit_card','cheque','wire','wire_transfer'],true)) $reason='Confirm the offline collection method in the booking first.';
                 elseif (!$p->booking || $p->booking->status === 'cancelled') $reason='An active venue booking is required for an offline collection.';
                 elseif (!$row['currency'] || !is_numeric($p->amount) || $p->amount <= 0 || $row['category'] === 'unclassified') $reason='Resolve this payment’s financial evidence first.';
                 elseif ($p->payment_refund_id || in_array('payment_skipped',[$p->booking->payment_method,$p->booking->payment_status],true)) $reason='Refunded or skipped bookings cannot be collected here.';
@@ -63,7 +72,7 @@ final class PaymentBulkService
                     if (array_diff(array_column($siblings,'id'),$ids)) $reason='Select every allocation of this payment before marking it paid. Clear the allocation filter if needed.';
                     elseif (array_sum(array_map(fn ($r) => Money::toMinor($r['amount'],$r['currency']),$siblings)) !== Money::toMinor($p->amount,$p->currency)) $reason='The receipt and allocations must balance before collection.';
                 }
-                if (!$reason) $after['status']='paid';
+                if (!$reason) { $after['status']='paid'; $after['method']=$data['method'] === 'card' ? 'credit_card' : $data['method']; }
             } else {
                 $destinations=PaymentBulkRules::destinations($row);
                 $fees=['provider_booking_fee','owned_platform_fee','provider_membership_fee','event_fee'];
@@ -90,9 +99,9 @@ final class PaymentBulkService
                 $delta[$key]=Money::toMajor(Money::toMinor($total[$key] ?? 0,$total['currency'])-Money::toMinor($old[$total['currency']][$key] ?? 0,$total['currency']),$total['currency']);
             $impact[]=$delta;
         }
-        $fingerprint=hash('sha256',json_encode([$actor->id,$ids,$data['action'],$data['destination'] ?? null,trim($data['reason']),$evidence,now()->toDateString()]));
+        $fingerprint=hash('sha256',json_encode([$actor->id,$ids,$data['action'],$data['destination'] ?? null,$data['method'] ?? null,trim($data['reason']),$evidence,now()->toDateString()]));
         return ['fingerprint'=>$fingerprint,'action'=>$data['action'],'reason'=>trim($data['reason']),
-            'collection_date'=>now()->toDateString(),'changes'=>$changes,'excluded'=>$excluded,'impact'=>$impact,
+            'collection_date'=>now()->toDateString(),'collection_method'=>$data['action'] === 'mark_paid' ? $data['method'] : null,'changes'=>$changes,'excluded'=>$excluded,'impact'=>$impact,
             'payment_count'=>count(array_unique(array_column($changes,'payment_id'))),'allocation_count'=>count($changes)];
     }
 
@@ -122,7 +131,7 @@ final class PaymentBulkService
             foreach (collect($plan['changes'])->groupBy('payment_id') as $paymentId=>$changes) {
                 $payment=Payment::findOrFail($paymentId);
                 if ($data['action'] === 'mark_paid') {
-                    $response=app(BookingService::class)->dashboardCollect(Request::create('/','PUT',['method'=>$payment->method]),$payment->booking_id,$payment->id);
+                    $response=app(BookingService::class)->dashboardCollect(Request::create('/','PUT',['method'=>$data['method']]),$payment->booking_id,$payment->id,true);
                     abort_unless($response->getStatusCode() === 200 && $response->getData(true)['success'],409,'A collection could not be saved. No changes were applied.');
                 } else {
                     $context=$payment->financial_context ?? [];

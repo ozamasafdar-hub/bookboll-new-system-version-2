@@ -14,7 +14,7 @@ final class PaymentReportCache
 
     private static function prefix(): string
     {
-        return 'payment-report-v13:'.hash('sha256', DB::connection()->getDatabaseName());
+        return 'payment-report-v14:'.hash('sha256', DB::connection()->getDatabaseName());
     }
 
     public static function version(): string

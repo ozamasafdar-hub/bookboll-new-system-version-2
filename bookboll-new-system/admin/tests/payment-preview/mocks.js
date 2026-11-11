@@ -29,4 +29,5 @@ export const previewPaymentReview = previewPaymentRefund
 export const savePaymentReview = previewPaymentRefund
 export const previewPaymentBulk = previewPaymentRefund
 export const savePaymentBulk = previewPaymentRefund
+export const fetchPaymentBulkSelection = previewPaymentRefund
 export const apiFetch = async () => ({success:true,data:{mode:'workspace',production_ready:false,refunds_ready:false,checks:[]}})

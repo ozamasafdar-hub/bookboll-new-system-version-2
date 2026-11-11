@@ -658,8 +658,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::get('payments/dashboard', [PaymentController::class, 'dashboard'])->name('payments.dashboard');
             Route::get('payments/release-checks', [\App\Http\Controllers\Admin\PaymentReleaseController::class, 'show']);
             Route::get('payments/{id}/details', [\App\Http\Controllers\Admin\PaymentDetailController::class, 'show'])->whereNumber('id');
-            Route::post('payments/bulk-preview', [\App\Http\Controllers\Admin\PaymentBulkController::class, 'preview'])->middleware('throttle:30,1');
-            Route::post('payments/bulk-action', [\App\Http\Controllers\Admin\PaymentBulkController::class, 'save'])->middleware('throttle:20,1');
+            Route::get('payments/bulk-selection', [\App\Http\Controllers\Admin\PaymentBulkController::class, 'selection'])->middleware('throttle:30,1');
+            Route::post('payments/bulk-preview', [\App\Http\Controllers\Admin\PaymentBulkController::class, 'preview'])->middleware('throttle:180,1');
+            Route::post('payments/bulk-action', [\App\Http\Controllers\Admin\PaymentBulkController::class, 'save'])->middleware('throttle:180,1');
             Route::post('payments/{id}/review-preview', [\App\Http\Controllers\Admin\PaymentDetailController::class, 'reviewPreview'])->whereNumber('id')->middleware('throttle:30,1');
             Route::post('payments/{id}/review', [\App\Http\Controllers\Admin\PaymentDetailController::class, 'reviewSave'])->whereNumber('id')->middleware('throttle:20,1');
             Route::get('payments/{id}/collection-preview', [\App\Http\Controllers\Admin\PaymentDetailController::class, 'collectionPreview'])->whereNumber('id');

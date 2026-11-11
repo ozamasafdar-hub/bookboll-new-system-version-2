@@ -5198,7 +5198,7 @@ class BookingService
         return $this->cancel($req);
     }
 
-    public function dashboardCollect(Request $request, $id, $paymentId)
+    public function dashboardCollect(Request $request, $id, $paymentId, bool $compact = false)
     {
         $data = $request->validate([
             'method'       => 'required|in:cash,card,credit_card,cheque,wire,wire_transfer,paid_cash,paid_card,paid_cheque,paid_wire',
@@ -5290,6 +5290,9 @@ class BookingService
             $booking->refresh();
 
             DB::commit();
+
+            // Bulk callers already have their reviewed before/after ledger rows.
+            if ($compact) return sendSuccess('Payment collected', ['payment_id'=>$payment->id]);
 
             $booking->load(['user', 'listing', 'venue', 'payments', 'promocode']);
 

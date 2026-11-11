@@ -39,8 +39,9 @@ final class PaymentReportService
         return $query;
     }
 
-    public function dashboard(Request $request)
+    public function dashboard(Request $request, bool $selectionOnly = false)
     {
+        if ($selectionOnly) abort_unless(\App\Support\PaymentBulkRules::allows($request->user()),403);
         $request->validate([
             'from_date' => 'nullable|date_format:Y-m-d',
             'to_date' => 'nullable|date_format:Y-m-d'.($request->filled('from_date') ? '|after_or_equal:from_date' : ''),
@@ -106,7 +107,7 @@ final class PaymentReportService
         $mayRefund = \App\Support\PaymentRefundAccess::allows($actor);
         $grouped = $request->input('group_by') === 'stripe';
         $groups = new PaymentReportGroups($rows);
-        $matching = [];
+        $matching = []; $selection = [];
         foreach ($rows as &$row) {
             $row = $groups->decorate($row);
             $row['can_request_refund'] = $mayRefund
@@ -124,12 +125,18 @@ final class PaymentReportService
             ];
             if ($row['business_id'] && $row['operator'] !== 'bookboll') $businesses[$row['business_id']] = ['value' => (string) $row['business_id'], 'label' => $row['business_name'] ?: $row['recipient_label']];
             if (!\App\Support\PaymentReportFilter::matches($row, $request->query())) continue;
+            if ($selectionOnly) {
+                $selection[] = ['id'=>(string)$row['id'], 'booking_id'=>$row['booking_id'], 'subscription_id'=>$row['subscription_id'] ?? null];
+                continue;
+            }
             $totals->add($row);
             if ($grouped) $matching[] = $row;
             else $pageRows->add($row);
             $matched++;
         }
         unset($row);
+        // Exact matching allocation IDs across every page, never hidden siblings.
+        if ($selectionOnly) return sendSuccess('All filtered allocations selected', ['rows'=>$selection, 'allocation_count'=>count($selection)]);
         $entryCount = $matched;
         if ($grouped) {
             $entries = $groups->entries($matching, $platform);
@@ -233,6 +240,7 @@ final class PaymentReportService
         if ($details) $row['notes'] = $payment->notes;
         return array_merge($row, [
             'booking_id' => $payment->booking_id ? (string) $payment->booking_id : null,
+            'subscription_id' => $payment->subscription_id ? (string) $payment->subscription_id : null,
             'checkout_reference' => $b?->checkout_reference,
             'customer_id' => $customer?->id,
             'booking_ref' => $b?->booking_id ?: ($payment->booking_id ? '#'.$payment->booking_id : ''),
