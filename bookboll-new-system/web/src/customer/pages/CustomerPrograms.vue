@@ -51,33 +51,16 @@ onMounted(() => document.addEventListener('click', onDocClick))
 onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 
 // Membership FAQ — apex marketplace only, mirrored as FAQPage JSON-LD below.
-// Product-accurate: intro offers vary per program (shown on each program's page), the
-// first charge waits for the trial to end, trials are once per business, cancelling
-// stops renewals (refunds for time already paid follow the Terms).
+// Contact-listing guidance matches the public detail page.
 const faqs = computed(() => {
   if (isWhiteLabel.value) return []
   const city = selectedCity.value?.name
   return [
-    { q: 'How do memberships on Bookboll work?',
-      a: 'Pick a gym, class or academy program, sign up online in a couple of minutes, and manage everything from your account. Billing renews automatically on the program\'s plan — monthly or per its stated interval.' },
-    { q: `Do memberships${city ? ' in ' + city : ''} come with a free trial?`,
-      a: 'Intro offers vary per program — a free first session, a free trial period, or a discounted rate on longer plans — and each program\'s page shows exactly what it includes. Free trials are limited to one per business.' },
-    { q: 'When am I charged?',
-      a: 'With a free trial, your card is only charged once the trial ends. Without one, the first payment is taken when you sign up and then automatically each billing period.' },
-    { q: 'Can I cancel my membership?',
-      a: 'Yes — you can cancel your renewal anytime from your account, and you won\'t be billed again. Refunds for time already paid follow the program\'s terms — see our Terms page for details.' },
-    { q: 'What\'s the difference between gyms, classes and academies?',
-      a: 'Gyms are ongoing access memberships, classes are recurring group sessions like yoga or fitness, and academies are structured training programs — often by sport and age group. Every program is labelled, so you can filter by category above.' },
-    { q: 'Are there programs for kids?',
-      a: 'Yes — many academies and classes are just for kids, and every program is labelled by who it\'s for. Use the audience filter above to see kids-only programs (plus ladies-only and men-only where offered).' },
-    { q: 'How do I check in at my gym or class?',
-      a: 'Active memberships come with a digital Membership Pass — a QR code plus a short code, found under Pass in your account. Show it on arrival and staff scan it to record your visit.' },
-    { q: 'Can I join more than one program?',
-      a: 'Yes — you can hold memberships at different venues and across sports. Just note that free trials are limited to one per business; rejoining at the regular price is always possible.' },
-    { q: 'Will I get reminders about my membership?',
-      a: 'Depending on the provider\'s settings and your notification preferences, renewal and session updates can arrive by email, SMS or WhatsApp. You can manage your preferences anytime from your account.' },
-    { q: `How do I find programs${city ? ' in ' + city : ''} near me?`,
-      a: 'Pick your city at the top, then use the search and filters to narrow by category, sport and audience. Each program shows its venue, so you can check the location before signing up.' },
+    { q: 'How do I join an academy or membership?', a: 'Choose a listing and call the academy using its contact number. The provider will explain availability, enrolment and payment.' },
+    { q: 'Does Bookboll collect my membership payment?', a: 'No. You arrange and pay for your academy membership directly with the provider. Bookboll helps you discover the listing.' },
+    { q: 'Can I try a class first?', a: 'Ask the academy about trial sessions, schedules and prices. Each provider sets its own offers and policies.' },
+    { q: 'Who handles changes, cancellations and attendance?', a: 'Contact the academy directly. It manages your membership, attendance and any changes or refunds.' },
+    { q: `How do I find programmes${city ? ' in ' + city : ''} near me?`, a: 'Choose your city, then filter by sport, category and audience. Check the location and call the academy for details.' },
   ]
 })
 
@@ -85,7 +68,7 @@ useSeo(() => {
   const city = selectedCity.value?.name
   return {
     title: city ? `Classes & memberships in ${city}` : 'Classes, academies & memberships',
-    description: `Find sports classes, academies and gym memberships${city ? ' in ' + city : ''} and sign up online with Bookboll.`,
+    description: `Find sports classes, academies and gym memberships${city ? ' in ' + city : ''} and contact the academy directly through Bookboll.`,
     path: '/programs',
     jsonLd: [faqLd(faqs.value)].filter(Boolean),
   }

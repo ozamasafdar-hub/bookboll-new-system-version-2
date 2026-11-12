@@ -47,3 +47,8 @@ P23 is part of the versioned payment policy, static policy check, required GitHu
 4. Admin `marketSettings.test.js`, `featureSearch.test.js`, policy validation, and all three frontend builds. Existing booking/payment safety tests remain required.
 
 Local verification: 53 MySQL tests / 263 assertions passed for the three suites above; 10 targeted frontend tests passed. Actual Stripe test-account lifecycle rehearsal remains required before live billing. See [Stripe subscription webhooks](https://docs.stripe.com/billing/subscriptions/webhooks) and [invoice-payment linkage](https://docs.stripe.com/api/invoice-payment/object).
+
+
+### Railway review
+
+The deployed listing editor saved a labelled private QA draft, retained its contact/schedule details, showed the USD 20 quote, kept marketplace visibility off without payment, and required Premium for the branded website. Listing payments and the global rate editor were inspected in the browser. Public marketplace FAQ and recruitment copy now describe direct academy contact. The additional ownerless-business permission regression passed on MySQL. The complete required backend suites passed (278 tests in total across runs), along with 53 targeted admin tests and three frontend builds. Real Stripe charges were not executed.

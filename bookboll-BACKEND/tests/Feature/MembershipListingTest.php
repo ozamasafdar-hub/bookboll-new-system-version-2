@@ -142,3 +142,14 @@ it('retires membership wallet mutations even when only its ID is supplied', func
  $this->postJson('/api/admin/wallet-payouts/delta',['wallet_id'=>$wallet->id,'available'=>999])->assertStatus(410);
  $this->assertDatabaseHas('provider_wallets',['id'=>$wallet->id,'purpose'=>'subscription']);
 });
+
+it('allows an authorized manager to create a listing for a business without an owner', function () {
+ Role::findOrCreate('facility_admin','web');
+ $manager=User::factory()->create(); $manager->assignRole('facility_admin');
+ $this->business->update(['owner_id'=>null]); $this->venue->forceFill(['owner_user_id'=>null,'business_id'=>$this->business->id])->saveQuietly();
+ \App\Models\BusinessMembership::create(['business_id'=>$this->business->id,'user_id'=>$manager->id,'role'=>'staff','scope'=>'all','status'=>'active','version'=>1]);
+ $this->actingAs($manager);
+ $response=$this->postJson('/api/admin/subscriptions/programs',['name'=>'Ownerless academy','location_id'=>$this->venue->id,'contact_phone'=>'+97455551234','show_on_provider_site'=>false,'status'=>'active']);
+ $this->assertSame(200,$response->status(),(string)$response->json('message'));
+ $this->getJson('/api/admin/membership-listings')->assertOk()->assertJsonCount(2,'data.programs');
+});

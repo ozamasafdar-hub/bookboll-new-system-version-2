@@ -116,7 +116,7 @@ class ProgramSaveService
         $isDraft = (bool) ($data['is_draft'] ?? false);
 
         $ownerId = $this->resolveOwner($request, $data);
-        if (! $ownerId && ! $isAdmin) {
+        if (! $ownerId && ! $isAdmin && AccessScope::businessId($user) === null) {
             return sendError('No business found for this account.', [], 404);
         }
 

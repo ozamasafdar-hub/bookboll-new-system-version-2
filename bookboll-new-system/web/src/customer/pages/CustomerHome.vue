@@ -115,7 +115,7 @@ const faqs = computed(() => {
   if (isWhiteLabel.value) return []
   return [
     { q: 'What is Bookboll?',
-      a: 'Bookboll is a sports booking marketplace. Book padel, football, tennis and other courts by the hour, join gyms, classes and academies with an online membership, and find local games and tournaments to play in — all with one free account.' },
+      a: 'Bookboll is a sports booking marketplace. Book padel, football, tennis and other courts by the hour, discover gyms, classes and academies and contact them directly, and find local games and tournaments to play in — all with one free account.' },
     { q: 'How do I book a sports venue on Bookboll?',
       a: 'Pick a venue, choose a date and an available time slot, and confirm at checkout. Availability is live, your selected slots are held for you while you finish the booking, and the confirmation appears in your account instantly.' },
     { q: 'Do I pay online or at the venue?',
@@ -124,20 +124,18 @@ const faqs = computed(() => {
       a: 'No. When a venue asks for a deposit, it is part of the total listed price — you pay that portion online to secure the slot and settle the remaining balance at the venue. It is never charged on top of the price.' },
     { q: 'Does Bookboll add booking fees for customers?',
       a: 'No. You pay the venue\'s listed price — Bookboll doesn\'t add service or booking fees on top at checkout.' },
-    { q: 'How do free trials on memberships work?',
-      a: 'Intro offers vary per program — a free first session, a free trial period, or a discounted rate on longer plans — and each program\'s page shows exactly what it includes. With a free trial, your first charge only happens when the trial ends. Free trials are limited to one per business.' },
+    { q: 'How do I join an academy?', a: 'Open its membership listing and call the academy. Enrolment, trials, schedules and payment are arranged directly with the provider.' },
     { q: 'What are Bookboll Rewards points?',
       a: 'Visit My Rewards to see the program for your selected country, your confirmed points and the earning rules. Rates and ranks can differ by country. The rewards page also explains redemption availability; venue-booking redemption is not available yet.' },
     { q: 'Can I play even if I don\'t have a group?',
       a: 'Yes. Browse player-hosted games, hangouts and tournaments near you. Some events are instant join — your spot is confirmed the moment you join — while others need the host to approve your request first; each event page says which. You can also host your own game at any bookable venue.' },
     { q: 'How do I pay for a hosted game or tournament?',
       a: 'The price of a hosted event is paid to the host — usually on arrival, or online when the host has enabled online tickets. Bookboll connects you with the event, but the host runs it and collects the payment.' },
-    { q: 'How do I check in for my gym or class membership?',
-      a: 'Active memberships come with a digital Membership Pass — a QR code plus a short code, found under Pass in your account. Show it at the venue and staff scan it to record your visit.' },
+    { q: 'Who manages academy memberships?', a: 'The academy handles membership payments, attendance, changes and cancellations. Bookboll provides discovery and contact details.' },
     { q: 'Can I cancel or change a booking?',
       a: 'Cancellation and refund terms are agreed between you and the venue or host, so they aren\'t the same everywhere. Check the listing and our Terms page, and contact the venue directly if your plans change.' },
     { q: 'Do I need an account to book?',
-      a: 'Yes — a free Bookboll account, created with just your email during checkout. It keeps your bookings, memberships, rewards points and games together in one place.' },
+      a: 'Yes — a free Bookboll account, created with just your email during checkout. It keeps your bookings, rewards points and games together in one place.' },
   ]
 })
 
@@ -151,7 +149,7 @@ useSeo(() => {
   return {
     exactTitle: metaTitle || undefined,
     title: metaTitle ? undefined : (city ? `Book sports venues, classes & events in ${city}` : null),
-    description: metaDescription || `${brand} — reserve sports courts and pitches by the hour, join games and tournaments, and sign up for classes and memberships${city ? ' in ' + city : ''}.`,
+    description: metaDescription || `${brand} — reserve sports courts and pitches by the hour, join games and tournaments, and discover academies and memberships${city ? ' in ' + city : ''}.`,
     path: '/',
     jsonLd: [
       organizationLd(), websiteLd(),

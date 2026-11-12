@@ -20,9 +20,9 @@ const COPY = {
   sports:  { heading: 'Own a court, pitch or venue?', audience: 'players', cta: 'List your venue' },
   hangout: { heading: 'Run an entertainment or hangout venue?', audience: 'guests', cta: 'List your venue' },
   work:    { heading: 'Own a studio or workspace?', audience: 'people', cta: 'List your space' },
-  membership: { heading: 'Run a gym, academy or class?', audience: 'members', cta: 'List your program' },
+  membership: { heading: 'Run a gym, academy or class?', audience: 'customers', cta: 'Advertise your academy', body: 'Show your academy on Bookboll and let interested customers call you directly. You manage enrolment, attendance and academy payments.' },
   business: { heading: 'Do you own a business?', audience: 'customers', cta: 'Try Bookboll for businesses',
-              body: "Create your own website and list your services on Bookboll's platform as well — take bookings, programs and payments all in one place." },
+              body: "Create your own website and list your services on Bookboll's platform as well — take venue bookings and help customers discover your academy." },
   '':      { heading: 'Own a venue or space?', audience: 'customers', cta: 'List your space' },
 }
 const c = computed(() => COPY[props.category] || COPY[''])
@@ -33,11 +33,11 @@ const c = computed(() => COPY[props.category] || COPY[''])
     <div class="recruit-text">
       <div class="recruit-badge"><Store :size="15" /> Bookboll for businesses</div>
       <h2>{{ c.heading }}</h2>
-      <p>{{ c.body || `List on Bookboll and get discovered by ${c.audience} near you — manage bookings, programs and payments all in one place.` }}</p>
+      <p>{{ c.body || `List on Bookboll and get discovered by ${c.audience} near you — manage venue bookings and help customers discover your services.` }}</p>
       <ul class="recruit-perks">
         <li><Check :size="15" /> Reach {{ c.audience }} searching in {{ where }}</li>
-        <li><Check :size="15" /> Take bookings &amp; subscriptions online</li>
-        <li><Check :size="15" /> Free to get started</li>
+        <li><Check :size="15" /> {{ category === 'membership' ? 'Customers contact you directly' : 'Take venue bookings online' }}</li>
+        <li><Check :size="15" /> {{ category === 'membership' ? 'USD 20/month per listing by default; local rates may apply' : 'Free website; academy marketplace listings billed separately' }}</li>
       </ul>
     </div>
     <div class="recruit-cta">
