@@ -37,6 +37,7 @@ The existing `send-booking-reminders` command now runs every minute; the old sev
 ### Deployment and operational requirements
 
 - Apply MySQL migration `2026_11_15_000001_add_comeback_promotions.php`. Deploy backend, admin and marketplace together. Maintain `schedule:work` (or cron `schedule:run` each minute), a queue worker and shared cache locks.
+- The Railway preview entrypoint runs only the comeback command every minute with synchronous preview delivery; it does not enable unrelated production schedules against the imported database.
 - Configure SMTP and `APP_FRONTEND_URL` to the marketplace domain. Links point to `/facilities/{venue_id}`.
 - Configure the platform WhatsApp sender plus `WHATSAPP_COMEBACK_TEMPLATE` and optional `WHATSAPP_COMEBACK_LANGUAGE` (default `en_US`). The Meta-approved MARKETING template must use these BODY variables in order: **1 customer name, 2 venue name, 3 percentage, 4 code, 5 expiry, 6 venue URL**. Include the platform-fee cap in the approved body. Do not deploy a template with a conflicting offer.
 - Inspect `booking_comeback_offers` for `needs_review`, stale `pending` or `sending`; review provider delivery records before any retry. `sent` means accepted by the channel, not proof of inbox receipt. Preview/mock tests are not live email or WhatsApp delivery evidence.

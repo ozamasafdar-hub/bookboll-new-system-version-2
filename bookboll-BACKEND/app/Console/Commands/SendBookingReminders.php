@@ -21,7 +21,10 @@ class SendBookingReminders extends Command
                 foreach ($rows as $b) if (app(ComebackOfferService::class)->consider($b)) $issued++;
             });
         DB::table('booking_comeback_offers')->where('status','pending')->orderBy('id')->chunkById(200,function ($rows) {
-            foreach ($rows as $offer) DeliverComebackOffer::dispatch($offer->id);
+            foreach ($rows as $offer) {
+                if (config('preview.enabled')) DeliverComebackOffer::dispatchSync($offer->id);
+                else DeliverComebackOffer::dispatch($offer->id);
+            }
         });
         $this->info("Comeback offers issued: {$issued}. Delivery uses each customer's marketing consent.");
         return self::SUCCESS;

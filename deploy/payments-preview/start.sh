@@ -31,5 +31,14 @@ php artisan workspace:sync-media
 php artisan payments:warm-report
 php artisan payments:release-check --allow-workspace
 chown -R www-data:www-data storage bootstrap/cache
+# Exercise only the comeback workflow in this isolated workspace. Its delivery
+# job records preview outcomes and cannot send email/WhatsApp. Do not enable
+# unrelated production maintenance schedules against the imported data copy.
+(
+    while :; do
+        php artisan send-booking-reminders || echo 'Comeback preview check failed; inspect application logs'
+        sleep 60
+    done
+) &
 php-fpm -D
 exec nginx -g 'daemon off;'
