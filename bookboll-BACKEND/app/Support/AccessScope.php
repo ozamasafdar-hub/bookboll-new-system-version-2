@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\Business;
 use App\Models\ClassProgram;
 use App\Models\User;
 use App\Models\Venue;
@@ -54,15 +55,45 @@ class AccessScope
             return (int) $membership;
         }
 
-        // Pre-membership accounts: resolve the owner, then their business.
-        $ownerId = self::ownerUserId($user);
-        if (! $ownerId) {
+        // Pre-membership accounts: resolve the owner, then their business. The
+        // owner may stand for an OWNERLESS business (businesses.owner_id null,
+        // owner attached by membership), so this reads both links — without the
+        // second a manager invited under such an owner resolved to nothing.
+        return BusinessMembershipSync::businessIdForOwner(self::ownerUserId($user));
+    }
+
+    /** The Business row behind businessId(), or null for platform-side users. */
+    public static function business(?User $user): ?Business
+    {
+        $id = self::businessId($user);
+
+        return $id ? Business::find($id) : null;
+    }
+
+    /**
+     * The business this user RUNS — owned outright, or held through a managing
+     * membership (owner / provider_admin). Null for staff and platform users.
+     *
+     * The owner-only writes (business profile, brand) used to read
+     * `$user->ownedBusiness`, which is null for the owner of a business created
+     * ownerless: they were refused their own profile page.
+     */
+    public static function managedBusiness(?User $user): ?Business
+    {
+        if (! $user) {
             return null;
         }
+        if ($user->ownedBusiness) {
+            return $user->ownedBusiness;
+        }
 
-        $businessId = DB::table('businesses')->where('owner_id', $ownerId)->value('id');
+        $id = \App\Models\BusinessMembership::query()
+            ->where('user_id', $user->id)
+            ->where('status', \App\Models\BusinessMembership::STATUS_ACTIVE)
+            ->whereIn('role', \App\Models\BusinessMembership::MANAGING_ROLES)
+            ->value('business_id');
 
-        return $businessId ? (int) $businessId : null;
+        return $id ? Business::find($id) : null;
     }
 
     /** The provider business this user belongs to, or null for platform-side users. */
@@ -74,8 +105,15 @@ class AccessScope
         if ($user->hasRole('provider_admin')) {
             return (int) $user->id;
         }
+        if ($user->owner_user_id) {
+            return (int) $user->owner_user_id;
+        }
 
-        return $user->owner_user_id ? (int) $user->owner_user_id : null;
+        // Moved into a business by membership: owner_user_id is null when that
+        // business is ownerless, and every owner-keyed read then took them for
+        // a PLATFORM user — site settings and storefront sort showed, and could
+        // write, the platform's values. Stand them under the business instead.
+        return BusinessMembershipSync::ownerUserIdForMember($user);
     }
 
     /** Sees everything, unscoped. */

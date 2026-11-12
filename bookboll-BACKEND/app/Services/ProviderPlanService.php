@@ -903,7 +903,7 @@ class ProviderPlanService
             return [null, null, sendError('Only a provider account has a plan to manage.', [], 403)];
         }
 
-        $business = Business::where('owner_id', $ownerId)->first();
+        $business = Business::forOwnerId($ownerId);
         if (! $business) {
             return [null, null, sendError('No business found for this account.', [], 404)];
         }

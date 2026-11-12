@@ -320,7 +320,7 @@ class UserService
 
             $roles = $user->getRoleNames();
 
-            $user->load(['venues', 'ownedBusiness']);
+            $user->load(['venues', 'ownedBusiness', 'activeBusinessMembership.business']);
             $permissions = $user->getAllPermissions()->pluck('name');
 
             $user->makeHidden(['roles']);
@@ -695,7 +695,7 @@ class UserService
     public function loginUser()
     {
         $user = auth()->user();
-        $user->load(['venues', 'ownedBusiness']);
+        $user->load(['venues', 'ownedBusiness', 'activeBusinessMembership.business']);
         $user->makeHidden(['roles']);
 
         $roles           = $user->getRoleNames();
@@ -1099,6 +1099,11 @@ class UserService
                 ])->save();
             }
 
+            // The legacy owner link alone is not enough: for a business created
+            // ownerless it resolves to nothing, and the invitee signs in to an
+            // empty dashboard. Leave the membership the rest of the system reads.
+            \App\Support\BusinessMembershipSync::syncForStaff($user, $user->owner_user_id, auth()->id());
+
             if ($formData['role'] === 'provider_admin') {
                 $username = BusinessService::normalizeUsername($formData['username'] ?? null);
                 if ($username === '' || strlen($username) < 3) {
@@ -1220,6 +1225,10 @@ class UserService
             if (! empty($venues)) {
                 $existing->venues()->sync($venues);
             }
+
+            // Same bridge as createUser(): a customer promoted to business staff
+            // must be a member of that business, not only pointed at its owner.
+            \App\Support\BusinessMembershipSync::syncForStaff($existing, $existing->owner_user_id, auth()->id());
 
             DB::commit();
 
@@ -1364,6 +1373,13 @@ class UserService
 
             if (! empty($formData['business_name']) && $user->ownedBusiness) {
                 $user->ownedBusiness->update(['name' => $formData['business_name']]);
+            }
+
+            // Role or owner may have changed above; the membership has to follow
+            // (moved to another business, or left for a platform role), or
+            // AccessScope keeps reading the business they no longer belong to.
+            if (isset($formData['role']) || array_key_exists('owner_user_id', $formData)) {
+                \App\Support\BusinessMembershipSync::syncForStaff($user->fresh(), $user->fresh()->owner_user_id, auth()->id());
             }
 
             DB::commit();

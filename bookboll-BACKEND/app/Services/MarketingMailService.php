@@ -57,7 +57,7 @@ class MarketingMailService
             ];
         }
 
-        $business = Business::where('owner_id', $ownerId)->first();
+        $business = Business::forOwnerId($ownerId);
         $cfg = is_array($business?->smtp_config) ? $business->smtp_config : [];
 
         $ready = ! empty($cfg['enabled'])
@@ -98,7 +98,7 @@ class MarketingMailService
         if ($ownerId === null) {
             return false;
         }
-        $business = Business::where('owner_id', $ownerId)->first();
+        $business = Business::forOwnerId($ownerId);
         $cfg = is_array($business?->smtp_config) ? $business->smtp_config : [];
 
         return ! empty($cfg['enabled']) && ! empty($cfg['host']) && ($cfg['use_for_automated'] ?? true);
@@ -304,7 +304,7 @@ class MarketingMailService
         if ($ownerId === null) {
             return '#0f766e';
         }
-        $primary = Business::where('owner_id', $ownerId)->value('brand_primary');
+        $primary = Business::forOwnerId($ownerId)?->brand_primary;
 
         return (is_string($primary) && preg_match('/^#[0-9a-fA-F]{3,8}$/', $primary)) ? $primary : '#0f766e';
     }

@@ -64,14 +64,14 @@ class SiteSettingsService
         $ownerId = AccessScope::ownerUserId($user);
 
         if ($ownerId !== null) {
-            $b = Business::where('owner_id', $ownerId)->first();
+            $b = Business::forOwnerId($ownerId);
 
             return sendSuccess('Site settings', [
                 'mode'     => 'provider',
                 'settings' => $this->providerPayload($b),
                 'username' => $b?->username,
                 'plan'     => $b?->plan ?: 'free',
-                'counts'   => $this->providerCounts($ownerId),
+                'counts'   => $this->providerCounts($ownerId, $b?->id),
             ]);
         }
 
@@ -89,14 +89,23 @@ class SiteSettingsService
         $user = $request->user();
         $ownerId = AccessScope::ownerUserId($user);
 
-        return $ownerId !== null
-            ? $this->updateProvider($request, $ownerId)
-            : $this->updatePlatform($request);
+        if ($ownerId !== null) {
+            return $this->updateProvider($request, $ownerId);
+        }
+
+        // Not under any business: only a platform user may write the
+        // platform's settings. A provider account that resolves to no business
+        // gets a clear refusal rather than the marketplace's own site.
+        if (! AccessScope::isPlatform($user)) {
+            return sendError('No business found for this account.', [], 404);
+        }
+
+        return $this->updatePlatform($request);
     }
 
     protected function updateProvider(Request $request, int $ownerId)
     {
-        $business = Business::where('owner_id', $ownerId)->first();
+        $business = Business::forOwnerId($ownerId);
         if (! $business) {
             return sendError('No business found for this account.', [], 404);
         }
@@ -308,9 +317,18 @@ class SiteSettingsService
      *
      * @return array{venues: int, programs: int, posts: int}
      */
-    protected function providerCounts(int $ownerId): array
+    protected function providerCounts(int $ownerId, ?int $businessId = null): array
     {
-        $venueIds = Venue::where('owner_user_id', $ownerId)->pluck('id');
+        // A venue reaches its business by the legacy owner key or by
+        // venues.business_id — the only link for an ownerless business.
+        $venueIds = Venue::query()
+            ->where(function ($q) use ($ownerId, $businessId) {
+                $q->where('owner_user_id', $ownerId);
+                if ($businessId) {
+                    $q->orWhere('business_id', $businessId);
+                }
+            })
+            ->pluck('id');
 
         $venues = $venueIds->isEmpty() ? 0 : Listing::whereIn('venue_id', $venueIds)
             ->where(function ($q) {

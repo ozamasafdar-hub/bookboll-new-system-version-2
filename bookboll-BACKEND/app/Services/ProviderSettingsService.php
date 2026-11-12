@@ -192,13 +192,15 @@ class ProviderSettingsService
     {
         $ownerId = AccessScope::ownerUserId($user);
 
-        return $ownerId === null ? null : Business::where('owner_id', $ownerId)->first();
+        return $ownerId === null ? null : Business::forOwnerId($ownerId);
     }
 
     /** The business this person owns outright, if any. */
     protected function ownedBusiness(?User $user): ?Business
     {
-        return $user?->ownedBusiness;
+        // Owned outright, or run through a managing membership — the owner of a
+        // business created ownerless holds it the second way.
+        return AccessScope::managedBusiness($user);
     }
 
     protected function nullIfBlank(?string $value): ?string
