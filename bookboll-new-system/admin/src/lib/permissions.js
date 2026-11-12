@@ -314,14 +314,14 @@ export const ROLE_INFO = {
     label: 'Owner', side: 'provider',
     tagline: 'Full control of the business',
     color: '#2563eb', bg: '#eff6ff',
-    can:    ['Everything — bookings, venues & programs, payments, promotions, website', 'Wallet payouts, withdrawals & team management'],
+    can:    ['Everything — bookings, venues & programs, payments, promotions, website', 'Connect the business’s Stripe account & manage its team'],
     cannot: ['See or touch other businesses'],
   },
   facility_admin: {
     label: 'Manager', side: 'provider',
     tagline: 'Runs the business day-to-day',
     color: '#0891b2', bg: '#ecfeff',
-    can:    ['Everything for assigned venues — bookings, customers, payments, venues & programs, promotions', 'View the wallet & moderate events'],
+    can:    ['Everything for assigned venues — bookings, customers, payments, venues & programs, promotions', 'View payment setup & moderate events'],
     cannot: ['Edit payout details, withdraw funds, manage the team or the website'],
   },
   provider_supervisor: {
