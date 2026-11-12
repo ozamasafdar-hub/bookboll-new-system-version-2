@@ -9,6 +9,7 @@ import { createProgram, updateProgram, firstError, setProgramState } from '../li
 import { useCurrentUser } from '../lib/currentUser.js'
 import { CAP } from '../lib/permissions.js'
 import { uploadImage } from '../lib/imageUpload.js'
+import { effectiveGenderPolicy } from '../lib/membershipCategories.js'
 const props = defineProps({ embedded: Boolean }), emit = defineEmits(['saved'])
 const { can } = useCurrentUser(), manage = computed(() => can(CAP.MANAGE_LISTINGS))
 const rows = ref([]), venues = ref([]), loading = ref(true), busy = ref(false), error = ref(''), message = ref(''), billingEnabled = ref(false), billingDisabledReason = ref('')
@@ -36,6 +37,7 @@ async function load() {
 onMounted(async () => { await load(); if (route.query.new === '1' && manage.value) openNewProgram() })
 function openEditProgram(p) {
   form.value = { name: '', location_id: '', description: '', contact_phone: '', schedule_description: '', sport_category: '', coach_name: '', monthly_price: 0, currency: 'QAR', billing_interval: 'monthly', photo_url: '', images: [], status: 'active', category: 'academy', audience: 'all', gender_policy: 'mixed', is_draft: false, show_on_marketplace: true, show_on_provider_site: false, ...p, listing_details: { type: 'ongoing', ...(p.listing_details || {}) } }
+  form.value.gender_policy = effectiveGenderPolicy(p)
   original.value = JSON.stringify(form.value); editor.value = true; editTab.value = 'details'; error.value = ''; discard.value = false
 }
 function openNewProgram(locationId) { openEditProgram({ location_id: locationId || '' }) }
