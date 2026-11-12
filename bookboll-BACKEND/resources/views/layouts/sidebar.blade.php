@@ -48,6 +48,12 @@
             'icon' => '<path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25A2.25 2.25 0 015.25 3h13.5A2.25 2.25 0 0121 5.25z" />',
         ],
         [
+            'label' => 'Delivery Tests',
+            'href' => route('delivery-tests.index'),
+            'active' => request()->routeIs('delivery-tests.*'),
+            'icon' => '<path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />',
+        ],
+        [
             'label' => 'Backups',
             'href' => route('backups.index'),
             'active' => request()->routeIs('backups.*'),
@@ -58,6 +64,7 @@
             'href' => route('log-viewer.index'),
             'active' => request()->routeIs('log-viewer.*'),
             'navigate' => false,
+            'new_tab' => true,
             'icon' => '<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />',
         ],
     ];
@@ -70,6 +77,7 @@
             'href' => $telescopeUrl,
             'active' => request()->is(trim(config('telescope.path'), '/').'*'),
             'navigate' => false,
+            'new_tab' => true,
             'icon' => '<path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />',
         ];
     }
@@ -137,11 +145,17 @@
                 <li>
                     <a href="{{ $item['href'] }}"
                        @if ($item['navigate'] ?? true) wire:navigate @endif
+                       @if ($item['new_tab'] ?? false) target="_blank" rel="noopener noreferrer" @endif
                        wire:current.exact="sidebar-link-active"
-                       title="{{ $item['label'] }}"
+                       title="{{ $item['label'] }}{{ ($item['new_tab'] ?? false) ? ' (opens in a new tab)' : '' }}"
                        @class(['sidebar-link', 'sidebar-link-active' => $item['active']])>
                         <svg class="h-5 w-5 shrink-0 opacity-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">{!! $item['icon'] !!}</svg>
                         <span class="sidebar-label">{{ $item['label'] }}</span>
+                        @if ($item['new_tab'] ?? false)
+                            <svg class="sidebar-label ml-auto h-3.5 w-3.5 shrink-0 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                            </svg>
+                        @endif
                     </a>
                 </li>
             @endforeach

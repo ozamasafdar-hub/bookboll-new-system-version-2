@@ -21,6 +21,22 @@ class OneSignalService
     /** @var array<string, array{app_id: string, rest_api_key: string}> */
     protected array $apps = [];
 
+    /**
+     * What OneSignal said to the most recent dispatch — notification id,
+     * recipient count, errors and HTTP status — so a caller that wants to show
+     * the outcome (the admin panel's delivery test) can, without every send
+     * having to return more than a bool.
+     *
+     * @var array{app: string, strategy: string, status: int|null, notification_id: string|null, recipients: int|null, errors: mixed, exception: string|null}|null
+     */
+    public ?array $lastResult = null;
+
+    /** Whether this app has an app id and REST key configured. */
+    public function isConfigured(string $app): bool
+    {
+        return $this->credentials($app) !== null;
+    }
+
     public function __construct()
     {
         $configured = (array) config('services.onesignal.apps', []);
@@ -186,6 +202,16 @@ class OneSignalService
             $notificationId = is_array($body) ? ($body['id'] ?? null) : null;
             $delivered      = $response->successful() && is_string($notificationId) && $notificationId !== '';
 
+            $this->lastResult = [
+                'app'             => $app,
+                'strategy'        => $strategy,
+                'status'          => $response->status(),
+                'notification_id' => $delivered ? $notificationId : null,
+                'recipients'      => is_array($body) && isset($body['recipients']) ? (int) $body['recipients'] : null,
+                'errors'          => is_array($body) ? ($body['errors'] ?? null) : null,
+                'exception'       => null,
+            ];
+
             if ($delivered) {
                 Log::info('OneSignal notification sent', [
                     'app'             => $app,
@@ -212,6 +238,16 @@ class OneSignalService
 
             return false;
         } catch (\Exception $e) {
+            $this->lastResult = [
+                'app'             => $app,
+                'strategy'        => $strategy,
+                'status'          => null,
+                'notification_id' => null,
+                'recipients'      => null,
+                'errors'          => null,
+                'exception'       => $e->getMessage(),
+            ];
+
             Log::error('OneSignal notification exception', [
                 'app'      => $app,
                 'strategy' => $strategy,
