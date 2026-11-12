@@ -127,7 +127,7 @@ const open = ref(-1)
       </div>
       <div class="fbp-note">
         <Info :size="14" />
-        <span>Subscription prices are in USD. Premium is ${{ PREMIUM_YEARLY_TOTAL }} once a year with no free trial. Booking commissions apply separately. *Marketplace membership listings default to USD 20 per listing each month on both plans; country/city rates may differ. Customers enrol and pay the academy directly. Optional extras: a custom domain (one-time fee). <router-link to="/terms" class="fbp-link">Provider terms apply</router-link>.</span>
+        <span>Subscription prices are in USD. Premium is ${{ PREMIUM_YEARLY_TOTAL }} once a year with no free trial. Booking commissions apply separately. *Marketplace membership listings default to USD 20 per listing each month on both plans; country/city rates may differ. Customers enrol and pay the academy directly. Your team can manage members, attendance and offline receipts in the dashboard without a payment gateway. Optional extras: a custom domain (one-time fee). <router-link to="/terms" class="fbp-link">Provider terms apply</router-link>.</span>
       </div>
     </section>
 

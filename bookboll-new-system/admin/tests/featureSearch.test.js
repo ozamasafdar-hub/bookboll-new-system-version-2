@@ -4,6 +4,11 @@ import { searchFeatures, FEATURE_DESTINATIONS } from '../src/lib/featureSearch.j
 import { CAP } from '../src/lib/permissions.js'
 
 const owner = { role: 'provider_admin', providerScoped: true }
+test('providers and read-only staff can find the manual member register without a gateway', () => {
+  for (const role of ['provider_admin','staff','provider_viewer']) {
+    assert.equal(searchFeatures('attendance', {role,providerScoped:true})[0]?.to, '/subscriptions')
+  }
+})
 test('online payments finds booking payouts without retired membership wallets', () => {
   for (const query of ['online payments', 'how do I set up online payments', 'add payout method', 'get paid']) {
     const results = searchFeatures(query, owner)

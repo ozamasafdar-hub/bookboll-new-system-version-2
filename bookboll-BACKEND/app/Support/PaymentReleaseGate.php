@@ -72,7 +72,7 @@ class PaymentReleaseGate
         try {
             $policy = json_decode(file_get_contents(config('payment_release.policy_file')), true, 512, JSON_THROW_ON_ERROR);
             $rules = array_column($policy['rules'], 'id');
-            $add('policy', 'Approved business rules available', count($rules) >= 23 && in_array('P17_SHARED_ONLINE_PAYMENTS', $rules, true) && in_array('P18_CHECKOUT_BALANCES', $rules, true) && in_array('P19_PAYMENT_REVIEW_ACTIONS',$rules,true) && in_array('P20_SUPERADMIN_BULK_ACTIONS',$rules,true) && in_array('P21_PAYMENT_ANALYTICS_PARITY',$rules,true) && in_array('P22_BOOKING_ACTIVITY_PARITY',$rules,true) && in_array('P23_MEMBERSHIP_CONTACT_LISTINGS',$rules,true) && count($rules) === count(array_unique($rules)), 'The release must cover every rule, including payment analytics parity, in the versioned payment policy.');
+            $add('policy', 'Approved business rules available', count($rules) >= 24 && in_array('P17_SHARED_ONLINE_PAYMENTS', $rules, true) && in_array('P18_CHECKOUT_BALANCES', $rules, true) && in_array('P19_PAYMENT_REVIEW_ACTIONS',$rules,true) && in_array('P20_SUPERADMIN_BULK_ACTIONS',$rules,true) && in_array('P21_PAYMENT_ANALYTICS_PARITY',$rules,true) && in_array('P22_BOOKING_ACTIVITY_PARITY',$rules,true) && in_array('P23_MEMBERSHIP_CONTACT_LISTINGS',$rules,true) && in_array('P24_MANUAL_PROVIDER_MEMBERS',$rules,true) && count($rules) === count(array_unique($rules)), 'The release must cover every rule, including payment analytics parity, in the versioned payment policy.');
             $missing = array_diff(array_map(fn ($p) => basename($p, '.php'), glob(database_path('migrations/*.php'))),
                 Schema::hasTable('migrations') ? DB::table('migrations')->pluck('migration')->all() : []);
             $schemaReady = !$missing && Schema::hasTable('payment_refunds') && Schema::hasColumn('payments', 'payment_refund_id')
@@ -121,7 +121,7 @@ class PaymentReleaseGate
                 $add($id, $label, $passed, $passed ? 'Verified evidence matches this release.' : 'Missing, failed, changed or mismatched release evidence.', $scope);
             }
             $legacyCount = DB::table('class_subscriptions')->whereNotNull('stripe_subscription_id')->whereNotIn('status', ['cancelled','canceled','expired','ended'])->count();
-            $add('legacy_membership_renewals', 'Legacy academy customer billing has ended', $legacyCount === 0, 'End legacy customer Stripe subscriptions and verify them before live use. Historical records must be preserved.');
+            $add('legacy_membership_renewals', 'Legacy academy customer billing has ended', $legacyCount === 0, 'Verify that no legacy customer Stripe subscriptions can renew. Dummy subscriber records are not imported into the manual register.');
             $stripeReady = preg_match('/^(sk|rk)_live_/', trim((string) config('services.stripe.secret'))) === 1
                 && str_starts_with(trim((string) config('services.stripe.webhook_secret')), 'whsec_');
             $add('stripe_configuration', 'Stripe and webhook signing configured', $stripeReady, 'Stripe credentials and the signed webhook endpoint are required. No credentials are shown here.', 'refunds');

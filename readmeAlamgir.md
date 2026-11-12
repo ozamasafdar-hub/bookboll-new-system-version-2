@@ -1,3 +1,16 @@
+# Current membership model — 13 November 2026
+
+**Authoritative update:** Keep information-only customer discovery and offline enrolment, but provide private subscriber management for provider staff. [Manual member register: implementation and required checks](docs/memberships/MANUAL_MEMBER_REGISTER.md).
+
+- Customers → Membership subscribers now supports manual enrolment, member contacts, membership dates/renewals, pause/cancel/reactivation, attendance and optional offline receipt records. No gateway, Stripe account, Premium or marketplace advertising subscription is required to use the register.
+- No customer online enrolment, automated academy billing, membership wallet or Bookboll-managed academy payments. Offline receipts never enter platform financial analytics.
+- Marketplace listing price remains USD 20/month by default with global/country/city overrides, separately on every plan. Premium still controls own-site public membership listings only.
+- Listing forms now describe ongoing memberships, courses, lesson packs, camps and drop-ins with inclusions, audience, access and provider policies.
+- The new MySQL register starts empty. Prior subscriber records are dummy data and are not imported. Historical membership preservation is no longer a rollout requirement. Unrelated booking/payment financial rules remain intact.
+- P24 and CI enforce the manual register's business isolation, permissions, attendance, lifecycle and offline payment rules. Apply the 13 November migration and deploy the admin + public frontends with the backend.
+
+The following 12 November section is superseded where it retired provider-operated subscriber and attendance tools; customer online billing remains retired.
+
 # Current membership model — 12 November 2026
 
 **Authoritative change:** Memberships are now academy contact listings. [Full implementation, API, billing and rollout guide](docs/memberships/CONTACT_LISTINGS.md).

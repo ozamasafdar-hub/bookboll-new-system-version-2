@@ -45,11 +45,12 @@ export const NAV_GROUPS = [
     ],
     items: [
     { path: '/customers', label: 'All customers', icon: Users, desc: 'Profiles, history & contact details' },
+    { path: '/subscriptions', label: 'Membership subscribers', icon: UsersRound, desc: 'Offline enrolments, attendance & member records' },
   ]},
   { key: 'money', label: 'Payments & Wallets', icon: Wallet,
-    blurb: 'Your money, end to end — every payment recorded, and a payout wallet for venue bookings for venue bookings.',
+    blurb: 'Booking payments and your connected payout account.',
     tips: [
-      'Connect a payout method in each wallet to unlock online payments for that side of your business.',
+      'Connect Stripe only if you want full online venue booking payments. Membership subscribers are managed offline without a gateway.',
       'Wallets are per country, so earnings always stay in their own currency.',
     ],
     items: [

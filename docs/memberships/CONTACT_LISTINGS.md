@@ -1,3 +1,5 @@
+> Updated 13 November: [Provider-managed offline members](MANUAL_MEMBER_REGISTER.md) supersedes the retirement of all operational tools below. The new private register does not import legacy dummy records and requires no gateway. Marketplace/own-site advertising entitlements below remain in force.
+
 # Membership contact listings — 12 November 2026
 
 This replaces the customer membership operations model. Earlier instructions about membership commissions, enrolment, trials, wallets, subscribers and check-in describe historical behavior only.

@@ -33,6 +33,7 @@ class CustomerProgramService
     private const INTERVAL_LABEL = [
         'weekly' => 'week', 'biweekly' => '2 weeks', 'monthly' => 'month',
         'quarterly' => 'quarter', 'yearly' => 'year', 'one_time' => 'one-time',
+        'session' => 'session', 'term' => 'term', 'package' => 'package', 'day' => 'day',
     ];
 
     private const INTERVAL_MONTHS = [
@@ -679,6 +680,7 @@ class CustomerProgramService
             'id'                       => $p->uuid,
             'contact_phone' => \App\Support\MembershipListingPolicy::phone($p),
             'schedule_description' => $p->schedule_description,
+            'listing_details' => $p->listing_details ?? [],
             'membership_model' => 'contact_listing',
             'name'                     => $p->name,
             'description'              => $p->description,

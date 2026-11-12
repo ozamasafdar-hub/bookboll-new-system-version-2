@@ -37,7 +37,7 @@ class ProgramSaveService
     public const PLATFORM_COMMISSION = 15;
 
     /** Fields that require approval before customers see them. */
-    protected const CONTENT_KEYS = ['name', 'description', 'photo_url', 'images', 'contact_phone', 'schedule_description'];
+    protected const CONTENT_KEYS = ['name', 'description', 'photo_url', 'images', 'contact_phone', 'schedule_description', 'listing_details'];
 
     public function store(Request $request)
     {
@@ -124,6 +124,7 @@ class ProgramSaveService
         // programme (or one being moved to another venue) is refused — an existing
         // programme keeps working, matching how the switch stops new supply only.
         $venueId = $data['location_id'] ?? null;
+        abort_if($existing && (int)$existing->venue_id !== (int)$venueId && \App\Models\ProviderMember::where('program_id',$existing->id)->exists(), 409, 'This listing has member records. Create a separate listing for another venue.');
         if ($venueId && (! $existing || (int) $existing->venue_id !== (int) $venueId)) {
             if ($err = CityModules::guard($venueId, CityModules::CLASSES, 'Membership programs')) {
                 return $err;
@@ -159,6 +160,7 @@ class ProgramSaveService
         }
 
         $content = [
+            'listing_details' => $base['listing_details'] ?? [],
             'contact_phone' => $base['contact_phone'] ?? '',
             'schedule_description' => $base['schedule_description'] ?? '',
             'name'        => $base['name'] ?? '',
@@ -274,6 +276,7 @@ class ProgramSaveService
         }
 
         $liveApproved = [
+            'listing_details' => $existing->listing_details ?? [],
             'contact_phone' => $existing->contact_phone ?: '',
             'schedule_description' => $existing->schedule_description ?: '',
             'name'        => $existing->name ?: '',
@@ -301,7 +304,7 @@ class ProgramSaveService
             $a = $next[$k] ?? null;
             $b = $live[$k] ?? null;
             if (is_array($a) || is_array($b)) {
-                if (array_values((array) $a) !== array_values((array) $b)) {
+                if ((array) $a != (array) $b) {
                     return true;
                 }
 
@@ -318,6 +321,7 @@ class ProgramSaveService
     protected function snapshotOf(ClassProgram $p): array
     {
         return [
+            'listing_details' => $p->listing_details ?? [],
             'name'        => $p->name,
             'description' => $p->description,
             'photo_url'   => $p->photo_url,
@@ -357,6 +361,7 @@ class ProgramSaveService
             'venue_id' => $d['location_id'] ?? null, 'location_id' => $d['location_id'] ?? null,
             'name' => $d['name'], 'description' => $d['description'] ?? '',
             'contact_phone' => $d['contact_phone'] ?? '', 'schedule_description' => $d['schedule_description'] ?? '',
+            'listing_details' => $d['listing_details'] ?? [],
             'sport_category' => $d['sport_category'] ?? '', 'coach_name' => $d['coach_name'] ?? '',
             // Advertised academy price is informational; it never creates a charge.
             'monthly_price' => $d['monthly_price'] ?? 0, 'currency' => $d['currency'] ?? '',
@@ -376,7 +381,10 @@ class ProgramSaveService
             'description' => 'nullable|string|max:10000', 'contact_phone' => 'nullable|string|max:40',
             'schedule_description' => 'nullable|string|max:2000', 'sport_category' => 'nullable|string|max:100',
             'coach_name' => 'nullable|string|max:150', 'monthly_price' => 'nullable|numeric|min:0|max:1000000',
-            'currency' => 'nullable|string|max:10', 'billing_interval' => 'nullable|in:monthly,weekly,yearly,session,term',
+            'currency' => 'nullable|string|max:10', 'billing_interval' => 'nullable|in:monthly,weekly,yearly,session,term,package,day',
+            'listing_details' => 'nullable|array:type,inclusions,age_group,level,duration,access,requirements,cancellation_policy,enrolment,pricing_note',
+            'listing_details.type' => 'nullable|in:ongoing,course,pack,camp,drop_in',
+            'listing_details.*' => 'nullable|string|max:2000',
             'photo_url' => 'nullable|url:http,https|max:2048', 'images' => 'nullable|array|max:12', 'images.*' => 'url:http,https|max:2048',
             'category' => 'nullable|string|max:40', 'audience' => 'nullable|string|max:40', 'gender_policy' => 'nullable|string|max:40',
             'show_on_marketplace' => 'nullable|boolean', 'show_on_provider_site' => 'nullable|boolean',

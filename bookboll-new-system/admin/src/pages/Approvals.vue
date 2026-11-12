@@ -718,6 +718,7 @@ function isContentUpdate(row) {
 }
 
 // Content fields staged for review — diffed live (approved) → pending_content.
+const membershipInformation = v => Object.entries(v || {}).filter(([,value]) => value).map(([key,value]) => `${key.replaceAll('_',' ')}: ${value}`).join('\n') || '—'
 const CONTENT_DIFF = {
   listing: [
     { key: 'name', label: 'Name' },
@@ -726,6 +727,9 @@ const CONTENT_DIFF = {
     { key: 'photos', label: 'Gallery', fmt: F.photos },
   ],
   program: [
+    { key: 'contact_phone', label: 'Contact phone' },
+    { key: 'schedule_description', label: 'Schedule information' },
+    { key: 'listing_details', label: 'Membership information', fmt: membershipInformation },
     { key: 'name', label: 'Name' },
     { key: 'description', label: 'Description' },
     { key: 'photo_url', label: 'Cover photo', fmt: F.photo },
@@ -789,6 +793,7 @@ const PREVIEW_PROGRAM_FIELDS = [
   { key: 'monthly_price', label: 'Advertised academy price' },
   { key: 'contact_phone', label: 'Contact phone' },
   { key: 'schedule_description', label: 'Schedule information' },
+  { key: 'listing_details', label: 'Membership information', fmt: membershipInformation },
   { key: 'listing_monthly_price', label: 'Marketplace listing fee (USD/month)' },
   { key: 'currency', label: 'Currency' },
   { key: 'billing_interval', label: 'Billing Interval' },
@@ -1173,7 +1178,7 @@ function livePhotos(item) { return previewPhotos(item).filter(u => !brokenPhotos
                     <p class="preview-desc-text">{{ previewItem[f.key] || '—' }}</p>
                   </template>
                   <template v-else>
-                    <span :class="previewItem[f.key] ? '' : 'muted-val'">{{ previewItem[f.key] ?? '—' }}</span>
+                    <span style="white-space:pre-wrap" :class="previewItem[f.key] ? '' : 'muted-val'">{{ f.fmt ? f.fmt(previewItem[f.key]) : previewItem[f.key] ?? '—' }}</span>
                   </template>
                 </div>
               </div>

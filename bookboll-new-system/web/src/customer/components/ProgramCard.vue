@@ -44,7 +44,7 @@ const distance = computed(() => {
       <span v-if="distance" class="pc-dist"><MapPin :size="11" /> {{ distance }}</span>
     </div>
     <div class="pc-body">
-      <div class="pc-name">{{ program.name }}</div><small class="pc-sport">Contact the academy to join</small>
+      <div class="pc-name">{{ program.name }}</div><small class="pc-sport">Contact the provider to join</small>
       <div class="pc-foot">
         <span v-if="Number(program.price)>0" class="pc-price">{{ program.currency }} {{ Number(program.price || 0).toLocaleString() }}<span class="pc-per">/{{ program.interval || 'month' }}</span></span>
         <span v-if="!Number(program.price)" class="pc-price">Contact for pricing</span>

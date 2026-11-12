@@ -21,6 +21,7 @@ export const FEATURE_DESTINATIONS = [
   entry('listings', 'Locations & listings', 'Manage venues, courts, prices and opening hours.', 'Day to day', '/listings', 'add location venue court space resources price availability hours schedule online payment options'),
   entry('memberships', 'Membership listings', 'Advertise your academy and manage monthly listing payments.', 'Day to day', '/memberships', 'membership subscriptions gym academy classes create listing contact phone marketplace subscription pricing'),
   entry('customers', 'Customers', 'Find customer profiles, bookings and contact details.', 'Customers', '/customers', 'crm people clients history loyalty points'),
+  entry('membership-members', 'Membership subscribers & attendance', 'Add offline members, manage cancellations and record attendance or payments received.', 'Customers', '/subscriptions', 'member membership subscriber enrol enrollment offline manual cancel cancellation pause renew attendance check in register gym academy'),
   entry('special-days', 'Special days & closures', 'Change hours for holidays and one-off dates.', 'Day to day', '/special-days', 'holiday close closed block dates opening hours'),
   entry('promos', 'Promo codes', 'Manage discounts and promotional codes.', 'Marketing', '/promocodes', 'coupon voucher promotion discount sale offer'),
   entry('email', 'Email sender', 'Configure the email address used for messages.', 'Marketing', '/email-sender', 'smtp email delivery sender notifications'),

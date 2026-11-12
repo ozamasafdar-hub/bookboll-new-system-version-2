@@ -9,6 +9,10 @@
  */
 
 export const MEMBERSHIP_CATEGORIES = [
+  { key: 'club', label: 'Club', blurb: 'Sports clubs and association memberships', subcategories: ['Football','Padel','Cricket','Badminton','Tennis','Other'] },
+  { key: 'camp', label: 'Camp', blurb: 'Holiday camps and seasonal programmes', subcategories: ['Multi-sport','Football','Swimming','Cricket','Other'] },
+  { key: 'coaching', label: 'Coaching', blurb: 'Personal coaching and lesson packs', subcategories: ['Padel','Tennis','Badminton','Fitness','Other'] },
+  { key: 'other', label: 'Other', blurb: 'Other memberships and activity programmes', subcategories: ['Other'] },
   {
     key: 'gym',
     label: 'Gym',
@@ -108,7 +112,7 @@ export function audienceMatches(filterKey, audience, gender) {
 
 // Normalise any stored value to a known category key (missing/legacy → 'academy').
 export function normMembershipCategory(key) {
-  const k = String(key || '').toLowerCase()
+  const k = key === 'classes' ? 'class' : String(key || '').toLowerCase()
   return MEMBERSHIP_CATEGORY_BY_KEY[k] ? k : 'academy'
 }
 export function membershipCategoryLabel(key) { return MEMBERSHIP_CATEGORY_BY_KEY[normMembershipCategory(key)].label }

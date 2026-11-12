@@ -347,8 +347,8 @@
     },
     {
       "id": "P23_MEMBERSHIP_CONTACT_LISTINGS",
-      "rule": "Academies are contact listings. Marketplace subscriptions cost USD 20/month per listing by default with global/country/city overrides, independent of Premium. Own-site visibility requires active paid Premium. Verified paid invoices grant marketplace access through the paid period. Listing fees are Bookboll B2B income and never booking GMV, provider wallet earnings or customer academy subscriptions. Preserve legacy records; retire legacy customer billing before production.",
-      "production_acceptance": "Prove tenant isolation, approved paid-period marketplace visibility, active paid Premium own-site visibility, signed invoice replay and refunds, country/city rate inheritance and retired operational APIs. Verify all legacy customer Stripe renewals ended without deleting history; attach Stripe test-mode lifecycle evidence.",
+      "rule": "Academies are contact listings. Marketplace subscriptions cost USD 20/month per listing by default with global/country/city overrides, independent of Premium. Own-site visibility requires active paid Premium. Verified paid invoices grant marketplace access through the paid period. Listing fees are Bookboll B2B income and never booking GMV, provider wallet earnings or customer academy subscriptions. Providers manage offline members separately without a gateway. Do not import dummy legacy subscribers; retire any real legacy customer billing before production.",
+      "production_acceptance": "Prove tenant isolation, approved paid-period marketplace visibility, active paid Premium own-site visibility, signed invoice replay and refunds, country/city rate inheritance and retired customer online-enrolment APIs. Verify all legacy customer Stripe renewals ended independently of dummy-record cleanup; attach Stripe test-mode lifecycle evidence.",
       "implementation": [
         "bookboll-BACKEND/app/Support/MembershipListingPolicy.php",
         "bookboll-BACKEND/app/Services/MembershipListingService.php",
@@ -357,6 +357,19 @@
       "tests": [
         "bookboll-BACKEND/tests/Feature/MembershipListingTest.php",
         "bookboll-new-system/admin/tests/marketSettings.test.js"
+      ]
+    },
+    {
+      "id": "P24_MANUAL_PROVIDER_MEMBERS",
+      "rule": "Membership enrolment and academy payments happen offline. Authorised provider staff can manage a private member register, lifecycle, attendance and offline receipts without Stripe, Premium or paid marketplace placement. Manual receipts never enter platform payments, GMV or wallets. Do not import dummy legacy subscribers.",
+      "production_acceptance": "Prove business and jurisdiction isolation, read-only denial, lifecycle and date validation, unique attendance and idempotent receipts, receipt void audit, public/private data separation and zero platform financial writes.",
+      "implementation": [
+        "bookboll-BACKEND/app/Http/Controllers/ProviderMemberController.php",
+        "bookboll-BACKEND/database/migrations/2026_11_13_000001_create_provider_membership_register.php",
+        "bookboll-new-system/admin/src/pages/ProviderMembers.vue"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/ProviderMemberTest.php"
       ]
     }
   ],

@@ -26,6 +26,7 @@ class ClassProgram extends Model
         'mapped_owner_user_id',
         'contact_phone',
         'schedule_description',
+        'listing_details',
         'name',
         'description',
         'sport_category',
@@ -75,6 +76,7 @@ class ClassProgram extends Model
     ];
 
     protected $casts = [
+        'listing_details' => 'array',
         'listing_ids'           => 'array',
         'day_of_week_mask'      => 'array',
         'images'                => 'array',

@@ -28,7 +28,7 @@ import Approvals from './pages/Approvals.vue'
 import AuditLogs from './pages/AuditLogs.vue'
 import Settings from './pages/Settings.vue'
 import WalletPage from './pages/Wallet.vue'
-import Subscriptions from './pages/Subscribers.vue'
+import Subscriptions from './pages/ProviderMembers.vue'
 import Moderation from './pages/Moderation.vue'
 import Brand from './pages/Brand.vue'
 import Banners from './pages/Banners.vue'
@@ -61,7 +61,7 @@ const router = createRouter({
     admin('/nav/:group', GroupNav),
     admin('/dashboard', Dashboard),
     admin('/bookings', Bookings),
-    { path: '/checkin', redirect: '/memberships' },
+    { path: '/checkin', redirect: '/subscriptions' },
     admin('/calendar', Calendar),
     admin('/listings', Listings),
     admin('/memberships', ClassesSubscriptions),
@@ -87,7 +87,7 @@ const router = createRouter({
     admin('/settings', Settings),
     admin('/wallet', WalletPage),
     admin('/wallet/:purpose', WalletPage),
-    { path: '/subscriptions', redirect: '/memberships' },
+    admin('/subscriptions', Subscriptions),
 
     { path: '/', redirect: '/admin' },
     { path: '/classes', redirect: '/memberships' },

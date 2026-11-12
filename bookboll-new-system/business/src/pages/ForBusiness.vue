@@ -101,7 +101,7 @@ const activeWorkflow = ref('bookings')
 const workflows = [
   { key: 'bookings', icon: CalendarCheck, title: 'Run your bookings', description: 'See availability, add walk-ins and keep every court or room on the same calendar.', items: ['Set opening hours and booking lengths', 'Offer peak-time prices and session extensions', 'Give your team access to the right locations'] },
   { key: 'payments', icon: CreditCard, title: 'Keep payments clear', description: 'Let customers pay online or pay a deposit and settle the rest when they arrive.', items: ['Show the full price before confirmation', 'Track payment status beside each booking', 'Connect payouts for full online payments'] },
-  { key: 'memberships', icon: Repeat, title: 'Showcase your academy', description: 'Let interested customers find your programme and contact you directly.', items: ['Marketplace: monthly subscription per listing', 'Own website: included with Premium', 'You handle enrolment and academy payments'] },
+  { key: 'memberships', icon: Repeat, title: 'Showcase your academy', description: 'Let interested customers find your programme and contact you directly.', items: ['Marketplace: monthly subscription per listing', 'Own website: included with Premium', 'Add members offline; manage attendance and cancellations', 'Record offline payments without a gateway'] },
 ]
 function moveWorkflow(event,key) {
   if (!['ArrowRight','ArrowLeft','ArrowUp','ArrowDown','Home','End'].includes(event.key)) return

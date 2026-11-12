@@ -442,6 +442,18 @@ Route::middleware(['auth:sanctum'])->group(function () {
         });
 
         Route::get('membership-listings', [\App\Http\Controllers\MembershipListingController::class, 'index'])->middleware('capability:view_listings,manage_listings');
+        Route::middleware('capability:view_subscriptions,manage_subscriptions')->group(function () {
+            Route::get('provider-members', [\App\Http\Controllers\ProviderMemberController::class, 'index']);
+            Route::get('provider-members/{id}', [\App\Http\Controllers\ProviderMemberController::class, 'show']);
+        });
+        Route::middleware('capability:manage_subscriptions')->group(function () {
+            Route::post('provider-members', [\App\Http\Controllers\ProviderMemberController::class, 'store']);
+            Route::put('provider-members/{id}', [\App\Http\Controllers\ProviderMemberController::class, 'update']);
+            Route::post('provider-members/{id}/state', [\App\Http\Controllers\ProviderMemberController::class, 'state']);
+            Route::post('provider-members/{id}/attendance', [\App\Http\Controllers\ProviderMemberController::class, 'attendance']);
+            Route::post('provider-members/{id}/payments', [\App\Http\Controllers\ProviderMemberController::class, 'payment']);
+            Route::post('provider-members/{id}/payments/{payment}/void', [\App\Http\Controllers\ProviderMemberController::class, 'voidPayment']);
+        });
         Route::post('membership-listings/{id}/checkout', [\App\Http\Controllers\MembershipListingController::class, 'checkout'])->middleware('capability:manage_listings');
         Route::post('membership-listings/{id}/billing', [\App\Http\Controllers\MembershipListingController::class, 'billing'])->middleware('capability:manage_listings');
         // Memberships & subscriptions

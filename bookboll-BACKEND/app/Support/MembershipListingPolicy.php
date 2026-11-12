@@ -49,6 +49,6 @@ class MembershipListingPolicy
     }
     public static function retired()
     {
-        return sendError('Memberships are now contact listings. Contact the academy directly for enrolment, payments and attendance.', ['membership_model' => 'contact_listing'], 410);
+        return sendError('Online membership enrolment and customer billing are unavailable. Providers manage offline enrolments in the member register.', ['membership_model' => 'contact_listing_manual_register'], 410);
     }
 }

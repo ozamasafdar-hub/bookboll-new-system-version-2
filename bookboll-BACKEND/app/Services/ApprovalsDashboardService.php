@@ -238,6 +238,7 @@ class ApprovalsDashboardService
             $pg->update([
                 'contact_phone' => $pc['contact_phone'] ?? $pg->contact_phone,
                 'schedule_description' => $pc['schedule_description'] ?? $pg->schedule_description,
+                'listing_details' => $pc['listing_details'] ?? $pg->listing_details,
                 'name'            => $pc['name'] ?? $pg->name,
                 'description'     => $pc['description'] ?? $pg->description,
                 'photo_url'       => $pc['photo_url'] ?? $pg->photo_url,
@@ -425,6 +426,7 @@ class ApprovalsDashboardService
             'coach_name'               => $p->coach_name,
             'contact_phone' => $p->contact_phone,
             'schedule_description' => $p->schedule_description,
+            'listing_details' => $p->listing_details ?? [],
             'listing_monthly_price' => \App\Support\MembershipListingPolicy::monthlyPrice($p),
             'monthly_price'            => (float) $p->monthly_price,
             'currency'                 => $p->currency,
