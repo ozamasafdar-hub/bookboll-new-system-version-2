@@ -12,6 +12,8 @@ The business ID is the website/catalog boundary. Ownerless sites must not fall t
 
 Busy venue columns expand to maintain 184px per simultaneous booking. Each booking remains individually clickable; no striped aggregate blocks. Cards show customer, listing and time. Missing customer data is explicitly labelled. Overnight bookings add a day to their end time and extend the grid; clicking after midnight sets the next date. Customer names come from the dashboard booking serializer's eager-loaded user.
 
+Calendar, booking details, table status filters and activity charts use the same paid-deposit confirmation rule as customer bookings. An old pending booking with a paid deposit is displayed as confirmed while its remaining payment stays pending. `recorded_booking_status` preserves the historical value; reading reports does not rewrite bookings or receipts. Refunded deposits do not confirm a booking, and cancelled/completed bookings keep their terminal status.
+
 ## Payment setup replaces Bookings wallet
 
 `/payment-setup` is the provider connection page and platform oversight view. Legacy wallet URLs redirect here (retired membership wallet still redirects to memberships). Payments remains the transaction/reporting page. A legacy wallet marked active is **not proof of a Stripe connection**.

@@ -7,6 +7,16 @@ use Illuminate\Support\Facades\DB;
 /** Read-only activity. Each bookings.id is counted once, never once per payment. */
 final class BookingActivity
 {
+    /** Mirrors Booking::customer_status so filters and charts agree with the calendar. */
+    public static function statusSql(): string
+    {
+        return "CASE WHEN bookings.status = 'pending' AND (
+            EXISTS (SELECT 1 FROM payments dp WHERE dp.booking_id = bookings.id AND dp.type = 'deposit' AND dp.status = 'paid')
+            OR (bookings.payment_status = 'deposit_paid' AND bookings.refunded_at IS NULL AND COALESCE(bookings.refunded_amount, 0) = 0
+                AND NOT EXISTS (SELECT 1 FROM payments dp WHERE dp.booking_id = bookings.id AND dp.type = 'deposit'))
+            ) THEN 'confirmed' ELSE COALESCE(NULLIF(bookings.status, ''), 'pending') END";
+    }
+
     // Mirrors PaymentReportRules::channel, including the immutable creation stamp.
     public static function channelSql(): string
     {
@@ -28,7 +38,8 @@ final class BookingActivity
     public static function summarize($query, array $filters): array
     {
         $source = (clone $query)->reorder()->setEagerLoads([])->select('bookings.*')
-            ->selectRaw(self::channelSql().' AS activity_channel')->selectRaw(self::purposeSql().' AS activity_purpose');
+            ->selectRaw(self::channelSql().' AS activity_channel')->selectRaw(self::purposeSql().' AS activity_purpose')
+            ->selectRaw(self::statusSql().' AS activity_status');
         $base = fn () => DB::query()->fromSub(clone $source->toBase(), 'activity');
         // Counts booking activity, including unpaid reservations; never claims these are visits or receipts.
         $eligible = fn () => $base()->where('activity_purpose','booking')->whereIn('status',['pending','confirmed','completed'])
@@ -75,12 +86,12 @@ final class BookingActivity
             'walk_in_bookings'=>$count-$identified,'per_customer'=>$customers ? round($identified/$customers,2) : null,
             'repeat_customers'=>$repeat,'repeat_pct'=>$customers ? round($repeat/$customers*100,1) : null,
             'slot_blocks'=>$base()->where('activity_purpose','provider_slot_block')->count(),
-            'pending'=>$base()->where('activity_purpose','booking')->where('status','pending')->count(),
+            'pending'=>$base()->where('activity_purpose','booking')->where('activity_status','pending')->count(),
             'cancelled'=>$base()->where('status','cancelled')->count(),
             'unclassified'=>$base()->where('activity_purpose','needs_review')->count(),
             'sales'=>$sales,'series'=>$series,'grain'=>$monthly ? 'month' : 'day',
             'undated'=>$eligible()->whereNull($dateColumn)->count(),
-            'statuses'=>$group('status'),'channels'=>$group('activity_channel'),'purposes'=>$group('activity_purpose'),
+            'statuses'=>$group('activity_status'),'channels'=>$group('activity_channel'),'purposes'=>$group('activity_purpose'),
             'frequency'=>array_map(fn($key)=>['label'=>[1=>'1 booking',2=>'2 bookings',3=>'3–4 bookings',5=>'5+ bookings'][$key],'value'=>$buckets[$key]],array_keys($buckets)),
             'hours'=>$eligible()->selectRaw('HOUR(start_time) AS hour, COUNT(*) AS bookings')->whereNotNull('start_time')->groupBy('hour')->orderBy('hour')->get()
                 ->map(fn($r)=>['label'=>sprintf('%02d:00',$r->hour),'value'=>(int)$r->bookings])->all(),

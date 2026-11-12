@@ -31,6 +31,34 @@ function activityReport($test,array $filters=[]) {
     return $test->getJson('/api/admin/bookings/dashboard?'.http_build_query(array_merge(['with_activity'=>1],$filters)));
 }
 
+it('confirms paid deposits consistently in calendar, details, filters and charts while preserving unpaid balances', function () {
+    $booking = activityBooking($this, ['status'=>'pending', 'payment_status'=>'pending', 'payment_method'=>'deposit_remaining_on_arrival']);
+    Payment::create(['user_id'=>$booking->user_id, 'payment_id'=>'QA-'.Str::uuid(), 'booking_id'=>$booking->id,
+        'amount'=>20, 'currency'=>'QAR', 'status'=>'paid', 'method'=>'online', 'type'=>'deposit']);
+    $balance = Payment::create(['user_id'=>$booking->user_id, 'payment_id'=>'QA-'.Str::uuid(), 'booking_id'=>$booking->id,
+        'amount'=>80, 'currency'=>'QAR', 'status'=>'pending', 'method'=>'cash', 'type'=>'remaining']);
+    $this->getJson('/api/admin/bookings/'.$booking->id.'/crm')->assertOk()
+        ->assertJsonPath('data.booking.booking_status', 'confirmed')->assertJsonPath('data.booking.amount_paid', 20);
+    $this->getJson('/api/admin/bookings/calendar-dashboard?from=2026-11-10&to=2026-11-10')->assertOk()
+        ->assertJsonPath('data.bookings.0.booking_status', 'confirmed');
+    activityReport($this, ['status'=>'confirmed'])->assertOk()->assertJsonPath('data.pagination.total', 1)
+        ->assertJsonPath('data.activity.pending', 0)->assertJsonPath('data.activity.statuses.0.label', 'confirmed');
+    activityReport($this, ['status'=>'pending'])->assertOk()->assertJsonPath('data.pagination.total', 0);
+    expect($booking->fresh()->status)->toBe('pending')->and($balance->fresh()->status)->toBe('pending');
+});
+
+it('keeps refunded deposits pending and never revives cancelled or completed bookings in reports', function () {
+    foreach (['pending', 'cancelled', 'completed'] as $status) {
+        $booking = activityBooking($this, ['status'=>$status, 'payment_status'=>'deposit_paid']);
+        Payment::create(['user_id'=>$booking->user_id, 'payment_id'=>'QA-'.Str::uuid(), 'booking_id'=>$booking->id,
+            'amount'=>20, 'currency'=>'QAR', 'status'=>$status === 'pending' ? 'refunded' : 'paid', 'method'=>'online', 'type'=>'deposit']);
+    }
+    $data = activityReport($this)->assertOk()->json('data');
+    expect(array_count_values(array_column($data['bookings'], 'booking_status')))->toEqual(['completed'=>1,'cancelled'=>1,'pending'=>1])
+        ->and($data['activity']['pending'])->toBe(1);
+    activityReport($this, ['status'=>'pending'])->assertOk()->assertJsonPath('data.pagination.total', 1);
+});
+
 it('uses the same records for table, charts and analytics and never multiplies a booking by its receipts',function(){
     $b=activityBooking($this);
     foreach([20,80] as $amount) Payment::create(['user_id'=>$b->user_id,'payment_id'=>'QA-'.Str::uuid(),'booking_id'=>$b->id,'amount'=>$amount,'currency'=>'QAR','status'=>'paid','method'=>'online','type'=>'full']);

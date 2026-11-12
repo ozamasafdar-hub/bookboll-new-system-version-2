@@ -1517,7 +1517,7 @@ class BookingService
             : collect();
 
         $bookingQuery = $this->bookingModel::query()
-            ->with(['listing:id,name,venue_id,calendar_color', 'venue:id,name', 'user:id,name'])
+            ->with(['listing:id,name,venue_id,calendar_color', 'venue:id,name', 'user:id,name', 'payments'])
             ->whereBetween('date', [$from, $to]);
 
         if ($venueIds) {
@@ -4578,7 +4578,7 @@ class BookingService
             if (in_array(BookingStatus::CONFIRMED, $statuses, true)) {
                 $statuses[] = BookingStatus::COMPLETED;
             }
-            $query->whereIn('bookings.status', array_values(array_unique($statuses)));
+            $query->whereIn(DB::raw(BookingActivity::statusSql()), array_values(array_unique($statuses)));
         }
         if ($f['payment_method']) { $query->whereIn('bookings.payment_method', $f['payment_method']); }
         if ($f['listing_id'])     { $query->whereIn('bookings.listing_id', $f['listing_id']); }
@@ -4670,7 +4670,7 @@ class BookingService
         match ($sort) {
             'booking_date'   => $query->orderBy('bookings.date', $dir)->orderBy('bookings.start_time', $dir),
             'total'          => $query->orderBy('bookings.total_price', $dir),
-            'booking_status' => $query->orderBy('bookings.status', $dir),
+            'booking_status' => $query->orderByRaw(BookingActivity::statusSql().' '.$dir),
             'payment_status' => $query->orderBy('bookings.payment_status', $dir),
             // Sorting by a related name needs the join the table's column implies.
             'customer'       => $query->leftJoin('users', 'users.id', '=', 'bookings.user_id')
@@ -5636,7 +5636,8 @@ class BookingService
             // totals with nothing to format them with — the list endpoint merged
             // its own currency in afterwards and so looked correct by contrast.
             'currency'       => $currency ?? $this->bookingCurrency($b),
-            'booking_status' => $b->status,
+            'booking_status' => $b->customer_status,
+            'recorded_booking_status' => $b->status,
             'payment_status' => $paymentStatus,
             'payment_method' => $this->toDashboardPaymentMethod($b->payment_method),
             'origin'             => $b->origin,
