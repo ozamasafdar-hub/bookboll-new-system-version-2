@@ -112,7 +112,7 @@ const filtered = computed(() => {
     </div>
     <div v-if="loading" class="discover-loading" role="status">Finding memberships…</div>
     <template v-else><div v-if="filtered.length" class="discover-result-head"><h2>{{ filtered.length }} memberships to explore</h2><p>Choose a plan that fits your routine</p></div><div v-if="filtered.length" class="cgrid"><ProgramCard v-for="p in filtered" :key="p.id" :program="{ ...p, cityName: selectedCity?.name }" /></div>
-      <div v-else class="discover-empty"><Dumbbell :size="40" /><h2>{{ q || activeFilters ? 'No memberships match your search' : 'Memberships are on their way' }}</h2><p>{{ q || activeFilters ? 'Try another activity or clear the filters to explore all memberships.' : 'Gym passes, classes and academy programs in ' + (selectedCity?.name || 'your city') + ' will appear here as businesses add them.' }}</p><button v-if="q || activeFilters" class="discover-action" @click="q='';clearFilters()">Clear search &amp; filters</button></div>
+      <div v-else class="discover-empty"><Dumbbell :size="40" /><h2>{{ q || activeFilters ? 'No memberships match your search' : 'Memberships are on their way' }}</h2><p>{{ q || activeFilters ? 'Try another activity or clear the filters to explore all memberships.' : 'Gym, class and academy contact listings in ' + (selectedCity?.name || 'your city') + ' will appear here as businesses add them.' }}</p><button v-if="q || activeFilters" class="discover-action" @click="q='';clearFilters()">Clear search &amp; filters</button></div>
     </template>
     <!-- Provider recruitment — straight after the listings, BEFORE the SEO sections -->
     <RecruitBanner :city-name="selectedCity?.name" category="membership" />

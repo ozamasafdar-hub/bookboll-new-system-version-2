@@ -441,15 +441,18 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::put('wallet-payouts/transactions/{id}', [WalletPayoutController::class, 'updateTransaction'])->name('wallet-payouts.transactions.update');
         });
 
+        Route::get('membership-listings', [\App\Http\Controllers\MembershipListingController::class, 'index'])->middleware('capability:view_listings,manage_listings');
+        Route::post('membership-listings/{id}/checkout', [\App\Http\Controllers\MembershipListingController::class, 'checkout'])->middleware('capability:manage_listings');
+        Route::post('membership-listings/{id}/billing', [\App\Http\Controllers\MembershipListingController::class, 'billing'])->middleware('capability:manage_listings');
         // Memberships & subscriptions
-        Route::middleware('capability:view_subscriptions,manage_subscriptions')->group(function () {
+        Route::middleware('capability:view_listings,manage_listings')->group(function () {
             Route::get('subscriptions/dashboard', [ClassMembershipController::class, 'dashboard'])->name('subscriptions.dashboard');
             Route::post('subscriptions/dashboard', [ClassMembershipController::class, 'store'])->name('subscriptions.dashboard.store');
             Route::post('subscriptions/dashboard/bulk-cancel', [ClassMembershipController::class, 'bulkCancel'])->name('subscriptions.dashboard.bulk-cancel');
-            Route::post('subscriptions/programs', [ClassMembershipController::class, 'storeProgram'])->name('subscriptions.programs.store');
-            Route::put('subscriptions/programs/{id}', [ClassMembershipController::class, 'updateProgram'])->name('subscriptions.programs.update');
-            Route::patch('subscriptions/programs/{id}/state', [ClassMembershipController::class, 'setProgramState'])->name('subscriptions.programs.state');
-            Route::delete('subscriptions/programs/{id}', [ClassMembershipController::class, 'destroyProgram'])->name('subscriptions.programs.destroy');
+            Route::post('subscriptions/programs', [ClassMembershipController::class, 'storeProgram'])->middleware('capability:manage_listings')->name('subscriptions.programs.store');
+            Route::put('subscriptions/programs/{id}', [ClassMembershipController::class, 'updateProgram'])->middleware('capability:manage_listings')->name('subscriptions.programs.update');
+            Route::patch('subscriptions/programs/{id}/state', [ClassMembershipController::class, 'setProgramState'])->middleware('capability:manage_listings')->name('subscriptions.programs.state');
+            Route::delete('subscriptions/programs/{id}', [ClassMembershipController::class, 'destroyProgram'])->middleware('capability:manage_listings')->name('subscriptions.programs.destroy');
             Route::get('subscriptions/dashboard/{id}', [ClassMembershipController::class, 'show'])->name('subscriptions.dashboard.show');
             Route::get('subscriptions/dashboard/{id}/payments', [ClassMembershipController::class, 'payments'])->name('subscriptions.dashboard.payments');
             // The customer's own saved cards, so staff pick a stored method
@@ -549,7 +552,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
         // Door check-in (admin app QR scanner)
         // Door check-in
-        Route::middleware('capability:view_subscriptions,manage_subscriptions')->group(function () {
+        Route::middleware('capability:view_listings,manage_listings')->group(function () {
             Route::prefix('checkin')->name('checkin.')->group(function () {
                 Route::get('lookup', [CheckInController::class, 'lookup'])->name('lookup');
                 Route::get('recent', [CheckInController::class, 'recent'])->name('recent');

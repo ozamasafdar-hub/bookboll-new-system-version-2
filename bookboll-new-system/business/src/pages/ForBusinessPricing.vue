@@ -24,9 +24,10 @@ const CORE_ROWS = [
   { label: 'Free branded booking website (yourclub.bookboll.com)' },
   { label: 'Bookboll marketplace listing' },
   { label: 'Court, venue & activity bookings' },
-  { label: 'Memberships & academy programs' },
+  { label: 'Membership listings on your own website', free: 'Premium required', premium: 'Included' },
+  { label: 'Marketplace membership listing', free: 'USD 20/month per listing*', premium: 'USD 20/month per listing*' },
   { label: 'Online payments & payout wallet' },
-  { label: 'Calendar, staff accounts & QR check-in' },
+  { label: 'Calendar & staff accounts' },
 ]
 
 const PRICING_FAQS = [
@@ -39,7 +40,7 @@ const PRICING_FAQS = [
   { q: 'What does Premium cost?',
     a: `US$${PREMIUM_YEARLY_TOTAL} per year, billed annually. There is no monthly plan or free trial.` },
   { q: 'Can I switch or cancel later?',
-    a: 'Yes. You can upgrade to annual Premium or cancel its next renewal at any time. You keep Premium until the end of the paid year, then return to Free from your dashboard — your website, listings and data stay as they are.' },
+    a: 'Yes. You can upgrade to annual Premium or cancel its next renewal at any time. You keep Premium until the end of the paid year, then return to Free from your dashboard — your booking website and stored data remain. Own-website membership listings become hidden when Premium ends.' },
 ]
 
 // SoftwareApplication LD with BOTH plan tiers — lets search engines show the
@@ -54,16 +55,16 @@ const PRICING_LD = {
   description: 'Booking software and a free branded website for sports venues, gyms and academies — free forever plan, annual Premium growth toolkit.',
   offers: [
     { '@type': 'Offer', name: 'Free', price: '0', priceCurrency: 'USD',
-      description: 'No monthly subscription fee. Booking website, marketplace listing, memberships and payments. Standard booking commissions apply on both website and marketplace.' },
+      description: 'No monthly subscription fee. Booking website, venue marketplace listings and booking payments. Membership marketplace exposure is a separate monthly fee. Standard booking commissions apply on both website and marketplace.' },
     { '@type': 'Offer', name: 'Premium (annual)', price: String(PREMIUM_YEARLY_TOTAL), priceCurrency: 'USD',
-      description: 'US$588 billed annually, no free trial. Paid Premium halves own-website booking commission; marketplace rates stay the same.' },
+      description: 'US$588 billed annually, no free trial. Paid Premium uses the configured own-website booking rate; marketplace rates stay the same.' },
   ],
   publisher: { '@type': 'Organization', name: 'Bookboll', url: 'https://bookboll.com/' },
 }
 
 useSeo({
   exactTitle: 'Pricing — Free & Premium Plans | Bookboll for Business',
-  description: `Bookboll for Business: no monthly subscription on Free. Annual Premium at US$${PREMIUM_YEARLY_TOTAL}/year halves own-website booking commission and adds marketing tools. Booking commissions apply on both plans.`,
+  description: `Bookboll for Business: no monthly subscription on Free. Annual Premium at US$${PREMIUM_YEARLY_TOTAL}/year adds own-website membership listings and marketing tools. Booking commissions apply on both plans.`,
   path: '/pricing',
   jsonLd: [PRICING_LD, faqLd(PRICING_FAQS)],
 })
@@ -126,7 +127,7 @@ const open = ref(-1)
       </div>
       <div class="fbp-note">
         <Info :size="14" />
-        <span>Subscription prices are in USD. Premium is ${{ PREMIUM_YEARLY_TOTAL }} once a year with no free trial. Booking commissions apply separately. Optional extras: a custom domain (one-time fee). <router-link to="/terms" class="fbp-link">Provider terms apply</router-link>.</span>
+        <span>Subscription prices are in USD. Premium is ${{ PREMIUM_YEARLY_TOTAL }} once a year with no free trial. Booking commissions apply separately. *Marketplace membership listings default to USD 20 per listing each month on both plans; country/city rates may differ. Customers enrol and pay the academy directly. Optional extras: a custom domain (one-time fee). <router-link to="/terms" class="fbp-link">Provider terms apply</router-link>.</span>
       </div>
     </section>
 

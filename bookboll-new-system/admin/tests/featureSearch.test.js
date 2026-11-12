@@ -4,12 +4,12 @@ import { searchFeatures, FEATURE_DESTINATIONS } from '../src/lib/featureSearch.j
 import { CAP } from '../src/lib/permissions.js'
 
 const owner = { role: 'provider_admin', providerScoped: true }
-test('online payments points to both payout setup flows, including a conversational query', () => {
+test('online payments finds booking payouts without retired membership wallets', () => {
   for (const query of ['online payments', 'how do I set up online payments', 'add payout method', 'get paid']) {
     const results = searchFeatures(query, owner)
-    assert.deepEqual(new Set(results.slice(0, 2).map(item => item.id)), new Set(['booking-payout', 'membership-payout']))
+    assert.equal(results[0]?.id, 'booking-payout')
+    assert.ok(!results.some(item => item.to.includes('/wallet/subscription')))
     assert.equal(results.find(item => item.id === 'booking-payout').to, '/wallet/bookings?setup=payout')
-    assert.equal(results.find(item => item.id === 'membership-payout').to, '/wallet/subscription?setup=payout')
   }
 })
 test('synonyms, partial words and small typos find the relevant features', () => {

@@ -5,9 +5,7 @@ import { canAccessPage, can, CAP, PLATFORM_ROLES } from './permissions.js'
 const entry = (id, title, description, group, to, keywords = '', extra = {}) => ({ id, title, description, group, to, keywords, ...extra })
 export const FEATURE_DESTINATIONS = [
   entry('booking-payout', 'Set up booking payouts', 'Connect how you get paid for online venue bookings.', 'Booking wallet', '/wallet/bookings?setup=payout', 'online payments accept cards credit debit stripe bank account add payout method receive money get paid payment gateway', { providerOnly: true, capability: CAP.MANAGE_PAYOUTS }),
-  entry('membership-payout', 'Set up membership payouts', 'Choose a payout method for membership earnings.', 'Membership wallet', '/wallet/subscription?setup=payout', 'online payments accept cards credit debit stripe bank account add payout method receive money get paid payment gateway recurring payments', { providerOnly: true, capability: CAP.MANAGE_PAYOUTS }),
   entry('booking-wallet', 'Booking wallet', 'View venue earnings, balances and withdrawals.', 'Money', '/wallet/bookings', 'booking online payments payout balance cash out withdraw money bank stripe'),
-  entry('membership-wallet', 'Membership wallet', 'View membership earnings and payouts.', 'Money', '/wallet/subscription', 'membership subscription online payments payout balance cash out withdraw money bank stripe'),
   entry('payments', 'Payments', 'Review payments and reconcile transactions.', 'Money', '/payments', 'paid unpaid receipts invoices payment history cash card refund'),
   entry('branding', 'Website logo & colours', 'Change your website name, logo and brand colours.', 'My website', '/brand?tab=branding', 'design customize customise branding appearance color theme upload photo picture name tagline'),
   entry('sections', 'Show or hide website sections', 'Choose the content visitors see on your site.', 'My website', '/brand?tab=sections', 'design editor homepage layout visibility hide show listings memberships about contact', { providerOnly: true }),
@@ -21,9 +19,7 @@ export const FEATURE_DESTINATIONS = [
   entry('calendar', 'Calendar', 'See availability and manage your schedule.', 'Day to day', '/calendar', 'schedule slots time availability quick booking reservation'),
   entry('bookings', 'Bookings', 'Find, update and manage reservations.', 'Day to day', '/bookings', 'reservation cancel reschedule customer booking refund'),
   entry('listings', 'Locations & listings', 'Manage venues, courts, prices and opening hours.', 'Day to day', '/listings', 'add location venue court space resources price availability hours schedule online payment options'),
-  entry('memberships', 'Membership programs', 'Set up plans, classes and academies.', 'Day to day', '/memberships', 'membership subscriptions gym academy classes create program recurring billing pricing'),
-  entry('subscribers', 'Membership subscribers', 'Review and manage customer subscriptions.', 'Customers', '/subscriptions', 'members subscriber cancel pause renew recurring billing'),
-  entry('checkin', 'Member check-in', 'Check attendance and validate member access.', 'Customers', '/checkin', 'qr scan attendance check in visit'),
+  entry('memberships', 'Membership listings', 'Advertise your academy and manage monthly listing payments.', 'Day to day', '/memberships', 'membership subscriptions gym academy classes create listing contact phone marketplace subscription pricing'),
   entry('customers', 'Customers', 'Find customer profiles, bookings and contact details.', 'Customers', '/customers', 'crm people clients history loyalty points'),
   entry('special-days', 'Special days & closures', 'Change hours for holidays and one-off dates.', 'Day to day', '/special-days', 'holiday close closed block dates opening hours'),
   entry('promos', 'Promo codes', 'Manage discounts and promotional codes.', 'Marketing', '/promocodes', 'coupon voucher promotion discount sale offer'),

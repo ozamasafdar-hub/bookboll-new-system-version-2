@@ -43,3 +43,12 @@ test('bad percentages are detected even when the field belongs to another editor
     assert.equal(validateMarketDraft(draft),null)
   }
 })
+
+test('listing subscriptions use a USD amount with inheritance, independently of percentages', () => {
+  const draft=marketDraft({overrides:{}})
+  assert.equal(marketValue(effectiveDraft(draft,{...parent,membership_listing_monthly:20}),'membership_listing_monthly'),'USD 20.00')
+  for (const value of [1,20,125,100000]) { draft.membership_listing_monthly=value; assert.equal(validateMarketDraft(draft),null) }
+  for (const value of ['',0,-1,100001,'invalid']) { draft.membership_listing_monthly=value; assert.equal(validateMarketDraft(draft).key,'membership_listing_monthly') }
+  draft.membership_listing_monthly=null
+  assert.equal(validateMarketDraft(draft),null)
+})

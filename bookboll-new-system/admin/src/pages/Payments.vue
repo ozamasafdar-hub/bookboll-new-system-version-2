@@ -146,7 +146,7 @@ onBeforeUnmount(() => { ++requestId; clearTimeout(timer) })
 <template>
   <div class="page payments-page">
     <header class="page-header">
-      <div><h1>Payments</h1><p>{{ platform ? 'Bookboll earnings, venue collections and provider sales.' : 'Your collections, outstanding balances and Bookboll fees.' }}</p></div>
+      <div><h1>Payments</h1><router-link v-if="can(CAP.MANAGE_LISTINGS)" to="/memberships?tab=billing">Membership listing subscription payments ↗</router-link><p>{{ platform ? 'Bookboll earnings, venue collections and provider sales.' : 'Your collections, outstanding balances and Bookboll fees.' }}</p></div>
       <div class="pay-actions"><button class="btn" :disabled="loading" @click="load(true)"><RefreshCw :size="15" /> Refresh</button><button v-if="can(CAP.EXPORT_PAYMENTS)" class="btn" :disabled="exporting || !ready || loading || !!invalid" @click="exportRows"><Download :size="15" /> {{ exporting ? 'Exporting…' : 'Export CSV' }}</button></div>
     </header>
 

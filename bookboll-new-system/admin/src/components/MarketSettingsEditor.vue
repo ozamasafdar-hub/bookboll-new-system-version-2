@@ -24,11 +24,11 @@ onMounted(load)
 function close() { if (busy.value) return; if (changes.value.length) discard.value = true; else emit('close') }
 function resetSection() { for (const f of group.value.fields) values.value[f.key] = null }
 function setSource(field, source) {
-  values.value[field.key] = source === 'inherit' ? null : field.boolean ? Boolean(effective.value[field.key]) : Number.parseFloat(marketValue(effective.value, field.key))
+  values.value[field.key] = source === 'inherit' ? null : field.boolean ? Boolean(effective.value[field.key]) : (field.currency ? Number(effective.value[field.key] ?? 20) : Number.parseFloat(marketValue(effective.value, field.key)))
 }
 function valueLabel(field, draft) {
   if (draft[field.key] === null) return props.scope === 'global' ? field.automatic : `Use ${parentName} default`
-  return field.boolean ? (draft[field.key] ? 'Enabled' : 'Disabled') : `${draft[field.key]}%`
+  return field.boolean ? (draft[field.key] ? 'Enabled' : 'Disabled') : (field.currency ? `USD ${draft[field.key]}` : `${draft[field.key]}%`)
 }
 async function save() {
   if (busy.value || !changes.value.length) return
@@ -60,11 +60,11 @@ async function save() {
                 <div class="market-controls">
                   <select v-if="!field.boolean && (scope !== 'global' || field.automatic)" :aria-label="field.label + ' setting source'" :value="values[field.key] === null ? 'inherit' : 'custom'" @change="setSource(field, $event.target.value)"><option value="inherit">{{ scope === 'global' ? 'Automatic' : 'Use ' + parentName }}</option><option value="custom">Custom rate</option></select>
                   <select v-if="field.boolean" :id="'setting-' + field.key" v-model="values[field.key]"><option v-if="scope !== 'global'" :value="null">Use {{ parentName }} · {{ config.parent[field.key] ? 'Enabled' : 'Disabled' }}</option><option :value="true">Enabled</option><option :value="false">Disabled</option></select>
-                  <div v-else class="market-percent"><input :id="'setting-' + field.key" type="number" min="0" max="100" step="0.01" :disabled="values[field.key] === null" :value="values[field.key] ?? Number.parseFloat(marketValue(effective, field.key))" @input="values[field.key] = $event.target.value === '' ? '' : Number($event.target.value)" /><span>%</span></div>
+                  <div v-else class="market-percent"><input :id="'setting-' + field.key" type="number" :min="field.currency ? 1 : 0" :max="field.currency ? 100000 : 100" step="0.01" :disabled="values[field.key] === null" :value="values[field.key] ?? (field.currency ? Number(effective[field.key] ?? 20) : Number.parseFloat(marketValue(effective, field.key)))" @input="values[field.key] = $event.target.value === '' ? '' : Number($event.target.value)" /><span>{{ field.currency ? '$' : '%' }}</span></div>
                 </div>
               </div>
               <div v-if="section === 'website'" class="market-example"><strong>On a booking worth 100</strong><div><span>Free: <b>{{ marketValue(effective, 'site_free').replace('%', '') }}</b> platform fee</span><span>Premium: <b>{{ marketValue(effective, 'site_premium').replace('%', '') }}</b> platform fee</span></div><small>Automatic examples use this market’s venue rate. A listing’s explicit marketplace rate can change the automatic website fee. Premium requires an active paid subscription.</small></div>
-              <p v-if="section === 'marketplace'" class="market-note">Listing-specific commissions and existing membership agreements take priority over these defaults.</p>
+              <p v-if="section === 'marketplace'" class="market-note">Listing-specific venue commissions take priority over these defaults.</p>
               <div v-if="changes.length" class="market-review"><button type="button" :aria-expanded="review" @click="review = !review">{{ review ? 'Hide' : 'Review' }} {{ changes.length }} unsaved change{{ changes.length === 1 ? '' : 's' }}</button><dl v-if="review"><div v-for="field in changes" :key="field.key"><dt>{{ field.label }}</dt><dd><s>{{ valueLabel(field, initial) }}</s><ArrowRight :size="13"/><b>{{ valueLabel(field, values) }}</b></dd></div></dl></div>
               <p v-if="error" class="market-error" role="alert">{{ error }}</p>
               <div v-if="discard" class="market-discard" role="alert"><strong>Discard your unsaved changes?</strong><div><button type="button" class="btn btn-secondary btn-sm" @click="discard = false">Keep editing</button><button type="button" class="btn btn-secondary btn-sm" @click="emit('close')">Discard changes</button></div></div>

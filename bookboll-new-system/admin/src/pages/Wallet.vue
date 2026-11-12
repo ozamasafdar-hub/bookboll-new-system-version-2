@@ -113,12 +113,12 @@ const providers = computed(() => {
 // Each wallet purpose is its OWN page: /wallet/subscription · /wallet/bookings (bare /wallet =
 // subscription). Purpose is derived from the route, so the sub-nav is real navigation
 // (back-button + shareable). `?purpose=` is still honoured for old deep links.
-const selectedPurpose = ref(normWalletPurpose(route.params.purpose || route.query.purpose))
+const selectedPurpose = ref('bookings')
 const purposeLabel = computed(() => WALLET_PURPOSE_LABELS[selectedPurpose.value] || 'Wallet')
 const isBookingsPurpose = computed(() => selectedPurpose.value === 'bookings')
 // Switching pages resets to the wallet list and closes any open editor.
 function applyPurpose(p) {
-  selectedPurpose.value = normWalletPurpose(p)
+  selectedPurpose.value = 'bookings'
   selectedWalletId.value = ''
   methodEditorOpen.value = false
   bookbollSetupOpen.value = false
@@ -290,7 +290,7 @@ async function changePayoutMethod() {
   const ctry = countryName(currentWallet.value.country_id)
   if (!(await askConfirm({
     title: 'Change payout method?',
-    message: `Your current ${ctry} wallet keeps its balance and your existing subscriptions keep paying into it. You'll set up a new wallet for new earnings next.`,
+    message: `Your current ${ctry} wallet keeps its balance and its historical records. You'll set up a new wallet for new earnings next.`,
     confirmText: 'Continue',
   }))) return
   const old = currentWallet.value
@@ -329,7 +329,7 @@ async function deleteWallet() {
   const ctry = countryName(w.country_id)
   if (!(await askConfirm({
     title: `Delete your ${ctry} wallet?`,
-    message: `You won't be able to take full online payments or run subscription programs in ${ctry} until you set up a wallet there again. Your transaction history is kept.`,
+    message: `You won't be able to take full online payments  in ${ctry} until you set up a wallet there again. Your transaction history is kept.`,
     danger: true, confirmText: 'Delete wallet',
   }))) return
   await apiDeleteWallet(w.id)
@@ -1586,9 +1586,7 @@ async function seedPayment(type) {
 
       <!-- ── Sub-nav: a distinct PAGE per wallet purpose (separate routes) ── -->
       <div class="wnav" role="tablist">
-        <router-link to="/wallet/subscription" class="wnav-tab" :class="{ active: selectedPurpose==='subscription' }" role="tab" :aria-selected="selectedPurpose==='subscription'">
-          <WalletIcon :size="16" /><span>Membership wallet</span>
-        </router-link>
+
         <router-link to="/wallet/bookings" class="wnav-tab" :class="{ active: selectedPurpose==='bookings' }" role="tab" :aria-selected="selectedPurpose==='bookings'">
           <Banknote :size="16" /><span>Bookings wallet</span>
         </router-link>

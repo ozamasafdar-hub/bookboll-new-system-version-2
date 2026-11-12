@@ -124,6 +124,7 @@ class NotificationSweepService
     /** @return array<int, array<string, mixed>> */
     protected function dueSubscriptions(int $ownerId, string $today, int $trialDays, int $renewalDays): array
     {
+        return []; // Contact listings do not manage academy customers.
         $programs = ClassProgram::query()
             ->where(fn ($q) => $q->where('mapped_owner_user_id', $ownerId)->orWhere('owner_user_id', (string) $ownerId))
             ->get()

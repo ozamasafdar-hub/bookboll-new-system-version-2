@@ -56,7 +56,7 @@ class WalletPayoutService
 
     public function dashboard($request)
     {
-        $wallets = ProviderWallet::query()->orderByDesc('updated_at')->get()->map(fn ($w) => $this->mapWallet($w))->values()->all();
+        $wallets = ProviderWallet::query()->where('purpose', 'bookings')->orderByDesc('updated_at')->get()->map(fn ($w) => $this->mapWallet($w))->values()->all();
 
         $withdrawals = WithdrawalRequest::query()
             ->orderByDesc('requested_at')
@@ -177,7 +177,7 @@ class WalletPayoutService
 
     public function listWallets($request)
     {
-        $q = ProviderWallet::query();
+        $q = ProviderWallet::query()->where('purpose', 'bookings');
         if ($request->filled('owner_user_id')) {
             // Match whichever key shape the wallet was filed under.
             $key = (string) $request->query('owner_user_id');
@@ -222,7 +222,7 @@ class WalletPayoutService
         // against this CHAR column, missed the wallet that already existed, and asked
         // for another. Hand back the existing row instead of minting a rival that
         // splits the balance.
-        $purposeKey = $data['purpose'] ?? 'subscription';
+        $purposeKey = $data['purpose'] ?? 'bookings';
         if (! empty($data['country_id'])) {
             $existing = ProviderWallet::query()
                 ->where('owner_user_id', $data['owner_user_id'])
@@ -308,7 +308,7 @@ class WalletPayoutService
             'patch'         => 'required|array',
         ]);
 
-        $purpose = $data['purpose'] ?? 'subscription';
+        $purpose = $data['purpose'] ?? 'bookings';
         $patch = $data['patch'];
         $fillable = (new ProviderWallet)->getFillable();
         $clean = [];

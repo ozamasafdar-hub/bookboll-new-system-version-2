@@ -166,6 +166,7 @@ class StripeService
 
     public function handleWebhookEvent(\Stripe\Event $event): void
     {
+        if (app(MembershipListingService::class)->webhook($event)) return;
         $type = $event->type;
 
         if (in_array($type, ['charge.refunded', 'refund.created', 'refund.updated', 'refund.failed'], true)) {

@@ -36,39 +36,7 @@ class ClassMembershipDashboardService
 
     public function bootstrap($request)
     {
-        $this->windDownSweep();
-
-        $programs = ClassProgram::query()->orderByDesc('created_at')->get();
-        $subscriptions = ClassSubscription::query()->orderByDesc('created_at')->get();
-
-        $sessionCounts = ClassSession::query()
-            ->selectRaw('subscription_id, count(*) as c')
-            ->groupBy('subscription_id')
-            ->pluck('c', 'subscription_id');
-
-        $sessions = ClassSession::query()
-            ->select(['id', 'subscription_id', 'program_id', 'status'])
-            ->get()
-            ->map(fn (ClassSession $s) => [
-                'id'              => $s->id,
-                'subscription_id' => $s->subscription_id,
-                'program_id'      => $s->program_id,
-                'status'          => $s->status,
-            ])
-            ->values()
-            ->all();
-
-        $providers = $this->buildProviders($programs);
-
-        return sendSuccess('Subscriptions dashboard fetched', [
-            'subscriptions' => $subscriptions->map(fn (ClassSubscription $s) => $this->mapSubscription(
-                $s,
-                (int) ($sessionCounts[$s->id] ?? 0)
-            ))->values()->all(),
-            'programs'      => $programs->map(fn (ClassProgram $p) => $this->mapProgram($p))->values()->all(),
-            'sessions'      => $sessions,
-            'providers'     => $providers,
-        ]);
+        return app(MembershipListingService::class)->index($request);
     }
 
     public function show($id)
@@ -403,42 +371,10 @@ class ClassMembershipDashboardService
      */
     public function destroyProgram(string $id)
     {
-        $program = ClassProgram::query()->find($id);
-        if (! $program) {
-            return sendError('Program not found', [], 404);
-        }
-
-        $venueId = $program->venue_id ? (int) $program->venue_id : null;
-
-        DB::beginTransaction();
-        try {
-            Booking::query()
-                ->where('program_id', $program->id)
-                ->where('origin', 'class_program')
-                ->delete();
-
-            // Explicitly clear children first in case FK cascade is missing on some envs.
-            ClassSession::query()->where('program_id', $program->id)->delete();
-            ClassSubscription::query()->where('program_id', $program->id)->delete();
-            $program->delete();
-
-            DB::commit();
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            Log::error('program destroy failed: ' . $e->getMessage(), ['exception' => $e]);
-
-            return sendError('Could not delete program.');
-        }
-
-        if ($venueId) {
-            notifyVenueStaffRefresh($venueId, [
-                'event'      => 'program_deleted',
-                'program_id' => $id,
-                'bell'       => true,
-            ]);
-        }
-
-        return sendSuccess('Program deleted');
+        $program = \App\Support\MembershipListingPolicy::scope(ClassProgram::query(), request()->user())->findOrFail($id);
+        abort_if($program->listingSubscriptions()->whereNotIn('status', ['canceled','incomplete_expired'])->exists(), 409, 'Stop the listing subscription before archiving.');
+        $program->update(['status' => 'inactive', 'show_on_marketplace' => false, 'show_on_provider_site' => false]);
+        return sendSuccess('Listing archived. Historical records are preserved.');
     }
 
     // ── Charge core ──────────────────────────────────────────────────────────

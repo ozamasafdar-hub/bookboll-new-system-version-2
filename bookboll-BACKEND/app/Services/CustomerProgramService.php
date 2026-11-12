@@ -65,7 +65,7 @@ class CustomerProgramService
         }
 
         $query = ClassProgram::query()
-            ->with('venue')
+            ->with(['venue', 'listingSubscriptions'])
             ->where('status', 'active')
             ->where(function ($q) {
                 $q->where('is_draft', false)->orWhereNull('is_draft');
@@ -163,12 +163,12 @@ class CustomerProgramService
             });
         }
 
-        $programs = $query->orderBy('sort_order')->orderBy('name')->get();
+        $programs = $query->orderBy('sort_order')->orderBy('name')->get()->filter(fn ($p) => $this->isVisible($p, $brandOwner));
 
         // A program with no venue_id shows no venue name — never borrow another
         // venue's, which would label every orphan with the same wrong place.
         // Run ProgramVenuesFromSupabaseSeeder to link imported programs.
-        $counts = $this->activeMemberCounts($programs->pluck('id')->all());
+        $counts = [];
 
         $cards = $programs->map(
             fn (ClassProgram $p) => $this->mapCard($p, (int) ($counts[$p->id] ?? 0))
@@ -191,13 +191,13 @@ class CustomerProgramService
      */
     protected function findPublicProgram(string $key): ?ClassProgram
     {
-        $program = ClassProgram::with('venue')->where('uuid', $key)->first();
+        $program = ClassProgram::with(['venue', 'listingSubscriptions'])->where('uuid', $key)->first();
         if ($program) {
             return $program;
         }
 
         return ctype_digit($key)
-            ? ClassProgram::with('venue')->whereKey((int) $key)->first()
+            ? ClassProgram::with(['venue', 'listingSubscriptions'])->whereKey((int) $key)->first()
             : null;
     }
 
@@ -222,36 +222,8 @@ class CustomerProgramService
             $openingHours = $this->venueHours((int) $venue->id);
         }
 
-        $memberCount = (int) ($this->activeMemberCounts([$program->id])[$program->id] ?? 0);
         $mapped = $this->mapProgramRow($program);
-
-        // Is the viewer already a member? This route is public, but the customer
-        // token rides along on every call, so a signed-in viewer resolves here.
-        // Enrolment is refused server-side by hasLiveMembership() — answering the
-        // same question up front is what stops the page inviting someone to sign
-        // up for a membership they already hold.
-        $viewer = auth('sanctum')->user();
-        $isMember = false;
-        $mySubscriptionId = null;
-
-        if ($viewer) {
-            $email = strtolower(trim((string) ($viewer->email ?: '')));
-            $isMember = $this->hasLiveMembership($program->id, (string) $viewer->uuid, $email);
-
-            if ($isMember) {
-                $mySubscriptionId = ClassSubscription::where('program_id', $program->id)
-                    ->whereIn('status', ['active', 'trial', 'trialing', 'paused', 'past_due'])
-                    ->where(function ($q) use ($viewer, $email) {
-                        $q->where('customer_id', $viewer->uuid);
-                        if ($email) {
-                            $q->orWhereRaw('LOWER(customer_email) = ?', [$email]);
-                        }
-                    })
-                    ->orderByDesc('started_at')
-                    ->value('uuid');
-            }
-        }
-
+        $memberCount = 0; $isMember = false; $mySubscriptionId = null;
         return sendSuccess('Program fetched', [
             'program'          => $mapped,
             'image'            => $this->firstPhoto($program),
@@ -267,7 +239,7 @@ class CustomerProgramService
     public function hours(string $uuid)
     {
         $program = $this->findPublicProgram($uuid);
-        if (! $program?->venue_id) {
+        if (! $program?->venue_id || !$this->isVisible($program, request()->query('brand_owner') ?: null)) {
             return sendSuccess('Hours', ['openingHours' => null]);
         }
 
@@ -295,6 +267,7 @@ class CustomerProgramService
 
     public function enroll(User $user, string $uuid, array $payload)
     {
+        return \App\Support\MembershipListingPolicy::retired();
         if (! $user->uuid) {
             return sendError('Please sign in to continue.');
         }
@@ -657,31 +630,7 @@ class CustomerProgramService
 
     public function isVisible(ClassProgram $p, ?string $brandOwner): bool
     {
-        if (($p->status ?: '') !== 'active') {
-            return false;
-        }
-        if ($p->is_draft) {
-            return false;
-        }
-        if ($brandOwner) {
-            $owner = $p->owner_user_id ?: (string) $p->mapped_owner_user_id;
-            if ($owner !== $brandOwner && (string) $p->mapped_owner_user_id !== $brandOwner) {
-                return false;
-            }
-
-            return $p->show_on_provider_site !== false;
-        }
-        if ($p->show_on_marketplace === false) {
-            return false;
-        }
-        if (($p->approval_status ?: 'approved') !== 'approved') {
-            return false;
-        }
-        if (($p->eligibility_status ?: 'eligible') === 'paused') {
-            return false;
-        }
-
-        return true;
+        return \App\Support\MembershipListingPolicy::visible($p, $brandOwner);
     }
 
     protected function activeMemberCounts(array $programIds): array
@@ -700,20 +649,12 @@ class CustomerProgramService
 
     protected function mapCard(ClassProgram $p, int $memberCount): array
     {
-        $mode = $this->offerModeFor($p);
-        $discount = (int) ($p->discount_months ?: 0);
-        $sessions = (int) ($p->free_trial_sessions ?: 0);
-        $tdays = (int) ($p->free_trial_days ?: 0);
-        $offerBadge = $mode === 'discount'
-            ? ($discount > 0 ? $discount.' month'.($discount !== 1 ? 's' : '').' off' : '')
-            : ($sessions > 0 ? '1 free session' : ($tdays > 0 ? $tdays.'-day free trial' : ''));
-        $price = $mode === 'discount'
-            ? $this->discountedPrice((float) $p->monthly_price, $p->billing_interval, $discount)
-            : (float) $p->monthly_price;
+        $offerBadge = ''; $memberCount = 0; $price = (float) $p->monthly_price;
         $venue = $p->venue;
 
         return [
             'id'           => $p->uuid,
+            'contact_phone' => \App\Support\MembershipListingPolicy::phone($p),
             'name'         => $p->name,
             'sport'        => $p->sport_category,
             'category'     => $p->category ?: 'academy',
@@ -736,6 +677,9 @@ class CustomerProgramService
     {
         return [
             'id'                       => $p->uuid,
+            'contact_phone' => \App\Support\MembershipListingPolicy::phone($p),
+            'schedule_description' => $p->schedule_description,
+            'membership_model' => 'contact_listing',
             'name'                     => $p->name,
             'description'              => $p->description,
             'sport_category'           => $p->sport_category,

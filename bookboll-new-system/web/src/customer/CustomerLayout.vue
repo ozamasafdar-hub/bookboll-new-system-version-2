@@ -153,7 +153,7 @@ function signOut() { customerSignOut(); menuOpen.value = false; router.push('/')
               <router-link v-if="!isWhiteLabel" :to="`/u/${customer.id}`" class="cust-menu-item" @click="menuOpen=false"><User :size="15" />{{ $t('account.myProfile') }}</router-link>
               <router-link v-if="!isWhiteLabel" to="/rewards" class="cust-menu-item" @click="menuOpen=false"><Trophy :size="15" />{{ $t('account.myRewards') }}</router-link>
               <router-link to="/my-bookings" class="cust-menu-item" @click="menuOpen=false"><CalendarCheck :size="15" />{{ $t('account.myBookings') }}</router-link>
-              <router-link to="/my-memberships" class="cust-menu-item" @click="menuOpen=false"><Dumbbell :size="15" />My Memberships</router-link>
+
               <router-link v-if="!isWhiteLabel" to="/my-games" class="cust-menu-item" @click="menuOpen=false"><CalendarDays :size="15" />{{ $t('account.myEvents') }}</router-link>
               <router-link v-if="!isWhiteLabel" to="/my-communities" class="cust-menu-item" @click="menuOpen=false"><UsersRound :size="15" />My Communities</router-link>
               <router-link to="/account" class="cust-menu-item" @click="menuOpen=false"><Settings :size="15" />{{ $t('account.settings') }}</router-link>

@@ -20,7 +20,7 @@ const allCities = computed(() => groups.value.flatMap(g => g.cities.map(c => ({ 
 
 useSeo(() => ({
   title: 'Gyms, classes & academies by city',
-  description: 'Browse gym memberships, fitness classes and sports academies by city — many with free trials and member offers — across every city on Bookboll.',
+  description: 'Browse gym memberships, fitness classes and sports academies by city — contact providers directly for availability and enrolment — across every city on Bookboll.',
   path: '/memberships',
   jsonLd: [
     { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'Memberships by city' },
@@ -33,7 +33,7 @@ useSeo(() => ({
   <div class="dir">
     <header class="dir-hero">
       <h1>Gyms, classes &amp; academies by city</h1>
-      <p>Find memberships with free trials and offers<span class="dir-cta-hint"> — pick your city to get started.</span></p>
+      <p>Find academies and contact providers directly<span class="dir-cta-hint"> — pick your city to get started.</span></p>
     </header>
 
     <div v-if="loading" class="cmsg">Loading…</div>

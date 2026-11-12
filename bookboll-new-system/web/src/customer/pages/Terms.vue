@@ -37,7 +37,7 @@ const SECTIONS = [
   { id: 'bookings', n: 3, title: 'Bookings & slot holds' },
   { id: 'payments', n: 4, title: 'Payments & deposits' },
   { id: 'refunds', n: 5, title: 'Cancellations, refunds & no-shows' },
-  { id: 'memberships', n: 6, title: 'Memberships, trials & billing' },
+  { id: 'memberships', n: 6, title: 'Academy and membership listings' },
   { id: 'offers', n: 7, title: 'Promo codes & loyalty points' },
   { id: 'events', n: 8, title: 'Community games, hangouts & tournaments' },
   { id: 'prizes', n: 9, title: 'Prize pots & event money' },
@@ -73,7 +73,7 @@ const SECTIONS = [
       <section id="account">
         <h2>2. Your account &amp; identity</h2>
         <ul>
-          <li>You need an account to complete a booking, membership or event signup. Keep your name, email and phone number accurate — they are used for confirmations and for identifying you at the venue.</li>
+          <li>You need an account to complete a booking or event signup. Keep your name, email and phone number accurate — they are used for confirmations and for identifying you at the venue.</li>
           <li>Your phone number may be verified with a one-time code (WhatsApp or SMS). One person per account; don't share accounts or impersonate others.</li>
           <li>You must be legally able to enter this agreement, or have a parent/guardian book on your behalf.</li>
         </ul>
@@ -109,15 +109,7 @@ const SECTIONS = [
         </ul>
       </section>
 
-      <section id="memberships">
-        <h2>6. Memberships, trials &amp; billing</h2>
-        <ul>
-          <li>Each membership shows its price, billing interval (e.g. monthly), any fixed end date and any intro offer <b>before</b> you subscribe. Ongoing plans renew automatically until cancelled.</li>
-          <li><b>Free trials and intro offers are once per provider.</b> You can use a given provider's introductory trial or intro discount one time only (checked by account and payment card). Rejoining later at full price is always allowed.</li>
-          <li>With a session-based trial, billing starts on your second visit; with a day-based trial, billing starts when the trial days end — unless you cancel before then.</li>
-          <li>Cancelling stops future renewals from the next period. Amounts already billed are not pro-rated or returned by Bookboll; anything beyond that is between you and the provider under their published policy.</li>
-        </ul>
-      </section>
+      <section id="memberships"><h2>6. Academy and membership listings</h2><p>Bookboll displays academy information and a contact phone so you can contact the provider directly. Availability, enrolment, academy payments, renewals, cancellations and attendance are arranged with the provider. Bookboll does not enrol you or collect academy membership payments through these listings. Confirm the programme details and price directly before enrolling.</p></section>
 
       <section id="offers">
         <h2>7. Promo codes &amp; loyalty points</h2>
@@ -158,8 +150,8 @@ const SECTIONS = [
       <section id="entry">
         <h2>10. Entry passes &amp; check-in at the venue</h2>
         <ul>
-          <li>Your bookings and active memberships come with an <b>entry pass</b>: a QR code and a short text code in your account.</li>
-          <li>Providers may ask to scan or read your pass on each visit to confirm the booking or membership is really yours and to record attendance. Showing it is part of the service — someone who cannot present a valid pass can be refused entry, and the deposit stays non-refundable.</li>
+          <li>Your bookings come with an <b>entry pass</b>: a QR code and a short text code in your account.</li>
+          <li>Providers may ask to scan or read your pass on each visit to confirm the booking is really yours and to record attendance. Showing it is part of the service — someone who cannot present a valid pass can be refused entry, and the deposit stays non-refundable.</li>
           <li>Passes, bookings and memberships are personal and <b>non-transferable</b>. Sharing your account or pass so someone else can play or train on your plan counts as abuse and can lead to refusal of entry or a ban (section 12).</li>
         </ul>
       </section>
@@ -187,7 +179,7 @@ const SECTIONS = [
       <section id="marketing">
         <h2>13. Messages &amp; marketing</h2>
         <ul>
-          <li>We and your providers send <b>service messages</b> about your bookings, memberships and events (confirmations, reminders, changes, one-time sign-in codes) by email, SMS or WhatsApp — these are part of the service.</li>
+          <li>We and your providers send <b>service messages</b> about your bookings and events (confirmations, reminders, changes, one-time sign-in codes) by email, SMS or WhatsApp — these are part of the service.</li>
           <li><b>Marketing</b> (offers &amp; news) is sent only on channels you opted in to — consent is per channel (email, SMS, WhatsApp) — and every marketing email has an unsubscribe link. You can change consent anytime in Account settings or via the unsubscribe page.</li>
           <li>Marketing from a provider you've used is sent by that provider under their own responsibility; unsubscribing from them doesn't affect your Bookboll service messages.</li>
         </ul>

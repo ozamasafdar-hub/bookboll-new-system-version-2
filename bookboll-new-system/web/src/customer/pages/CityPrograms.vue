@@ -69,7 +69,7 @@ const intro = computed(() => {
   const n = programs.value.length
   const price = range.value ? ` from ${range.value.currency} ${range.value.from.toLocaleString()}/month` : ''
   if (!n) return `We don't have any ${subjectNoun.value} listed in ${place.value.name} just yet — check back soon.`
-  return `Browse ${n} ${subjectNoun.value} in ${place.value.name}${price} — many with free trials and member offers. Compare and sign up online in seconds.`
+  return `Browse ${n} ${subjectNoun.value} in ${place.value.name}${price} — contact providers directly for availability and enrolment. Compare listings and contact the provider.`
 })
 
 // Keyword FAQ — apex marketplace only (white-label sites must not carry Bookboll
@@ -80,14 +80,9 @@ const faqs = computed(() => {
   const w = subjectNoun.value, c = place.value.name
   const price = range.value ? `${range.value.currency} ${range.value.from.toLocaleString()}/month` : 'competitive rates'
   return [
-    { q: `Do ${w} in ${c} offer free trials?`, a: `Intro offers vary per program — a free first session, a free trial period, or a discount on longer plans — and each program's page shows exactly what it includes. Free trials are limited to one per business.` },
-    { q: `How much do ${w} cost in ${c}?`, a: `Prices start from ${price} and vary by program and plan length. Each listing shows its live pricing and any intro offer or discount.` },
-    { q: `How do I sign up for ${w} in ${c}?`, a: `Open a program, pick your plan and subscribe online in a few taps. With a free trial your first charge only happens when the trial ends; otherwise billing starts at sign-up and renews on the program's stated interval.` },
-    { q: `Can I cancel a membership in ${c}?`, a: `Yes — you can cancel your renewal anytime from your account, and you won't be billed again. Refunds for time already paid follow the program's terms — see our Terms page for details.` },
-    { q: `Are there ${w} for kids in ${c}?`, a: `Yes — many academies and classes are just for kids, and every program is labelled by who it's for. Use the audience filter above to see kids-only options (plus ladies-only and men-only where offered).` },
-    { q: `How do I check in once I've joined?`, a: `Active memberships come with a digital Membership Pass — a QR code plus a short code in your account. Show it on arrival and staff scan it to record your visit.` },
-    { q: `Can I join more than one program in ${c}?`, a: `Yes — you can hold memberships at different venues and across sports. Free trials are limited to one per business, but rejoining at the regular price is always possible.` },
-    { q: `Do memberships in ${c} renew automatically?`, a: `Yes — billing renews on the program's stated interval until you cancel your renewal from your account. Depending on the provider's settings and your preferences, reminders can arrive by email, SMS or WhatsApp.` },
+    { q: `How do I join ${w} in ${c}?`, a: `Open a listing and call the academy using its contact number. The provider handles availability, enrolment and payments directly.` },
+    { q: `How much do ${w} cost in ${c}?`, a: `Advertised prices vary by academy. Confirm the final price and schedule with the provider before enrolling.` },
+    { q: `Does Bookboll manage my academy membership?`, a: `No. Bookboll helps you discover academies. Membership payments, renewals, cancellations and attendance are handled directly with the academy.` },
   ]
 })
 
@@ -104,7 +99,7 @@ const crumbs = computed(() => {
 useSeo(() => {
   if (!place.value) return { path: route.path, noindex: true, title: 'Memberships' }
   const noindex = programs.value.length === 0
-  const title = mode.value === 'category' ? `${heading.value} — free trials & offers` : heading.value
+  const title = mode.value === 'category' ? `${heading.value} — contact an academy` : heading.value
   const ld = [
     { '@context': 'https://schema.org', '@type': 'CollectionPage', name: heading.value, description: intro.value },
     breadcrumbLd(crumbs.value),

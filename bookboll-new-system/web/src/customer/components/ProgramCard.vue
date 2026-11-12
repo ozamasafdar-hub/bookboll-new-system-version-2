@@ -9,7 +9,7 @@ const props = defineProps({ program: { type: Object, required: true } })
 // Social proof: only show the "N members" pill once a program has real traction, so a
 // brand-new program never advertises "1 member". Below the threshold → hidden.
 const memberCount = computed(() => Number(props.program.memberCount) || 0)
-const showMembers = computed(() => memberCount.value >= MEMBER_COUNT_MIN)
+const showMembers = computed(() => false)
 const img = computed(() => props.program.image || '')
 const color = computed(() => props.program.color || '#7c3aed')
 const isGym = computed(() => categoryIsGym(props.program.category))
@@ -44,9 +44,10 @@ const distance = computed(() => {
       <span v-if="distance" class="pc-dist"><MapPin :size="11" /> {{ distance }}</span>
     </div>
     <div class="pc-body">
-      <div class="pc-name">{{ program.name }}</div>
+      <div class="pc-name">{{ program.name }}</div><small class="pc-sport">Contact the academy to join</small>
       <div class="pc-foot">
-        <span class="pc-price">{{ program.currency }} {{ Number(program.price || 0).toLocaleString() }}<span class="pc-per">/{{ program.interval || 'month' }}</span></span>
+        <span v-if="Number(program.price)>0" class="pc-price">{{ program.currency }} {{ Number(program.price || 0).toLocaleString() }}<span class="pc-per">/{{ program.interval || 'month' }}</span></span>
+        <span v-if="!Number(program.price)" class="pc-price">Contact for pricing</span>
         <span class="pc-foot-r"><span v-if="showMembers" class="pc-members"><Users :size="11" /> {{ memberCount.toLocaleString() }} members</span><span v-else-if="program.sport" class="pc-sport">{{ program.sport }}</span><ChevronRight :size="16" class="pc-arrow" /></span>
       </div>
     </div>

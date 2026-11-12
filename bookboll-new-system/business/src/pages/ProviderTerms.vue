@@ -41,7 +41,7 @@ const SECTIONS = [
   { id: 'listings', n: 4, title: 'Listings, review & placement' },
   { id: 'fees', n: 5, title: 'Fees, payments & deposits' },
   { id: 'wallets', n: 6, title: 'Wallets, payouts & payout reviews' },
-  { id: 'memberships', n: 7, title: 'Membership programs & subscriptions' },
+  { id: 'memberships', n: 7, title: 'Membership contact listings' },
   { id: 'premium', n: 8, title: 'Premium subscription & paid add-ons' },
   { id: 'events', n: 9, title: 'Community events hosted at your venues' },
   { id: 'website', n: 10, title: 'Your website, white-label & connected channels' },
@@ -136,21 +136,20 @@ const SECTIONS = [
         <section id="wallets">
           <h2>6. Wallets, payouts &amp; payout reviews</h2>
           <ul>
-            <li>Bookboll provides per-country wallets, split by purpose: a <b>Bookings wallet</b> (venue/court bookings) and a <b>Membership wallet</b> (membership programs). Each holds a balance in that country's currency.</li>
+            <li>Venue booking payout methods are managed through the Bookings wallet. Membership contact listings do not use a payout wallet.</li>
             <li>Your share of online payments is credited to the relevant wallet. Withdrawals are paid to the payout method on file and may be subject to verification review by Bookboll before settlement.</li>
-            <li><b>Payout methods are subject to verification, and Bookboll may pause an approved payout method</b> pending review (for example for fraud, chargeback or compliance checks). While a method is paused, features that require a ready wallet — such as full-online payments or publishing membership programs — may be unavailable until the review completes.</li>
+            <li><b>Payout methods are subject to verification, and Bookboll may pause an approved payout method</b> pending review (for example for fraud, chargeback or compliance checks). While a method is paused, features that require a ready wallet — such as full-online venue payments — may be unavailable until the review completes.</li>
             <li>Keep your payout details accurate. Bookboll may hold or reverse credits in cases of suspected fraud, chargebacks, or breach of these terms.</li>
           </ul>
         </section>
 
         <section id="memberships">
-          <h2>7. Membership programs &amp; subscriptions</h2>
-          <ul>
-            <li>Creating a membership program <b>requires a payout method on your Membership wallet first</b> — unlike venue bookings, programs cannot be published without one.</li>
-            <li>You define the plan, price, billing interval and any free trial or introductory offer; those terms are shown to the customer before they subscribe and you must honour them.</li>
-            <li><b>Intro offers are one per customer, per business.</b> Bookboll automatically limits free trials and intro discounts to once per customer for your business (checked by account email and payment card). A customer rejoining at full price is never blocked.</li>
-            <li>Recurring billing runs against the subscriber until the subscription is cancelled by you or the customer in line with your published terms. Cancelling stops future renewals; you decide — under your own policy — how to treat the current period, but must not promise refunds on Bookboll's behalf.</li>
-          </ul>
+          <h2>7. Membership contact listings</h2>
+          <ul><li>Membership listings advertise a gym, academy or programme and show the provider’s contact phone. Customers arrange enrolment, academy payments and attendance directly with the provider.</li>
+          <li>Marketplace placement requires a separate monthly subscription for each listing, on every plan. The default is USD 20 per listing per month; country or city pricing may differ. The exact rate is shown before payment.</li>
+          <li>Membership listings on a provider’s own website require an active paid Premium plan. Premium does not include marketplace listing subscriptions.</li>
+          <li>Marketplace access starts after approval and confirmed payment and lasts through the paid period. Failed renewal hides the listing when that period ends. Stopping renewal retains access through the paid period. Hiding a listing alone does not stop renewal.</li>
+          <li>Bookboll does not provide academy customer subscription billing, a membership wallet or membership check-in. Existing customer arrangements remain with the academy.</li></ul>
         </section>
 
         <section id="premium">

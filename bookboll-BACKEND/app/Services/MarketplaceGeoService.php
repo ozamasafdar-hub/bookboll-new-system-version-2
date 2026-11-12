@@ -195,7 +195,7 @@ class MarketplaceGeoService
                 $q->whereNull('eligibility_status')->orWhere('eligibility_status', '!=', 'paused');
             })
             ->whereNotNull('venue_id')
-            ->get(['venue_id', 'sport_category', 'category']);
+            ->with(['venue', 'listingSubscriptions'])->get()->filter(fn ($p) => \App\Support\MembershipListingPolicy::visible($p));
 
         foreach ($programs as $program) {
             $venue = $venueCity->get($program->venue_id);

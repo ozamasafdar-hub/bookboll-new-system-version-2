@@ -17,8 +17,8 @@ use Illuminate\Support\Facades\DB;
  * Creating and editing membership programmes, including the approval staging the
  * dashboard relies on.
  *
- * Only CONTENT (title, description, photos) needs Bookboll's approval. Operational
- * edits — price, schedule, capacity, trial — go live immediately. So a content
+ * Public content (including contact phone and schedule information) needs approval.
+ * Placement and advertised pricing changes are validated separately. So a content
  * change to a programme that is already live is STAGED in `pending_content` while
  * the approved content keeps serving, and only that goes into the review queue.
  *
@@ -37,7 +37,7 @@ class ProgramSaveService
     public const PLATFORM_COMMISSION = 15;
 
     /** Fields that require approval before customers see them. */
-    protected const CONTENT_KEYS = ['name', 'description', 'photo_url', 'images'];
+    protected const CONTENT_KEYS = ['name', 'description', 'photo_url', 'images', 'contact_phone', 'schedule_description'];
 
     public function store(Request $request)
     {
@@ -61,8 +61,7 @@ class ProgramSaveService
      * Lifecycle changes that are not content edits: activate / archive (status),
      * and Bookboll pausing or resuming a programme (eligibility).
      *
-     * Pausing takes it off the storefront, so its reserved calendar slots free up
-     * automatically — they are derived from the recurrence, never stored.
+     * Pausing removes public visibility. Contact listings never reserve calendar slots.
      */
     public function setState(Request $request, $id)
     {
@@ -131,22 +130,23 @@ class ProgramSaveService
             }
         }
 
-        // Selling a programme only on your own site, off the Bookboll Marketplace, is
-        // the `own_site_only` Premium feature (ClassesSubscriptions.vue gates the
-        // toggle). Putting it back on the marketplace is always free.
-        if (array_key_exists('show_on_marketplace', $data)
-            && filter_var($data['show_on_marketplace'], FILTER_VALIDATE_BOOLEAN) === false
-            && $existing?->show_on_marketplace !== false
-            && ! PremiumPlan::entitled($user)) {
-            return PremiumPlan::denied('own_site_only');
+        abort_if($existing && (int) $existing->venue_id !== (int) $venueId && $existing->listingSubscriptions()->whereNotIn('status', ['canceled','incomplete_expired'])->exists(), 409, 'Stop the listing subscription before moving this listing to another venue.');
+        $venue = $venueId ? Venue::findOrFail($venueId) : null;
+        $allowed = AccessScope::allowedVenueIds($user);
+        abort_if($venue && $allowed !== null && !in_array((int) $venue->id, $allowed, true), 403, 'This venue is outside your business or jurisdiction.');
+        // Ownership follows the venue, never an arbitrary browser-supplied owner.
+        $ownerId = $venue ? ((int) $venue->owner_user_id ?: null) : $ownerId;
+        $candidate = $existing ? clone $existing : new ClassProgram();
+        $candidate->fill(['venue_id' => $venue?->id, 'mapped_owner_user_id' => $ownerId, 'owner_user_id' => $ownerId]);
+        $candidate->setRelation('venue', $venue);
+        if (!empty($data['show_on_provider_site']) && !\App\Support\MembershipListingPolicy::websiteEntitled($candidate)) {
+            return sendError('Premium is required to show membership listings on this business’s website.', ['feature' => 'membership_website'], 403);
         }
-
-        $venue = $venueId ? Venue::find($venueId) : null;
-        $defaultRate = app(\App\Support\MarketSettings::class)->rate('program', $venue?->country_id, $venue?->city_id);
-        // Providers cannot set their own platform fee; country/city defaults apply.
-        // Existing agreements are retained unless platform staff explicitly edit them.
-        if (! $isAdmin || ! isset($data['commission_percentage'])) {
-            $data['commission_percentage'] = $existing?->commission_percentage ?? $defaultRate;
+        $data['contact_phone'] = trim($data['contact_phone'] ?? $venue?->phone ?? '');
+        if (!$isDraft) {
+            abort_unless($venue, 422, 'Choose a venue before publishing.');
+            $candidate->contact_phone = $data['contact_phone'];
+            abort_unless(\App\Support\MembershipListingPolicy::phoneReady($candidate), 422, 'Enter a valid academy contact phone number.');
         }
         $base = $this->buildAttributes($data, $ownerId);
 
@@ -159,6 +159,8 @@ class ProgramSaveService
         }
 
         $content = [
+            'contact_phone' => $base['contact_phone'] ?? '',
+            'schedule_description' => $base['schedule_description'] ?? '',
             'name'        => $base['name'] ?? '',
             'description' => $base['description'] ?? '',
             'photo_url'   => $base['photo_url'] ?? '',
@@ -190,7 +192,7 @@ class ProgramSaveService
                 $entersReview = true;
             }
 
-            $this->recordTrialAgreement($program, $data, $ownerId);
+
 
             return sendSuccess($existing ? 'Program updated' : 'Program created', [
                 'program'    => $program->fresh(),
@@ -272,6 +274,8 @@ class ProgramSaveService
         }
 
         $liveApproved = [
+            'contact_phone' => $existing->contact_phone ?: '',
+            'schedule_description' => $existing->schedule_description ?: '',
             'name'        => $existing->name ?: '',
             'description' => $existing->description ?: '',
             'photo_url'   => $existing->photo_url ?: '',
@@ -318,6 +322,8 @@ class ProgramSaveService
             'description' => $p->description,
             'photo_url'   => $p->photo_url,
             'images'      => is_array($p->images) ? $p->images : [],
+            'contact_phone' => $p->contact_phone,
+            'schedule_description' => $p->schedule_description,
         ];
     }
 
@@ -346,105 +352,38 @@ class ProgramSaveService
     /** Column values from the validated form, with the gym rules applied. */
     protected function buildAttributes(array $d, ?int $ownerId): array
     {
-        $isGym = ($d['category'] ?? '') === 'gym';
-
-        $attrs = [
-            'owner_user_id'            => $ownerId ? (string) $ownerId : null,
-            'mapped_owner_user_id'     => $ownerId,
-            'venue_id'                 => $d['location_id'] ?? null,
-            'location_id'              => $d['location_id'] ?? null,
-            'name'                     => $d['name'],
-            'description'              => $d['description'] ?? '',
-            'sport_category'           => $d['sport_category'] ?? '',
-            'coach_name'               => $isGym ? '' : ($d['coach_name'] ?? ''),
-            'monthly_price'            => (float) ($d['monthly_price'] ?? 0),
-            'currency'                 => $d['currency'] ?? '',
-            'billing_interval'         => $d['billing_interval'] ?? 'monthly',
-            'sessions_per_week'        => $isGym ? 0 : (int) ($d['sessions_per_week'] ?? 1),
-            'session_duration_minutes' => $isGym ? 0 : (int) ($d['session_duration_minutes'] ?? 60),
-            'day_of_week_mask'         => $isGym ? [0, 1, 2, 3, 4, 5, 6] : ($d['day_of_week_mask'] ?? []),
-            'session_time'             => $isGym ? null : ($d['session_time'] ?? '18:00'),
-            'capacity'                 => $isGym ? 0 : (int) ($d['capacity'] ?? 12),
-            'commission_percentage'    => (float) ($d['commission_percentage'] ?? self::PLATFORM_COMMISSION),
-            'free_trial_days'          => (int) ($d['free_trial_days'] ?? 0),
-            'free_trial_enabled'       => (bool) ($d['free_trial_enabled'] ?? false),
-            'program_type'             => $isGym ? 'ongoing' : ($d['program_type'] ?? 'ongoing'),
-            'duration_weeks'           => (! $isGym && ($d['program_type'] ?? '') === 'fixed_duration')
-                ? ((int) ($d['duration_weeks'] ?? 0) ?: null) : null,
-            'start_date'               => $isGym ? null : ($d['start_date'] ?? null),
-            'end_date'                 => $isGym ? null : ($d['end_date'] ?? null),
-            'photo_url'                => $d['photo_url'] ?? (($d['images'][0] ?? '') ?: ''),
-            'images'                   => $d['images'] ?? [],
+        return [
+            'owner_user_id' => $ownerId ? (string) $ownerId : null, 'mapped_owner_user_id' => $ownerId,
+            'venue_id' => $d['location_id'] ?? null, 'location_id' => $d['location_id'] ?? null,
+            'name' => $d['name'], 'description' => $d['description'] ?? '',
+            'contact_phone' => $d['contact_phone'] ?? '', 'schedule_description' => $d['schedule_description'] ?? '',
+            'sport_category' => $d['sport_category'] ?? '', 'coach_name' => $d['coach_name'] ?? '',
+            // Advertised academy price is informational; it never creates a charge.
+            'monthly_price' => $d['monthly_price'] ?? 0, 'currency' => $d['currency'] ?? '',
+            'billing_interval' => $d['billing_interval'] ?? 'monthly',
+            'photo_url' => $d['photo_url'] ?? ($d['images'][0] ?? ''), 'images' => $d['images'] ?? [],
+            'status' => $d['status'] ?? 'active', 'category' => $d['category'] ?? 'academy',
+            'audience' => $d['audience'] ?? 'all', 'gender_policy' => $d['gender_policy'] ?? 'all',
+            'show_on_marketplace' => $d['show_on_marketplace'] ?? true,
+            'show_on_provider_site' => $d['show_on_provider_site'] ?? false,
         ];
-
-        foreach ([
-            'status', 'color', 'category', 'audience', 'gender_policy',
-            'show_on_marketplace', 'show_on_provider_site',
-            'free_trial_sessions', 'discount_months', 'bonus_months',
-            'signup_form', 'joining_fee', 'listing_id', 'listing_ids',
-        ] as $optional) {
-            if (array_key_exists($optional, $d)) {
-                $attrs[$optional] = $d[$optional];
-            }
-        }
-
-        if ($isGym) {
-            $attrs['gender_policy'] = $attrs['gender_policy'] ?? null;
-        }
-
-        return $attrs;
     }
 
     protected function validated(Request $request): array
     {
         return $request->validate([
-            'name'                     => 'required|string|max:150',
-            'location_id'              => 'nullable|integer|exists:venues,id',
-            'owner_user_id'            => 'nullable',
-            'description'              => 'nullable|string',
-            'sport_category'           => 'nullable|string|max:100',
-            'coach_name'               => 'nullable|string|max:150',
-            'monthly_price'            => 'nullable|numeric|min:0',
-            'currency'                 => 'nullable|string|max:10',
-            'billing_interval'         => 'nullable|string|max:20',
-            'sessions_per_week'        => 'nullable|integer|min:0',
-            'session_duration_minutes' => 'nullable|integer|min:0',
-            'day_of_week_mask'         => 'nullable|array',
-            'session_time'             => 'nullable|string|max:8',
-            'capacity'                 => 'nullable|integer|min:0',
-            'commission_percentage'    => 'nullable|numeric|min:0|max:100',
-            'free_trial_days'          => 'nullable|integer|min:0',
-            'free_trial_enabled'       => 'nullable|boolean',
-            'free_trial_sessions'      => 'nullable|integer|min:0',
-            'discount_months'          => 'nullable|integer|min:0',
-            'bonus_months'             => 'nullable|integer|min:0',
-            'joining_fee'              => 'nullable|numeric|min:0',
-            'program_type'             => 'nullable|string|max:30',
-            'duration_weeks'           => 'nullable|integer|min:0',
-            'start_date'               => 'nullable|date',
-            'end_date'                 => 'nullable|date',
-            'photo_url'                => 'nullable|string|max:2048',
-            'images'                   => 'nullable|array',
-            'color'                    => 'nullable|string|max:20',
-            'category'                 => 'nullable|string|max:40',
-            'audience'                 => 'nullable|string|max:40',
-            'gender_policy'            => 'nullable|string|max:40',
-            'show_on_marketplace'      => 'nullable|boolean',
-            'show_on_provider_site'    => 'nullable|boolean',
-            'signup_form'              => 'nullable|array',
-            'status'                   => 'nullable|string|max:20',
-            'listing_id'               => 'nullable|integer',
-            'listing_ids'              => 'nullable|array',
-            'is_draft'                 => 'nullable|boolean',
-            'accept_trial_terms'       => 'nullable|boolean',
-            'terms_version'            => 'nullable|string|max:40',
+            'name' => 'required|string|max:150', 'location_id' => 'nullable|integer|exists:venues,id',
+            'description' => 'nullable|string|max:10000', 'contact_phone' => 'nullable|string|max:40',
+            'schedule_description' => 'nullable|string|max:2000', 'sport_category' => 'nullable|string|max:100',
+            'coach_name' => 'nullable|string|max:150', 'monthly_price' => 'nullable|numeric|min:0|max:1000000',
+            'currency' => 'nullable|string|max:10', 'billing_interval' => 'nullable|in:monthly,weekly,yearly,session,term',
+            'photo_url' => 'nullable|url:http,https|max:2048', 'images' => 'nullable|array|max:12', 'images.*' => 'url:http,https|max:2048',
+            'category' => 'nullable|string|max:40', 'audience' => 'nullable|string|max:40', 'gender_policy' => 'nullable|string|max:40',
+            'show_on_marketplace' => 'nullable|boolean', 'show_on_provider_site' => 'nullable|boolean',
+            'status' => 'nullable|in:active,inactive', 'is_draft' => 'nullable|boolean',
         ]);
     }
 
-    /**
-     * A provider always writes to their own business; a platform admin may act
-     * for the venue's owner (or an explicitly named one).
-     */
     protected function resolveOwner(Request $request, array $data): ?int
     {
         $user = $request->user();
@@ -471,19 +410,6 @@ class ProgramSaveService
 
     protected function mayTouch(Request $request, ClassProgram $program): bool
     {
-        $user = $request->user();
-        if (! $user) {
-            return false;
-        }
-        if (AccessScope::isPlatform($user)) {
-            return true;
-        }
-
-        $own = AccessScope::ownerUserId($user);
-
-        return $own !== null && (
-            (int) $program->mapped_owner_user_id === $own
-            || (string) $program->owner_user_id === (string) $own
-        );
+        return $request->user() && \App\Support\MembershipListingPolicy::scope(ClassProgram::query(), $request->user())->whereKey($program->id)->exists();
     }
 }

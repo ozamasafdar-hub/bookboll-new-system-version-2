@@ -103,7 +103,7 @@ const router = createRouter({
     customer('/my-bookings', MyBookings),
     customer('/thank-you', ThankYou),
     customer('/payment/cancel', PaymentCancelled),
-    customer('/my-memberships', MyMemberships),
+    { path: '/my-memberships', redirect: '/programs' },
     customer('/messages', Messages),
     customer('/messages/:id', Messages),
     customer('/u/:id', PublicProfile),

@@ -83,6 +83,7 @@ function datesForRule(mask, fromISO, toISO) {
  * @param exceptions Set of `${program_id}|${date}` cancelled occurrences.
  */
 export function generateProgramSessions(programs, fromISO, toISO, { listings = [], exceptions = new Set(), windDownUntil = {} } = {}) {
+  return [] // Membership listings do not create calendar reservations.
   const sessions = []
   for (const p of programs || []) {
     if (!p.day_of_week_mask?.length || !p.session_time) continue

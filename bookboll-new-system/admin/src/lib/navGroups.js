@@ -30,27 +30,24 @@ export const NAV_GROUPS = [
     blurb: 'What you sell — bookable courts and spaces, membership programs, plus special days and closures.',
     tips: [
       'Venue listings carry schedule, slot length, pricing and payment options.',
-      'Memberships are on their own page — classes and recurring programs.',
+      'Memberships are on their own page — academy discovery and contact details.',
       'Special days override the weekly schedule for one date.',
     ],
     items: [
     { path: '/listings', label: 'All listings', icon: Building2, desc: 'Locations, courts, spaces & schedules' },
-    { path: '/memberships', label: 'Memberships', icon: GraduationCap, desc: 'Classes, programs, trials & billing' },
+    { path: '/memberships', label: 'Memberships', icon: GraduationCap, desc: 'Academy contact listings & listing payments' },
     { path: '/special-days', label: 'Special days & closures', icon: CalendarDays, desc: 'Holiday hours, closures & special pricing' },
   ]},
   { key: 'customers', label: 'Customers', icon: Users,
-    blurb: 'The people who book with you and join your programs — profiles, memberships and door check-in.',
+    blurb: 'The people who book with you and join your programs — profiles, contact details and booking history.',
     tips: [
       'A customer’s profile keeps their full booking and payment history.',
-      'Members carry ONE QR pass for everything — scan it at the door with Member check-in.',
     ],
     items: [
     { path: '/customers', label: 'All customers', icon: Users, desc: 'Profiles, history & contact details' },
-    { path: '/subscriptions', label: 'Membership subscribers', icon: Repeat, desc: 'Members, billing & renewals' },
-    { path: '/checkin', label: 'Member check-in', icon: QrCode, desc: 'Scan entry passes at the door' },
   ]},
   { key: 'money', label: 'Payments & Wallets', icon: Wallet,
-    blurb: 'Your money, end to end — every payment recorded, and a payout wallet for venue bookings plus another for memberships.',
+    blurb: 'Your money, end to end — every payment recorded, and a payout wallet for venue bookings for venue bookings.',
     tips: [
       'Connect a payout method in each wallet to unlock online payments for that side of your business.',
       'Wallets are per country, so earnings always stay in their own currency.',
@@ -58,7 +55,6 @@ export const NAV_GROUPS = [
     items: [
     { path: '/payments', label: 'Payments', icon: ArrowLeftRight, desc: 'Every payment, in and out' },
     { path: '/wallet/bookings', label: 'Bookings wallet', icon: Banknote, desc: 'Venue earnings & payouts' },
-    { path: '/wallet/subscription', label: 'Membership wallet', icon: Wallet, desc: 'Membership earnings & payouts' },
   ]},
   { key: 'website', label: 'My Website', icon: Globe2,
     blurb: 'Create, edit and publish your own booking website with your own branding — customers book you directly, no coding needed.',

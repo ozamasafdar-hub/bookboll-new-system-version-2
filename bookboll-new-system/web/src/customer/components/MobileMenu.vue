@@ -72,7 +72,7 @@ onBeforeUnmount(() => { desktop?.removeEventListener('change', onResize); unlock
             <router-link :to="isWhiteLabel ? '/account' : `/u/${customer.id}`" class="mm-profile" @click="close"><User :size="20" /><span data-no-translate>{{ customer.full_name || 'My profile' }}</span></router-link>
             <nav aria-label="Your account" class="mm-nav">
               <router-link to="/my-bookings" @click="close"><CalendarCheck :size="19" />My bookings</router-link>
-              <router-link to="/my-memberships" @click="close"><Dumbbell :size="19" />My memberships</router-link>
+
               <router-link v-if="!isWhiteLabel" to="/my-games" @click="close"><CalendarDays :size="19" />My events</router-link>
               <router-link v-if="!isWhiteLabel" to="/my-communities" @click="close"><UsersRound :size="19" />My communities</router-link>
               <router-link v-if="!isWhiteLabel" to="/rewards" @click="close"><Trophy :size="19" />Rewards</router-link>

@@ -21,7 +21,7 @@ onMounted(revealCurrentPage)
 watch(() => route.path, revealCurrentPage)
 watch(navigationBar, revealCurrentPage)
 const links = computed(() => [
-  { to: '/my-bookings', label: 'Bookings' }, { to: '/my-memberships', label: 'Memberships' },
+  { to: '/my-bookings', label: 'Bookings' },
   ...(brandShows('events') ? [{ to: '/my-games', label: 'Events' }] : []),
   ...(!isWhiteLabel.value ? [{ to: '/my-communities', label: 'Communities' }, { to: `/u/${customer.value?.id}`, label: 'My profile' }] : []),
   { to: '/account', label: 'Account settings' },

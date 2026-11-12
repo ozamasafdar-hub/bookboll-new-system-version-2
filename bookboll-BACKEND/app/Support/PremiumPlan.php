@@ -35,6 +35,7 @@ class PremiumPlan
 
     /** Canonical feature list (order = upsell display order), mirroring premium.js. */
     public const FEATURES = [
+        ['key' => 'membership_website', 'label' => 'Own-website membership listings', 'desc' => 'Show academy contact listings on your own website. Marketplace exposure is billed separately.'],
         ['key' => 'blog',        'label' => 'Website blog',        'desc' => 'Publish posts on your own site — great for Google.'],
         ['key' => 'marketing',   'label' => 'Marketing emails',    'desc' => 'Email campaigns to your opted-in customers.'],
         ['key' => 'exports',     'label' => 'Data exports',        'desc' => 'Download bookings, customers, payments & more as CSV.'],
@@ -42,7 +43,7 @@ class PremiumPlan
         ['key' => 'banners',     'label' => 'Custom home banners', 'desc' => 'Your own hero slides with buttons & images.'],
         ['key' => 'widgets',     'label' => 'Embed & widgets',     'desc' => 'Booking widgets and buttons for your existing website.'],
         ['key' => 'whitelabel',  'label' => 'White-label website', 'desc' => 'Remove the Bookboll badge from your site — only a small footer credit remains.'],
-        ['key' => 'own_site_only', 'label' => 'Off-marketplace listings', 'desc' => 'Hide a listing or program from the Bookboll Marketplace and sell it only on your own website.'],
+        ['key' => 'own_site_only', 'label' => 'Off-marketplace listings', 'desc' => 'Hide a venue listing from the Bookboll Marketplace and sell it only on your own website.'],
     ];
 
     public static function billingIsYearly(?string $billing): bool

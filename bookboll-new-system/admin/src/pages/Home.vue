@@ -59,10 +59,10 @@ function openSite() {
 // Guidance cards — filtered by what the current role can actually open.
 const ALL_CARDS = [
   { to: '/listings', icon: Building2, title: 'Listings & programs', desc: 'Manage your locations, listings, prices and membership programs.' },
-  { to: '/calendar', icon: Calendar, title: 'Calendar', desc: 'See every booking and class session across your venues at a glance.' },
+  { to: '/calendar', icon: Calendar, title: 'Calendar', desc: 'See every booking across your venues at a glance.' },
   { to: '/bookings', icon: BookOpen, title: 'Bookings', desc: 'Review, edit and manage incoming reservations.' },
   { to: '/customers', icon: Users, title: 'Customers', desc: 'Your customer CRM — profiles, history and loyalty.' },
-  { to: '/subscriptions', icon: Repeat, title: 'Subscriptions', desc: 'Add, cancel and manage membership subscribers.' },
+  { to: '/memberships', icon: Repeat, title: 'Membership listings', desc: 'Showcase your academy and manage marketplace listing subscriptions.' },
   { to: '/wallet', icon: Wallet, title: 'My Wallets', desc: 'One wallet per country — track earnings and set up how you get paid.' },
   { to: '/promocodes', icon: Ticket, title: 'Promotions', desc: 'Create promo codes to bring in more bookings.' },
   { to: '/payments', icon: LayoutDashboard, title: 'Payments', desc: 'Collect and reconcile payments.' },
@@ -76,7 +76,7 @@ const ALL_CARDS = [
 ]
 const cards = computed(() => ALL_CARDS.filter(c => canAccessPage(c.to, role.value, currentOverrides.value)))
 const cardGroups = computed(() => [
-  { title: 'Day to day', icon: Calendar, paths: ['/calendar', '/bookings', '/listings', '/customers', '/subscriptions', '/special-days'] },
+  { title: 'Day to day', icon: Calendar, paths: ['/calendar', '/bookings', '/listings', '/customers', '/memberships', '/special-days'] },
   { title: 'Money & growth', icon: Wallet, paths: ['/payments', '/wallet', '/promocodes'] },
   { title: 'Business & administration', icon: Settings, paths: ['/team', '/approvals', '/moderation', '/countries', '/audit-logs', '/settings'] },
 ].map(group => ({ ...group, cards: group.paths.map(path => cards.value.find(card => card.to === path)).filter(Boolean) }))

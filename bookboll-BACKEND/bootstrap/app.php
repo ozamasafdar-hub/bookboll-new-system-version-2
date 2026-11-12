@@ -18,8 +18,8 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->api(prepend: [\App\Http\Middleware\PaymentsPreviewAccess::class]);
-        $middleware->api(append: [\App\Http\Middleware\RequirePaymentRelease::class]);
-        $middleware->web(append: [\App\Http\Middleware\RequirePaymentRelease::class]);
+        $middleware->api(append: [\App\Http\Middleware\RequirePaymentRelease::class, \App\Http\Middleware\RetiredMembershipOperations::class]);
+        $middleware->web(append: [\App\Http\Middleware\RequirePaymentRelease::class, \App\Http\Middleware\RetiredMembershipOperations::class]);
         $middleware->alias([
             'checkRoles' => \App\Http\Middleware\CheckRole::class,
             'role' => \App\Http\Middleware\CheckRole::class,

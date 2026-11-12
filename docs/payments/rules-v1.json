@@ -14,7 +14,10 @@
   "implementation_note": "Linked code and tests provide traceability, not proof that every production writer or scenario is verified. Existing apply commands are guarded to the Railway workspace. Production must validate a fresh source and exact cohorts.",
   "related_workflows": {
     "full_refunds_and_connected_details": "docs/payments/REFUNDS_AND_PAYMENT_DETAILS.md",
-    "refund_tests": ["bookboll-BACKEND/tests/Feature/PaymentDetailsAndRefundTest.php", "bookboll-BACKEND/tests/Feature/StripeRefundGatewayTest.php"],
+    "refund_tests": [
+      "bookboll-BACKEND/tests/Feature/PaymentDetailsAndRefundTest.php",
+      "bookboll-BACKEND/tests/Feature/StripeRefundGatewayTest.php"
+    ],
     "refund_limits": "Full original charge only; platform admin/super_admin only; no provider refund access. Real Stripe disabled in Railway. Legacy wallet credits without exact receipt/reversal evidence, partial/external refunds and refund-date cashflow remain gated or unsupported."
   },
   "rule_precedence": [
@@ -30,67 +33,128 @@
     {
       "id": "P01_CREATOR_EVIDENCE",
       "rule": "Use created_by, authenticated creation entry point and corroborating creation history to distinguish staff and customer. user_id is the booking customer. Later collector, payment method, generic legacy bookboll_web and current role alone are not proof. Staff using customer checkout can be a customer-origin booking. Preserve unknown evidence.",
-      "implementation": ["bookboll-BACKEND/app/Support/BookingProvenance.php", "bookboll-BACKEND/app/Services/BookingCreatorReconciliation.php"],
-      "tests": ["bookboll-BACKEND/tests/Feature/BookingCreatorReconciliationTest.php", "bookboll-new-system/admin/tests/bookingCreator.test.mjs"],
+      "implementation": [
+        "bookboll-BACKEND/app/Support/BookingProvenance.php",
+        "bookboll-BACKEND/app/Services/BookingCreatorReconciliation.php"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/BookingCreatorReconciliationTest.php",
+        "bookboll-new-system/admin/tests/bookingCreator.test.mjs"
+      ],
       "production_acceptance": "Verify all entry points and immutable source evidence; audit nonmanual creation-context writes as well as manual monetary reclassification."
     },
     {
       "id": "P02_EXTERNAL_CUSTOMER_DEPOSIT",
       "rule": "The actual paid external-provider online deposit is entirely Bookboll platform fee. The remaining arrival amount belongs to that provider. Keep marketplace and provider-site channels separate; use saved amount/rate, not today's configuration.",
-      "implementation": ["bookboll-BACKEND/app/Support/PaymentReportRules.php", "bookboll-BACKEND/app/Support/PaymentFinancialContext.php"],
-      "tests": ["bookboll-BACKEND/tests/payment-report-rules.php", "bookboll-BACKEND/tests/Feature/DepositFollowsSurfaceAndCommissionTest.php", "bookboll-BACKEND/tests/Feature/OwnSiteCommissionPolicyTest.php"],
+      "implementation": [
+        "bookboll-BACKEND/app/Support/PaymentReportRules.php",
+        "bookboll-BACKEND/app/Support/PaymentFinancialContext.php"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/payment-report-rules.php",
+        "bookboll-BACKEND/tests/Feature/DepositFollowsSurfaceAndCommissionTest.php",
+        "bookboll-BACKEND/tests/Feature/OwnSiteCommissionPolicyTest.php"
+      ],
       "production_acceptance": "Provider cash and pending balances never enter Bookboll received, pending or debt. Disclose provider's own collections in its dashboard."
     },
     {
       "id": "P03_EXTERNAL_FULL_ONLINE",
       "rule": "Gross online receipt equals its saved platform fee plus provider share. Link children to the gross receipt and count only disjoint allocations. Provider allocated income does not prove a bank payout.",
-      "implementation": ["bookboll-BACKEND/app/Support/PaymentReportRules.php", "bookboll-BACKEND/app/Support/PaymentFinancialContext.php"],
-      "tests": ["bookboll-BACKEND/tests/Feature/CommissionSnapshotAndLedgerTest.php", "bookboll-BACKEND/tests/payment-report-rules.php"],
+      "implementation": [
+        "bookboll-BACKEND/app/Support/PaymentReportRules.php",
+        "bookboll-BACKEND/app/Support/PaymentFinancialContext.php"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/CommissionSnapshotAndLedgerTest.php",
+        "bookboll-BACKEND/tests/payment-report-rules.php"
+      ],
       "production_acceptance": "Verify Stripe Connect fees/transfers and replay in test mode. Unknown original splits need evidence or review; never infer provider-owned gross as Bookboll revenue."
     },
     {
       "id": "P04_OWN_CUSTOMER_INTERNAL_SPLIT",
       "rule": "Own-venue customer receipts separate platform fee from venue remainder for every payment method. Deposit goes to platform and its arrival balance to venue. Full online/full arrival use saved quote. Payment method and business-unit recipient are distinct dimensions.",
-      "implementation": ["bookboll-BACKEND/app/Support/OwnedVenueAllocation.php", "bookboll-BACKEND/app/Support/PaymentReportRules.php"],
-      "tests": ["bookboll-BACKEND/tests/Feature/CommissionSnapshotAndLedgerTest.php", "bookboll-BACKEND/tests/Feature/LoyaltyVenueBookingFundingTest.php", "bookboll-BACKEND/tests/payment-report-rules.php"],
+      "implementation": [
+        "bookboll-BACKEND/app/Support/OwnedVenueAllocation.php",
+        "bookboll-BACKEND/app/Support/PaymentReportRules.php"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/CommissionSnapshotAndLedgerTest.php",
+        "bookboll-BACKEND/tests/Feature/LoyaltyVenueBookingFundingTest.php",
+        "bookboll-BACKEND/tests/payment-report-rules.php"
+      ],
       "production_acceptance": "Paid and pending allocations conserve each source receipt; full refunds inherit to both children; saved fee/loyalty evidence is preserved."
     },
     {
       "id": "P05_MANUAL_ZERO_FEE",
       "rule": "Staff-entered court bookings have zero platform fee. Own venue: 100% venue revenue. External venue: 100% provider revenue. Operator identity, not creator employer, selects recipient. Unpaid remains pending.",
       "owner_confirmation": "Keep manual bookings entirely as venue revenue",
-      "implementation": ["bookboll-BACKEND/app/Services/BookingCreatorReconciliation.php", "bookboll-BACKEND/app/Support/OwnedVenueAllocation.php", "bookboll-BACKEND/app/Support/LegacyReconciliation.php"],
-      "tests": ["bookboll-BACKEND/tests/Feature/BookingCreatorReconciliationTest.php", "bookboll-BACKEND/tests/Feature/VenueTransferTest.php", "bookboll-BACKEND/tests/payment-report-rules.php"],
+      "implementation": [
+        "bookboll-BACKEND/app/Services/BookingCreatorReconciliation.php",
+        "bookboll-BACKEND/app/Support/OwnedVenueAllocation.php",
+        "bookboll-BACKEND/app/Support/LegacyReconciliation.php"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/BookingCreatorReconciliationTest.php",
+        "bookboll-BACKEND/tests/Feature/VenueTransferTest.php",
+        "bookboll-BACKEND/tests/payment-report-rules.php"
+      ],
       "production_acceptance": "Classify creator before any historical arrival-paid assertion; payment method is not a substitute for creator evidence."
     },
     {
       "id": "P06_SKIPPED_PAYMENT",
       "rule": "Legacy skipped payments are provider availability blocks. Do not generate a receipt or infer earnings/pending from booking price. Conflicting existing paid records require review, not deletion.",
-      "implementation": ["bookboll-BACKEND/app/Support/PaymentReportRules.php", "bookboll-BACKEND/app/Support/LegacyReconciliation.php"],
-      "tests": ["bookboll-BACKEND/tests/Feature/BookingPaymentMethodsAccessTest.php", "bookboll-BACKEND/tests/payment-report-rules.php"],
+      "implementation": [
+        "bookboll-BACKEND/app/Support/PaymentReportRules.php",
+        "bookboll-BACKEND/app/Support/LegacyReconciliation.php"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/BookingPaymentMethodsAccessTest.php",
+        "bookboll-BACKEND/tests/payment-report-rules.php"
+      ],
       "production_acceptance": "Separate genuine event fee records from a skipped court reservation; no blanket deletion by booking status."
     },
     {
       "id": "P07_EVENTS_AND_MEMBERSHIPS",
       "rule": "Event host/seat fees use the actual saved country-specific fee, not a universal 10%. They are separate from court revenue. Membership fees and shares use saved business/channel/quote; sessions are not new subscription charges.",
-      "implementation": ["bookboll-BACKEND/app/Support/PaymentFinancialContext.php", "bookboll-BACKEND/app/Support/PaymentReportRules.php"],
-      "tests": ["bookboll-BACKEND/tests/payment-report-rules.php", "bookboll-BACKEND/tests/Feature/SubscriberPaymentPickerTest.php"],
+      "implementation": [
+        "bookboll-BACKEND/app/Support/PaymentFinancialContext.php",
+        "bookboll-BACKEND/app/Support/PaymentReportRules.php"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/payment-report-rules.php",
+        "bookboll-BACKEND/tests/Feature/SubscriberPaymentPickerTest.php"
+      ],
       "production_acceptance": "Check event/mobile/manual membership/renewal writers and processor evidence. Historical business or channel gaps stay labelled unknown."
     },
     {
       "id": "P08_OWNERSHIP_AND_TRANSFER",
       "rule": "Keep both Bright Future venues and Al Sadd owned. Preserve existing external assignments; create separate external businesses for the remaining mapped owned venues. Ownerless business is valid. A non-null business_id alone does not imply external ownership. Optional history restatement requires a reviewed plan and complete sibling fingerprint.",
-      "owner_confirmations": ["Keep both Bright Future venues and Al Sadd", "Keep existing external assignments; create businesses for the remaining owned venues"],
-      "implementation": ["bookboll-BACKEND/app/Services/VenueTransferService.php", "bookboll-BACKEND/app/Support/LegacyReconciliation.php"],
-      "tests": ["bookboll-BACKEND/tests/Feature/VenueTransferTest.php", "bookboll-new-system/admin/tests/venueTransferView.test.js"],
+      "owner_confirmations": [
+        "Keep both Bright Future venues and Al Sadd",
+        "Keep existing external assignments; create businesses for the remaining owned venues"
+      ],
+      "implementation": [
+        "bookboll-BACKEND/app/Services/VenueTransferService.php",
+        "bookboll-BACKEND/app/Support/LegacyReconciliation.php"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/VenueTransferTest.php",
+        "bookboll-new-system/admin/tests/venueTransferView.test.js"
+      ],
       "production_acceptance": "Validate live identities/effective dates. Freeze excluded siblings before changes. Current business changes must not silently rewrite historical recipients. Transfer reconciliation version must be 3."
     },
     {
       "id": "P09_PROVIDER_DIRECT_CASH_ASSERTION",
       "rule": "Only explicitly reviewed eligible historical customer arrival balances may become provider-direct collected cash. Keep unpaid staff-added bookings pending. Exclude unpaid online, cancelled, refunded, failed, disputed and skipped records.",
       "owner_confirmation": "Keep staff-added unpaid bookings pending",
-      "implementation": ["bookboll-BACKEND/app/Support/LegacyReconciliation.php", "bookboll-BACKEND/app/Services/VenueTransferService.php"],
-      "tests": ["bookboll-BACKEND/tests/Feature/VenueTransferTest.php", "bookboll-BACKEND/tests/payment-report-rules.php"],
+      "implementation": [
+        "bookboll-BACKEND/app/Support/LegacyReconciliation.php",
+        "bookboll-BACKEND/app/Services/VenueTransferService.php"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/VenueTransferTest.php",
+        "bookboll-BACKEND/tests/payment-report-rules.php"
+      ],
       "production_acceptance": "Use exact mapped historical cohort, preserve original status/date in audit, label inferred dates and never record this as Bookboll cash or a payout."
     },
     {
@@ -98,16 +162,24 @@
       "rule": "For approved historical own-venue customer bookings missing fee/split evidence, allocate 20% to platform and 80% to venue. Exclude staff, skipped, hosted-event, pre-existing allocations, saved quotes and deposit/arrival arrangements. This is a closed historical correction, not a new-booking default rate.",
       "owner_confirmation": "for such case please use 20% platform fee for only those bookings that are generated via customer's side... for admin side generated put all 100% in own venue revenue",
       "implementation_policy": "owner_confirmed_legacy_20pct",
-      "implementation": ["bookboll-BACKEND/app/Services/HistoricalOwnedFeeReconciliation.php"],
-      "tests": ["bookboll-BACKEND/tests/Feature/HistoricalOwnedFeeReconciliationTest.php"],
+      "implementation": [
+        "bookboll-BACKEND/app/Services/HistoricalOwnedFeeReconciliation.php"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/HistoricalOwnedFeeReconciliationTest.php"
+      ],
       "production_acceptance": "Replace preview-specific cohort dependency with a verified source mapping; preserve source amount/status/dates and record fallback basis and owner approval."
     },
     {
       "id": "P11_SAVED_QUOTE_RESTORATION",
       "rule": "Restore exact saved fee/merchant amounts before fallback. For the supported two-receipt pattern, one unique online receipt equals saved fee plus merchant share, both receipts equal booking total, currency/operator match, loyalty is zero and no conflicting allocations exist. Separate balance stays venue revenue.",
       "implementation_policy": "restored_booking_quote",
-      "implementation": ["bookboll-BACKEND/app/Services/HistoricalOwnedFeeReconciliation.php"],
-      "tests": ["bookboll-BACKEND/tests/Feature/HistoricalOwnedFeeReconciliationTest.php"],
+      "implementation": [
+        "bookboll-BACKEND/app/Services/HistoricalOwnedFeeReconciliation.php"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/HistoricalOwnedFeeReconciliationTest.php"
+      ],
       "production_acceptance": "Do not recalculate fee on the later balance or generalize this pattern to nonconserving siblings."
     },
     {
@@ -115,71 +187,147 @@
       "rule": "Three specifically confirmed paid external receipts formerly labelled full online are entirely retained Bookboll deposits. Match every identity and eligibility fact; no blanket reclassification of other full online payments.",
       "owner_confirmation": "They were deposits kept by Bookboll",
       "implementation_policy": "owner_confirmed_retained_deposit_2026_11_11",
-      "implementation": ["bookboll-BACKEND/app/Services/HistoricalRetainedDepositReconciliation.php"],
-      "tests": ["bookboll-BACKEND/tests/Feature/HistoricalRetainedDepositReconciliationTest.php"],
+      "implementation": [
+        "bookboll-BACKEND/app/Services/HistoricalRetainedDepositReconciliation.php"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/HistoricalRetainedDepositReconciliationTest.php"
+      ],
       "production_acceptance": "Exact matches below only; retain money/status/method/date/processor identity, audit type/recipient/context correction and treat existing correction as no-op."
     },
     {
       "id": "P13_RECEIPT_CONSERVATION",
       "rule": "Bookboll received is paid platform allocations plus paid own venue AFTER fees plus confirmed own unallocated receipts. Total sales (GMV) is the sum of paid and pending reconciled allocations across ALL recipients, including external staff bookings, own venue bookings, memberships and event fees. Count a gross receipt OR its conserving allocations once, never both. Cancelled, refunded, skipped and unresolved amounts are excluded from GMV; unresolved amounts are disclosed. Pending/refunded/cancelled/provider-direct cash are not Bookboll received. Currency totals stay separate; sales and receipts are not profit.",
-      "implementation": ["bookboll-BACKEND/app/Support/PaymentReportRules.php", "bookboll-BACKEND/app/Support/PaymentReportTotals.php"],
-      "tests": ["bookboll-BACKEND/tests/payment-report-rules.php", "bookboll-BACKEND/tests/Feature/PaymentReportDashboardTest.php", "bookboll-new-system/admin/tests/paymentReport.test.mjs"],
+      "implementation": [
+        "bookboll-BACKEND/app/Support/PaymentReportRules.php",
+        "bookboll-BACKEND/app/Support/PaymentReportTotals.php"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/payment-report-rules.php",
+        "bookboll-BACKEND/tests/Feature/PaymentReportDashboardTest.php",
+        "bookboll-new-system/admin/tests/paymentReport.test.mjs"
+      ],
       "production_acceptance": "Audit paid/pending totals independently from persisted records per currency and parent receipt, including rounding, refunds and ambiguous splits. GMV must conserve deposit + arrival, full gross/fee/share, owned internal splits and shared multi-slot checkouts; include manual external/owned, event and membership allocations. It must follow filters before pagination and match flat CSV totals for eligible allocations. Test separate zero/three-decimal currencies."
     },
     {
       "id": "P14_REVIEW_AND_ACCESS",
       "rule": "Unknown classification stays review and excluded from earnings. Confirmed owned unallocated receipts count once in combined received with separate historical-split disclosure. Preserve provider access only to authorized frozen history; never disclose another business's current booking finances.",
-      "implementation": ["bookboll-BACKEND/app/Services/PaymentReportService.php", "bookboll-BACKEND/app/Support/PaymentReportFilter.php"],
-      "tests": ["bookboll-BACKEND/tests/Feature/PaymentReportDashboardTest.php", "bookboll-BACKEND/tests/Feature/VenueTransferTest.php", "bookboll-BACKEND/tests/Feature/BookingPaymentMethodsAccessTest.php"],
+      "implementation": [
+        "bookboll-BACKEND/app/Services/PaymentReportService.php",
+        "bookboll-BACKEND/app/Support/PaymentReportFilter.php"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/PaymentReportDashboardTest.php",
+        "bookboll-BACKEND/tests/Feature/VenueTransferTest.php",
+        "bookboll-BACKEND/tests/Feature/BookingPaymentMethodsAccessTest.php"
+      ],
       "production_acceptance": "Test super/country/platform/provider owner and staff, ownerless-business staff, missing accept/export capability, transferred venues and foreign filter IDs."
     },
     {
       "id": "P15_FILTERS_AND_CACHES",
       "rule": "Resolve receipt siblings before applying filters. Summary and rows use the entire authorized set and identical custom dates/status/method/channel/operator/recipient/currency/venue/listing/business/amount filters. The business_id=bookboll sentinel matches the frozen bookboll operator, not the fee recipient or current venue owner. Combine selected businesses with OR; combine different filter fields with AND. Listing options carry venue_id and come only from authorized records; selecting venues limits choices and clears incompatible listings. Payment statuses are paid/pending/refunded/cancelled, not wallet hold/payout states. Cache invalidation follows committed mutations; allocations are not extra receipt records.",
-      "implementation": ["bookboll-BACKEND/app/Services/PaymentReportService.php", "bookboll-BACKEND/app/Support/PaymentReportFilter.php", "bookboll-BACKEND/app/Support/PaymentReportCache.php"],
-      "tests": ["bookboll-BACKEND/tests/Feature/PaymentReportDashboardTest.php", "bookboll-BACKEND/tests/Feature/PaymentReportCacheTest.php", "bookboll-new-system/admin/tests/paymentReport.test.mjs"],
+      "implementation": [
+        "bookboll-BACKEND/app/Services/PaymentReportService.php",
+        "bookboll-BACKEND/app/Support/PaymentReportFilter.php",
+        "bookboll-BACKEND/app/Support/PaymentReportCache.php"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/PaymentReportDashboardTest.php",
+        "bookboll-BACKEND/tests/Feature/PaymentReportCacheTest.php",
+        "bookboll-new-system/admin/tests/paymentReport.test.mjs"
+      ],
       "production_acceptance": "Validate shared multi-replica cache/locks and consistent export snapshot during edits. Test listing-filtered multi-slot checkout partial amounts, stable pre-filter choices, invalid venue/listing combinations, multi-select owned + external businesses, frozen ownership after transfer and denial of foreign listing IDs/options to providers. Verify venue changes clear incompatible selections. Cache v12 includes listing IDs. Separate Analytics activity 5,000-record cap still requires its own server aggregate work."
     },
     {
       "id": "P16_LANDLORD_COSTS",
       "rule": "Fixed rent/revenue-share costs follow dated agreements and renewals for Bookboll-operated facilities. Deduct once separately from receipts. External provider arrival balances are not landlord liabilities.",
-      "implementation": ["bookboll-BACKEND/app/Services/VenueAgreementService.php"],
-      "tests": ["bookboll-BACKEND/tests/Feature/VenueOperatingAgreementTest.php"],
+      "implementation": [
+        "bookboll-BACKEND/app/Services/VenueAgreementService.php"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/VenueOperatingAgreementTest.php"
+      ],
       "production_acceptance": "Agreement storage/tests do not certify complete finance recognition or payments. Verify effective-date/proration/revenue-share calculations and no double cost before enabling profit claims."
     },
     {
       "id": "P17_SHARED_ONLINE_PAYMENTS",
       "rule": "One Stripe charge can cover several bookings. Group only authorized online allocations with the same recorded processor identity and currency, before pagination. Charge identity takes precedence over payment intent; do not merge distinct charge attempts or guess from customer/date/amount. Preserve the individual deposit, fee, venue-share and arrival records. A display parent is never a new receipt or an extra contribution to earnings. Filters and exports remain allocation-based; label partial/provider views without claiming the full Stripe amount. Arrival balances are separate and never included in the online amount. Refunds operate on the full original processor charge only after server preflight.",
-      "implementation": ["bookboll-BACKEND/app/Support/PaymentReportGroups.php", "bookboll-BACKEND/app/Services/PaymentReportService.php", "bookboll-BACKEND/app/Services/PaymentDetailService.php", "bookboll-new-system/admin/src/components/PaymentLedgerEntry.vue"],
-      "tests": ["bookboll-BACKEND/tests/Feature/PaymentReportDashboardTest.php", "bookboll-BACKEND/tests/Feature/PaymentDetailsAndRefundTest.php", "bookboll-BACKEND/tests/Feature/PaymentReleaseGateTest.php", "bookboll-new-system/admin/tests/paymentLedgerEntry.test.mjs"],
+      "implementation": [
+        "bookboll-BACKEND/app/Support/PaymentReportGroups.php",
+        "bookboll-BACKEND/app/Services/PaymentReportService.php",
+        "bookboll-BACKEND/app/Services/PaymentDetailService.php",
+        "bookboll-new-system/admin/src/components/PaymentLedgerEntry.vue"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/PaymentReportDashboardTest.php",
+        "bookboll-BACKEND/tests/Feature/PaymentDetailsAndRefundTest.php",
+        "bookboll-BACKEND/tests/Feature/PaymentReleaseGateTest.php",
+        "bookboll-new-system/admin/tests/paymentLedgerEntry.test.mjs"
+      ],
       "production_acceptance": "Prove QAR 25 + 20 appears as one QAR 45 online payment. P18 requires the connected QAR 180 remaining payment with QAR 100/80 booking allocations. Test page boundaries, filtering one child, amount/date/status filters, two businesses in one charge, intent-only links, distinct charges, missing identities, currencies, full gross/fee/share conservation, refunds and unchanged allocation CSV totals. Include P17 in signed financial_regression passed_rule_ids."
     },
     {
       "id": "P18_CHECKOUT_BALANCES",
       "rule": "Each multi-slot checkout has one online payment and one remaining payment per collector/customer/currency. Stamp new customer checkout slots with a server-created checkout reference; for historical rows use verified shared deposit charge identity, never customer or date guesses. Parent payment references are distinct from legacy per-slot allocation IDs. Preserve all source receipts and financial totals. Show collected and pending parts separately. Collect only the outstanding offline balance, once, with server-authorized recipient scope, reviewed fingerprint, atomic booking receipt updates and replay-safe audit. No online charges or refunds occur during collection.",
-      "implementation": ["bookboll-BACKEND/app/Support/CheckoutReference.php", "bookboll-BACKEND/app/Support/PaymentReportGroups.php", "bookboll-BACKEND/app/Services/CheckoutPaymentCollection.php", "bookboll-new-system/admin/src/components/CheckoutPaymentBreakdown.vue", "bookboll-new-system/admin/src/components/PaymentDetails.vue"],
-      "tests": ["bookboll-BACKEND/tests/Feature/PaymentReportDashboardTest.php", "bookboll-BACKEND/tests/Feature/PaymentReleaseGateTest.php", "bookboll-new-system/admin/tests/paymentLedgerEntry.test.mjs"],
+      "implementation": [
+        "bookboll-BACKEND/app/Support/CheckoutReference.php",
+        "bookboll-BACKEND/app/Support/PaymentReportGroups.php",
+        "bookboll-BACKEND/app/Services/CheckoutPaymentCollection.php",
+        "bookboll-new-system/admin/src/components/CheckoutPaymentBreakdown.vue",
+        "bookboll-new-system/admin/src/components/PaymentDetails.vue"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/PaymentReportDashboardTest.php",
+        "bookboll-BACKEND/tests/Feature/PaymentReleaseGateTest.php",
+        "bookboll-new-system/admin/tests/paymentLedgerEntry.test.mjs"
+      ],
       "production_acceptance": "Prove two entries: QAR 45 online and QAR 180 remaining, with one checkout reference and separate phase references. Confirm linked details, allocation CSV conservation, partial filters, future reference stability through processor confirmation, mixed paid/pending status, separate collectors, unauthorized rejection, changed/cancelled balance rejection, atomic collection, replay safety and saved audit. Apply checkout schema migrations. Signed financial_regression passed_rule_ids must include P18; previous 17-rule evidence is insufficient."
     },
     {
       "id": "P19_PAYMENT_REVIEW_ACTIONS",
       "rule": "Only platform admins/super admins may resolve reviewable payments through evidence-bound preview and confirmation. Preserve original receipts and append audit history. Cancelled uncollected records contribute no earnings; paid external customer receipts may be confirmed retained deposits or conserving exact fee/provider splits. Staff/skipped/unknown-source conflicts cannot be overridden. Notes stay open; reopening and source changes restore original classification.",
-      "implementation": ["bookboll-BACKEND/app/Services/PaymentReviewService.php","bookboll-BACKEND/app/Support/PaymentReviewRules.php","bookboll-new-system/admin/src/components/PaymentReviewPanel.vue"],
-      "tests": ["bookboll-BACKEND/tests/Feature/PaymentReviewTest.php","bookboll-new-system/admin/tests/paymentReview.test.mjs"],
+      "implementation": [
+        "bookboll-BACKEND/app/Services/PaymentReviewService.php",
+        "bookboll-BACKEND/app/Support/PaymentReviewRules.php",
+        "bookboll-new-system/admin/src/components/PaymentReviewPanel.vue"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/PaymentReviewTest.php",
+        "bookboll-new-system/admin/tests/paymentReview.test.mjs"
+      ],
       "production_acceptance": "Test role/scope denial, immutable receipt fields, integer conservation, preview/change detection, duplicate replay, reversal/reopen, automatic invalidation, provider privacy and runtime gate. No automatic approval of the three cancelled examples. See docs/payments/PAYMENT_REVIEWS.md."
     },
     {
       "id": "P20_SUPERADMIN_BULK_ACTIONS",
       "rule": "Only a platform superadmin may confirm selected-payment changes. All-filtered selection resolves exact matching allocation IDs across every page using the same authorized report filters, with no overall 500-row cap or expansion into hidden siblings. Bounded dependency-preserving batches, mandatory reason, preview of all batches, locked evidence recheck and append-only audit are required. Multi-batch saves show progress, stop on failure and retry idempotently; earlier committed batches remain saved. Pending offline active-booking collections require an explicit cash/card/cheque/bank-transfer method, bind it to the preview and audit, normalize existing storage values and use the current collection date; Stripe payments cannot be manually confirmed. Partial receipt selections cannot mark a whole receipt paid. Reassignment preserves receipt amounts, original splits, booking channel and existing business, with no fees for staff-created bookings. No cross-business moves or processor transfers. Corrections remain visible in provider reports, while private audit evidence is superadmin-only.",
-      "implementation": ["bookboll-BACKEND/app/Services/PaymentBulkService.php","bookboll-BACKEND/app/Support/PaymentBulkRules.php","bookboll-new-system/admin/src/components/PaymentBulkDialog.vue","bookboll-new-system/admin/src/lib/paymentBulk.js"],
-      "tests": ["bookboll-BACKEND/tests/Feature/PaymentBulkTest.php","bookboll-new-system/admin/tests/paymentBulk.test.mjs","bookboll-BACKEND/tests/Feature/PaymentReleaseGateTest.php"],
+      "implementation": [
+        "bookboll-BACKEND/app/Services/PaymentBulkService.php",
+        "bookboll-BACKEND/app/Support/PaymentBulkRules.php",
+        "bookboll-new-system/admin/src/components/PaymentBulkDialog.vue",
+        "bookboll-new-system/admin/src/lib/paymentBulk.js"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/PaymentBulkTest.php",
+        "bookboll-new-system/admin/tests/paymentBulk.test.mjs",
+        "bookboll-BACKEND/tests/Feature/PaymentReleaseGateTest.php"
+      ],
       "production_acceptance": "Apply payment_bulk_actions and payment_bulk_action_items migration. Prove admin/staff/provider and mixed provider-superadmin denial including all-filtered selection; filter parity beyond 500 rows; dependency-preserving batches; all four explicit methods and normalized audited results; missing/online method rejection; stale method/evidence rejection; batch atomicity, idempotent replay and visible partial failure; immutable/conserving allocation corrections; provider report parity; no partial-payment overcollection; source-change invalidation and release gate enforcement. Signed financial_regression passed_rule_ids must include P20 and the current policy checksum; older acceptance is insufficient. See docs/payments/BULK_PAYMENT_ACTIONS.md."
     },
     {
       "id": "P21_PAYMENT_ANALYTICS_PARITY",
       "rule": "Payment analytics and Payments must share the full authorized classified allocation dataset, filter predicate and minor-unit totals. Every currency/channel/method/venue/time breakdown must reconcile without receipt duplication or sampling. External businesses received includes paid staff-added bookings; external total sales includes paid and pending staff sales; sales sent through marketplace/site remains a separately labelled subset. Staff venue bookings never gain fees. No cross-currency summing, current-rate recalculation or bank-payout/profit claims.",
-      "implementation": ["bookboll-BACKEND/app/Support/PaymentReportAnalytics.php", "bookboll-BACKEND/app/Services/PaymentReportService.php", "bookboll-BACKEND/app/Support/PaymentReportTotals.php", "bookboll-new-system/admin/src/components/PaymentAnalytics.vue", "bookboll-new-system/admin/src/lib/paymentMetrics.js"],
-      "tests": ["bookboll-BACKEND/tests/Feature/PaymentReportDashboardTest.php", "bookboll-BACKEND/tests/Feature/PaymentReleaseGateTest.php", "bookboll-BACKEND/tests/Feature/PaymentReportCacheTest.php"],
+      "implementation": [
+        "bookboll-BACKEND/app/Support/PaymentReportAnalytics.php",
+        "bookboll-BACKEND/app/Services/PaymentReportService.php",
+        "bookboll-BACKEND/app/Support/PaymentReportTotals.php",
+        "bookboll-new-system/admin/src/components/PaymentAnalytics.vue",
+        "bookboll-new-system/admin/src/lib/paymentMetrics.js"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/PaymentReportDashboardTest.php",
+        "bookboll-BACKEND/tests/Feature/PaymentReleaseGateTest.php",
+        "bookboll-BACKEND/tests/Feature/PaymentReportCacheTest.php"
+      ],
       "production_acceptance": "Compare both reports exactly under every filter and after mutations; reconcile every breakdown per currency, with explicit undated timeline disclosure. Include external and owned staff/customer cases, full/deposit splits, checkout siblings, pending/refunded/review exclusions, dependent listings, provider history and denied foreign scope. Require P21 in signed financial regression acceptance. See docs/payments/PAYMENT_ANALYTICS.md."
     },
     {
@@ -196,6 +344,20 @@
         "bookboll-BACKEND/tests/Feature/BookingActivityTest.php",
         "bookboll-new-system/admin/tests/bookingActivity.test.mjs"
       ]
+    },
+    {
+      "id": "P23_MEMBERSHIP_CONTACT_LISTINGS",
+      "rule": "Academies are contact listings. Marketplace subscriptions cost USD 20/month per listing by default with global/country/city overrides, independent of Premium. Own-site visibility requires active paid Premium. Verified paid invoices grant marketplace access through the paid period. Listing fees are Bookboll B2B income and never booking GMV, provider wallet earnings or customer academy subscriptions. Preserve legacy records; retire legacy customer billing before production.",
+      "production_acceptance": "Prove tenant isolation, approved paid-period marketplace visibility, active paid Premium own-site visibility, signed invoice replay and refunds, country/city rate inheritance and retired operational APIs. Verify all legacy customer Stripe renewals ended without deleting history; attach Stripe test-mode lifecycle evidence.",
+      "implementation": [
+        "bookboll-BACKEND/app/Support/MembershipListingPolicy.php",
+        "bookboll-BACKEND/app/Services/MembershipListingService.php",
+        "bookboll-BACKEND/app/Http/Middleware/RetiredMembershipOperations.php"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/MembershipListingTest.php",
+        "bookboll-new-system/admin/tests/marketSettings.test.js"
+      ]
     }
   ],
   "analytics_acceptance": {
@@ -209,31 +371,99 @@
     "original_booking_count": 19057,
     "original_payment_count": 22391,
     "bookboll_operated": [
-      {"snapshot_venue_id": 1, "name": "Abu Hamor (Bright Future International School)"},
-      {"snapshot_venue_id": 2, "name": "Abu Hamor MPH (Bright Future International School)"},
-      {"snapshot_venue_id": 3, "name": "Al Sadd (Tariq Bin Ziad Primary School)"}
+      {
+        "snapshot_venue_id": 1,
+        "name": "Abu Hamor (Bright Future International School)"
+      },
+      {
+        "snapshot_venue_id": 2,
+        "name": "Abu Hamor MPH (Bright Future International School)"
+      },
+      {
+        "snapshot_venue_id": 3,
+        "name": "Al Sadd (Tariq Bin Ziad Primary School)"
+      }
     ],
     "create_separate_external_business": [
-      {"snapshot_venue_id": 7, "name": "Pickup Location - Adventure Sports"},
-      {"snapshot_venue_id": 11, "name": "Target Snooker & Billiard - Ain Khaled"},
-      {"snapshot_venue_id": 14, "name": "Collab Connect"}
+      {
+        "snapshot_venue_id": 7,
+        "name": "Pickup Location - Adventure Sports"
+      },
+      {
+        "snapshot_venue_id": 11,
+        "name": "Target Snooker & Billiard - Ain Khaled"
+      },
+      {
+        "snapshot_venue_id": 14,
+        "name": "Collab Connect"
+      }
     ],
     "preserve_existing_external_assignments": true,
     "provider_direct_cash_historical_boundary": "Before 2026-11-10, only the reviewed mapped cohort; source timezone and exact eligibility must be recorded in production plan. Not all pending balances before go-live."
   },
   "exact_retained_deposit_exceptions": [
-    {"receipt_reference": "PAY-2723-FUL-066381", "snapshot_booking_id": 2723, "venue_identity_hint": "Adventure Sports", "currency": "QAR", "amount_minor": 14900},
-    {"receipt_reference": "PAY-2722-FUL-055751", "snapshot_booking_id": 2722, "venue_identity_hint": "Adventure Sports", "currency": "QAR", "amount_minor": 14900},
-    {"receipt_reference": "PAY-1863-FUL-820143", "snapshot_booking_id": 1863, "venue_identity_hint": "Bin Omran / Durham School", "currency": "QAR", "amount_minor": 15000}
+    {
+      "receipt_reference": "PAY-2723-FUL-066381",
+      "snapshot_booking_id": 2723,
+      "venue_identity_hint": "Adventure Sports",
+      "currency": "QAR",
+      "amount_minor": 14900
+    },
+    {
+      "receipt_reference": "PAY-2722-FUL-055751",
+      "snapshot_booking_id": 2722,
+      "venue_identity_hint": "Adventure Sports",
+      "currency": "QAR",
+      "amount_minor": 14900
+    },
+    {
+      "receipt_reference": "PAY-1863-FUL-820143",
+      "snapshot_booking_id": 1863,
+      "venue_identity_hint": "Bin Omran / Durham School",
+      "currency": "QAR",
+      "amount_minor": 15000
+    }
   ],
   "saved_quote_restoration_examples": [
-    {"snapshot_booking_id": 19598, "currency": "QAR", "original_receipt_id": 22463, "original_amount_minor": 15000, "original_fee_minor": 3000, "original_venue_minor": 12000, "later_receipt_id": 22489, "later_amount_minor": 2500, "later_fee_minor": 0},
-    {"snapshot_booking_id": 19903, "currency": "QAR", "original_receipt_id": 22872, "original_amount_minor": 3600, "original_fee_minor": 720, "original_venue_minor": 2880, "later_receipt_id": 22888, "later_amount_minor": 900, "later_fee_minor": 0}
+    {
+      "snapshot_booking_id": 19598,
+      "currency": "QAR",
+      "original_receipt_id": 22463,
+      "original_amount_minor": 15000,
+      "original_fee_minor": 3000,
+      "original_venue_minor": 12000,
+      "later_receipt_id": 22489,
+      "later_amount_minor": 2500,
+      "later_fee_minor": 0
+    },
+    {
+      "snapshot_booking_id": 19903,
+      "currency": "QAR",
+      "original_receipt_id": 22872,
+      "original_amount_minor": 3600,
+      "original_fee_minor": 720,
+      "original_venue_minor": 2880,
+      "later_receipt_id": 22888,
+      "later_amount_minor": 900,
+      "later_fee_minor": 0
+    }
   ],
   "cancelled_review_reference": [
-    {"receipt_reference": "PAY-8516-FUL-472823", "currency": "QAR", "amount_minor": 54900},
-    {"receipt_reference": "PAY-3972-FUL-439405", "currency": "QAR", "amount_minor": 54900},
-    {"receipt_reference": "PAY-3569-FUL-946486", "currency": "QAR", "amount_minor": 44900}
+    {
+      "receipt_reference": "PAY-8516-FUL-472823",
+      "currency": "QAR",
+      "amount_minor": 54900
+    },
+    {
+      "receipt_reference": "PAY-3972-FUL-439405",
+      "currency": "QAR",
+      "amount_minor": 54900
+    },
+    {
+      "receipt_reference": "PAY-3569-FUL-946486",
+      "currency": "QAR",
+      "amount_minor": 44900
+    }
   ],
   "last_railway_verification_reference": {
     "not_production_expected_totals": true,

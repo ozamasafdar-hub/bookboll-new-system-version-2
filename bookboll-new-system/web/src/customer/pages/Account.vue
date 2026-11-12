@@ -152,7 +152,7 @@ function signOut() { customerSignOut(); router.push('/') }
 
       <div class="acc-links">
         <router-link to="/my-bookings" class="acc-link"><CalendarCheck :size="20" /><span>My Bookings</span></router-link>
-        <router-link to="/my-memberships" class="acc-link"><Dumbbell :size="20" /><span>My Memberships</span></router-link>
+
         <router-link v-if="!isWhiteLabel" to="/rewards" class="acc-link"><Trophy :size="20" /><span>My Rewards</span></router-link>
         <router-link v-if="brandShows('events')" to="/my-games" class="acc-link"><Ticket :size="20" /><span>My Events</span></router-link>
       </div>

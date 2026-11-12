@@ -24,9 +24,8 @@ const featureLabel = computed(() => PREMIUM_FEATURES.find(f => f.key === highlig
 // Core platform (free plan) highlights.
 const FREE_FEATURES = [
   'Free branded booking website',
-  'Bookboll marketplace listing',
+  'Venue marketplace listings',
   'Court, venue & activity bookings',
-  'Memberships & academy programs',
   'Online payments & payout wallet',
   'One calendar + team accounts',
 ]
@@ -119,6 +118,7 @@ function close() { clearPromo(); step.value = 'gate'; upgradeModal.value = { ope
         <h3 class="ug-title" tabindex="-1">Choose your plan</h3>
         <p class="ug-sub">Keep the core tools on Free, or subscribe to Premium for a year.</p>
 
+        <p class="ug-fee-note">Marketplace membership listings have a separate monthly fee per listing on every plan. Default USD 20/month; country and city rates may differ.</p>
         <div class="ug-plans">
           <!-- Free -->
           <div class="ug-plan">

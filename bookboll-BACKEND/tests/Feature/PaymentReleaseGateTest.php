@@ -121,7 +121,7 @@ it('blocks previous acceptance without required payment workflow checks', functi
     $status = (new CompletedRunnerFixtureGate)->status();
     expect($status['production_ready'])->toBeFalse()
         ->and(collect($status['checks'])->keyBy('id')['financial_regression']['passed'])->toBeFalse();
-})->with(['P20_SUPERADMIN_BULK_ACTIONS', 'P21_PAYMENT_ANALYTICS_PARITY','P22_BOOKING_ACTIVITY_PARITY']);
+})->with(['P20_SUPERADMIN_BULK_ACTIONS', 'P21_PAYMENT_ANALYTICS_PARITY','P22_BOOKING_ACTIVITY_PARITY','P23_MEMBERSHIP_CONTACT_LISTINGS']);
 
 it('rejects a tampered signature or artifact without trusting checked boxes', function () {
     signReleaseFixture();
@@ -221,4 +221,11 @@ it('stops processor calls before any network request including a direct SDK refu
 it('blocks financial scheduled commands until release verification', function () {
     try { $this->artisan('wallet:release-holds', ['--apply'=>true])->run(); $this->fail('An unapproved financial command ran.'); }
     catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) { expect($e->getStatusCode())->toBe(503); }
+});
+
+
+it('rejects listing-billing evidence without a Stripe test-mode rehearsal', function () {
+    signReleaseFixture(['membership_listing_billing' => ['stripe_mode' => 'live']]);
+    $checks = collect((new CompletedRunnerFixtureGate)->status()['checks'])->keyBy('id');
+    expect($checks['membership_listing_billing']['passed'])->toBeFalse();
 });

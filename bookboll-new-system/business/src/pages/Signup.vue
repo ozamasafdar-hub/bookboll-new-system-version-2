@@ -519,7 +519,7 @@ async function goDashboard() {
               </div>
             </div>
             <div class="ob-site-address"><Globe :size="18" /><div><strong>Your reserved web address</strong><span>{{ liveHost }}</span><small>Connect your own domain later in My Website.</small></div></div>
-            <p class="ob-preview-note"><Sparkles :size="16" /> Your listings and memberships appear here when you add them in your dashboard.</p>
+            <p class="ob-preview-note"><Sparkles :size="16" /> Your booking listings appear here when published. Membership listings on your own website require Premium.</p>
           </div>
         </div>
 
@@ -545,7 +545,7 @@ async function goDashboard() {
             add your <b>location &amp; first listing</b>, connect a <b>payout method</b>, and go live.
           </p>
 
-          <ol class="ob-next-steps"><li><MapPin :size="19" /><span><strong>Add your location</strong><small>Show customers where to find you.</small></span></li><li><CalendarCheck :size="19" /><span><strong>Create a listing or membership</strong><small>Set availability, prices and payment options.</small></span></li><li><Globe :size="19" /><span><strong>Review and publish</strong><small>Your dashboard guides you through the remaining setup.</small></span></li></ol>
+          <ol class="ob-next-steps"><li><MapPin :size="19" /><span><strong>Add your location</strong><small>Show customers where to find you.</small></span></li><li><CalendarCheck :size="19" /><span><strong>Create a listing or membership</strong><small>Set up bookings, or add an academy contact listing.</small></span></li><li><Globe :size="19" /><span><strong>Review and publish</strong><small>Your dashboard guides you through the remaining setup.</small></span></li></ol>
           <div v-if="finalUrl" class="ob-done-site">
             <div class="ob-done-site-l"><Globe :size="16" /> <span>{{ finalUrl }}</span></div>
             <div class="ob-done-site-actions">

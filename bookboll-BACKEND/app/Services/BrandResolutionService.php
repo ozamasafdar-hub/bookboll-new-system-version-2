@@ -209,7 +209,7 @@ class BrandResolutionService
             ->where(function ($q) {
                 $q->where('show_on_provider_site', true)->orWhereNull('show_on_provider_site');
             })
-            ->exists();
+            ->with(['venue', 'listingSubscriptions'])->get()->contains(fn ($p) => \App\Support\MembershipListingPolicy::visible($p, (string) $ownerId));
 
         // The Blog section appears once the provider has published a post of their own.
         $blog = Post::query()

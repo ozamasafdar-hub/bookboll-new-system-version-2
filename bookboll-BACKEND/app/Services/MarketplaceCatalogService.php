@@ -391,7 +391,7 @@ class MarketplaceCatalogService
             ->where(fn ($q) => $q->where('show_on_marketplace', true)->orWhereNull('show_on_marketplace'))
             ->where(fn ($q) => $q->where('approval_status', 'approved')->orWhereNull('approval_status'))
             ->where(fn ($q) => $q->whereNull('eligibility_status')->orWhere('eligibility_status', '!=', 'paused'))
-            ->get(['id', 'venue_id', 'category', 'sport_category', 'created_at']);
+            ->with(['venue', 'listingSubscriptions'])->get()->filter(fn ($p) => \App\Support\MembershipListingPolicy::visible($p));
 
         // Only games a crawler can still act on: open, not removed, not past.
         $today = now()->toDateString();

@@ -236,6 +236,8 @@ class ApprovalsDashboardService
         if ($this->isContentUpdate($pg->approval_status, $pg->pending_content)) {
             $pc = is_array($pg->pending_content) ? $pg->pending_content : [];
             $pg->update([
+                'contact_phone' => $pc['contact_phone'] ?? $pg->contact_phone,
+                'schedule_description' => $pc['schedule_description'] ?? $pg->schedule_description,
                 'name'            => $pc['name'] ?? $pg->name,
                 'description'     => $pc['description'] ?? $pg->description,
                 'photo_url'       => $pc['photo_url'] ?? $pg->photo_url,
@@ -421,6 +423,9 @@ class ApprovalsDashboardService
             'description'              => $p->description,
             'sport_category'           => $p->sport_category,
             'coach_name'               => $p->coach_name,
+            'contact_phone' => $p->contact_phone,
+            'schedule_description' => $p->schedule_description,
+            'listing_monthly_price' => \App\Support\MembershipListingPolicy::monthlyPrice($p),
             'monthly_price'            => (float) $p->monthly_price,
             'currency'                 => $p->currency,
             'sessions_per_week'        => $p->sessions_per_week,

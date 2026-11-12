@@ -92,6 +92,7 @@ class MembershipBillingService
     /** Build the Checkout session for a membership sign-up. */
     public function createCheckoutSession(User $user, ClassProgram $program, array $payload): array
     {
+        abort(410, 'Memberships are contact listings. Contact the academy directly.');
         $secret = trim((string) config('services.stripe.secret'));
         if ($secret === '') {
             return ['error' => 'Payments are not configured. Please try again later.'];

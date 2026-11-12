@@ -418,8 +418,8 @@ class GeographyService
         if ($request->isMethod('put')) {
             $rules = ['values' => 'required|array:'.implode(',', array_keys(MarketSettings::DEFAULTS))];
             foreach (MarketSettings::DEFAULTS as $key => $default) {
-                $rules['values.'.$key] = (in_array($key, MarketSettings::SITE_KEYS, true) ? 'sometimes|nullable|' : ($scope === 'global' ? 'required|' : 'present|nullable|'))
-                    .(is_bool($default) ? 'boolean' : 'numeric|min:0|max:100');
+                $rules['values.'.$key] = (in_array($key, [...MarketSettings::SITE_KEYS, 'membership_listing_monthly', 'program'], true) ? 'sometimes|nullable|' : ($scope === 'global' ? 'required|' : 'present|nullable|'))
+                    .(is_bool($default) ? 'boolean' : ($key === 'membership_listing_monthly' ? 'numeric|min:1|max:100000' : 'numeric|min:0|max:100'));
             }
             $values = $request->validate($rules)['values'];
             DB::transaction(function () use ($scope, $id, $city, $values) {

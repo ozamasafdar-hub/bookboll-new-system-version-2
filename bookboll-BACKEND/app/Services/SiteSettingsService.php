@@ -341,7 +341,7 @@ class SiteSettingsService
             })
             ->where(function ($q) {
                 $q->where('show_on_provider_site', true)->orWhereNull('show_on_provider_site');
-            })->count();
+            })->with(['venue', 'listingSubscriptions'])->get()->filter(fn ($p) => \App\Support\MembershipListingPolicy::visible($p, (string) $ownerId))->count();
 
         $posts = Post::where('owner_user_id', $ownerId)->where('status', 'published')->count();
 

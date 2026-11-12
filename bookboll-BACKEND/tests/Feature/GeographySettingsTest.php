@@ -167,11 +167,11 @@ it('enforces the matchmaking switch for new events without changing existing con
     expect($this->listing->fresh()->status)->toBe('active');
 });
 
-it('preserves configured low and zero membership rates rather than forcing twenty percent', function () {
+it('does not write legacy customer membership commission from contact listing forms', function () {
     $method = new ReflectionMethod(ProgramSaveService::class, 'buildAttributes');
     foreach ([0, 5, 10] as $rate) {
         $attrs = $method->invoke(app(ProgramSaveService::class), ['name' => 'QA program', 'commission_percentage' => $rate], null);
-        expect($attrs['commission_percentage'])->toBe((float) $rate);
+        expect($attrs)->not->toHaveKey('commission_percentage');
     }
 });
 

@@ -24,6 +24,8 @@ class ClassProgram extends Model
         'venue_id',
         'owner_user_id',
         'mapped_owner_user_id',
+        'contact_phone',
+        'schedule_description',
         'name',
         'description',
         'sport_category',
@@ -102,6 +104,11 @@ class ClassProgram extends Model
         return $this->belongsTo(User::class, 'mapped_owner_user_id');
     }
 
+    public function listingSubscriptions(): HasMany
+    {
+        return $this->hasMany(MembershipListingSubscription::class, 'program_id');
+    }
+
     public function subscriptions(): HasMany
     {
         return $this->hasMany(ClassSubscription::class, 'program_id');
@@ -129,7 +136,9 @@ class ClassProgram extends Model
             'venue_id',
             'owner_user_id',
             'mapped_owner_user_id',
-            'name',
+            'contact_phone',
+        'schedule_description',
+        'name',
             'description',
             'sport_category',
             'coach_name',

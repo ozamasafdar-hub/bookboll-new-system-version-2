@@ -1,3 +1,16 @@
+# Current membership model — 12 November 2026
+
+**Authoritative change:** Memberships are now academy contact listings. [Full implementation, API, billing and rollout guide](docs/memberships/CONTACT_LISTINGS.md).
+
+- Marketplace: **USD 20/month per listing**, configurable globally and by country/city, charged separately on every business plan.
+- Provider website: membership listings require an active paid **Premium** plan. Premium does not include marketplace subscriptions.
+- Customers contact the academy by phone and pay it directly. Customer enrolment, subscribers, check-in and membership-wallet operations are retired; history stays intact.
+- Admin/provider listing management, listing invoices, geography rate editor, marketplace detail, branded-site eligibility, navigation and business pricing copy use this model.
+- Deploy all three frontends with the MySQL migration and backend. Marketplace visibility requires a verified paid period; no grace entitlement is invented. Real listing payments stay disabled in the Railway test workspace.
+- **Mandatory P23:** CI and runtime release checks now require 23 rules, Stripe test-mode listing billing evidence and verified retirement of existing customer Stripe renewals. Never simply copy a database and enable live billing. Existing processor subscriptions must be ended/verified separately; no real customer charge or cancellation was performed here.
+
+Earlier membership commission, wallet, trial and operational instructions below are historical and superseded by this section. Historical booking/payment rules remain in effect.
+
 ## Country supervision and editing flow — 12 November 2026
 
 - Global overview separates marketplace fees, website fees, creation services and rewards, each with a direct edit entry. Country rows compare venue/business counts, booking rates, Free/Premium website rates and explicit override counts. Automatic website values are illustrated with the market booking rate and labelled; the actual listing override still applies.

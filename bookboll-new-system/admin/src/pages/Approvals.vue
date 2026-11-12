@@ -676,10 +676,7 @@ const PROGRAM_FIELDS = [
   { key: 'currency', label: 'Currency' },
   { key: 'billing_interval', label: 'Billing interval' },
   { key: 'joining_fee', label: 'Joining fee' },
-  { key: 'free_trial_days', label: 'Free trial (days)' },
-  { key: 'free_trial_sessions', label: 'Free trial (sessions)' },
   { key: 'discount_months', label: 'Discount months' },
-  { key: 'sessions_per_week', label: 'Sessions / week' },
   { key: 'session_duration_minutes', label: 'Session duration' },
   { key: 'session_time', label: 'Session time' },
   { key: 'day_of_week_mask', label: 'Session days', fmt: F.days },
@@ -789,15 +786,15 @@ const PREVIEW_PROGRAM_FIELDS = [
   { key: 'name', label: 'Name' },
   { key: 'sport_category', label: 'Sport' },
   { key: 'coach_name', label: 'Coach' },
-  { key: 'monthly_price', label: 'Monthly Price' },
+  { key: 'monthly_price', label: 'Advertised academy price' },
+  { key: 'contact_phone', label: 'Contact phone' },
+  { key: 'schedule_description', label: 'Schedule information' },
+  { key: 'listing_monthly_price', label: 'Marketplace listing fee (USD/month)' },
   { key: 'currency', label: 'Currency' },
   { key: 'billing_interval', label: 'Billing Interval' },
   { key: 'session_duration_minutes', label: 'Session Duration (min)' },
-  { key: 'sessions_per_week', label: 'Sessions / Week' },
   { key: 'session_time', label: 'Session Time' },
   { key: 'capacity', label: 'Capacity' },
-  { key: 'free_trial_days', label: 'Free Trial (days)' },
-  { key: 'commission_percentage', label: 'Commission %' },
   { key: 'program_type', label: 'Program Type' },
   { key: 'status', label: 'Status' },
   { key: 'description', label: 'Description' },
@@ -930,7 +927,7 @@ function livePhotos(item) { return previewPhotos(item).filter(u => !brokenPhotos
             <div class="approve-meta">
               <span class="meta-pill">{{ item.sport_category }}</span>
               <span v-if="item._type === 'listing'">{{ item.base_price }}/hr &middot; Cap {{ item.capacity }}</span>
-              <span v-else>{{ item.currency || '' }} {{ item.monthly_price }}/mo &middot; {{ item.free_trial_days || 14 }}d trial</span>
+              <span v-else>Academy contact listing &middot; {{ item.contact_phone || 'Contact phone needed' }}</span>
             </div>
 
             <div class="approve-provider-row">
@@ -1247,7 +1244,7 @@ function livePhotos(item) { return previewPhotos(item).filter(u => !brokenPhotos
                   <div class="preview-field-label"><FileText :size="10" /> License No.</div>
                   <div class="preview-field-value pv-mono">{{ providerById(previewItem.owner_user_id).license_number }}</div>
                 </div>
-                <div v-if="providerCommission(previewItem) !== null" class="preview-field">
+                <div v-if="previewItem._type === 'listing' && providerCommission(previewItem) !== null" class="preview-field">
                   <div class="preview-field-label"><Star :size="10" /> Commission Rate</div>
                   <div class="preview-field-value">{{ providerCommission(previewItem) }}%</div>
                 </div>
