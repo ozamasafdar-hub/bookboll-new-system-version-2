@@ -72,38 +72,34 @@ class Booking extends Model
         'total_price'           => 'decimal:2',
     ];
 
-    protected $appends = ['due_amount', 'status_label'];
+    protected $appends = ['due_amount', 'status_label', 'customer_status'];
+
+    public function hasPaidDeposit(): bool
+    {
+        $this->loadMissing('payments');
+        $deposits = $this->payments->where('type', PaymentType::DEPOSIT);
+
+        // Receipt evidence wins over a stale booking flag after a refund.
+        if ($deposits->isNotEmpty()) {
+            return $deposits->contains('status', PaymentStatus::PAID);
+        }
+
+        // Older imports can have the settled booking flag without receipt rows.
+        return $this->payment_status === \BookingPaymentStatus::DEPOSIT_PAID
+            && ! $this->refunded_at && ! $this->refunded_amount;
+    }
+
+    public function getCustomerStatusAttribute(): string
+    {
+        // Reading historical bookings must not rewrite records or revive a cancellation.
+        return $this->status === BookingStatus::PENDING && $this->hasPaidDeposit()
+            ? BookingStatus::CONFIRMED
+            : ($this->status ?: BookingStatus::PENDING);
+    }
 
     public function getStatusLabelAttribute()
     {
-        if (
-            $this->status == BookingStatus::PENDING
-            && $this->payment_status === \BookingPaymentStatus::DEPOSIT_PAID
-            && (
-                $this->relationLoaded('payments')
-                    ? $this->payments->count() > 1
-                    : $this->payments()->count() > 1
-            )
-        ) {
-
-            $remainingPaymentExists = $this->relationLoaded('payments')
-                ? $this->payments
-                ->where('type', PaymentType::REMAINING)
-                ->where('method', PaymentMethod::CASH)
-                ->where('status', PaymentStatus::PENDING)
-                ->isNotEmpty()
-                : $this->payments()
-                ->where('type', PaymentType::REMAINING)
-                ->where('method', PaymentMethod::CASH)
-                ->where('status', PaymentStatus::PENDING)
-                ->exists();
-
-            if ($remainingPaymentExists) {
-                return 'Deposit paid - confirmed';
-            }
-        }
-
-        return $this->status;
+        return $this->customer_status;
     }
 
     public function getDueAmountAttribute()

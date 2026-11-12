@@ -6,6 +6,8 @@
 import { apiFetch, getCustomerToken, setCustomerToken } from '../lib/api.js'
 import { redemptionFields } from '../lib/checkoutRewards.js'
 import { createdBookingCurrency } from '../lib/bookingCurrency.js'
+import { mapCustomerBooking } from '../lib/customerBookingPresentation.js'
+export { mapCustomerBooking } from '../lib/customerBookingPresentation.js'
 
 /** UI payment method → the API's payment_method enum. */
 export const PAY_MAP = {
@@ -254,41 +256,12 @@ export async function createCustomerBookingsMulti({
   return { bookings, currency: createdBookingCurrency(res.data?.bookings, location) }
 }
 
-const PAY_STATUS = {
-  fully_paid: 'paid',
-  deposit_paid: 'partial',
-  payment_skipped: 'skipped',
-  pending: 'pending',
-  cancelled: 'skipped',
-}
-
 function bookingList(res) {
   const d = res?.data
   if (Array.isArray(d?.bookings)) return d.bookings
   if (Array.isArray(d?.data)) return d.data
   if (Array.isArray(d)) return d
   return []
-}
-
-export function mapCustomerBooking(row) {
-  const date = String(row?.date || '').slice(0, 10)
-  const paymentRaw = row?.payment_status || 'pending'
-  const payment_status = PAY_STATUS[paymentRaw] || paymentRaw
-  const booking_status = row?.status || 'pending'
-  return {
-    id: row.id,
-    bookingRef: row.booking_id || String(row.id),
-    listingName: row.listing?.name || 'Court',
-    locationName: row.venue?.name || '',
-    currency: row.currency || '',
-    booking_date: date,
-    start_time: row.start_time,
-    end_time: row.end_time,
-    total: Number(row.total_price) || 0,
-    booking_status,
-    payment_status,
-    canCancel: booking_status === 'pending' && paymentRaw !== 'deposit_paid' && payment_status !== 'partial',
-  }
 }
 
 export async function loadCustomerBookings() {
@@ -331,10 +304,5 @@ export async function loadBookingsByIds(ids) {
   const res = await apiFetch('/customer/bookings/by-ids', { query: { booking_ids: list.join(',') } })
   if (!res.success) return []
 
-  return bookingList(res).map(row => ({
-    ...mapCustomerBooking(row),
-    due: Number(row.due_amount) || 0,
-    statusLabel: row.status_label || '',
-    paymentMethod: row.payment_method || '',
-  }))
+  return bookingList(res).map(mapCustomerBooking)
 }

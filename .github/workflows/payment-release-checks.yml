@@ -42,6 +42,8 @@ jobs:
         with:
           node-version: '22'
       - run: node scripts/check-payment-policy.mjs
+      - run: node --test tests/customerBookingPresentation.test.js tests/personalBookings.test.js
+        working-directory: bookboll-new-system/web
       - run: composer install --no-interaction --prefer-dist --no-scripts
         working-directory: bookboll-BACKEND
       - run: php artisan package:discover --ansi

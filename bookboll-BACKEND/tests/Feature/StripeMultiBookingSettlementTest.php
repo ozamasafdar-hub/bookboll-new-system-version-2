@@ -116,8 +116,77 @@ it('settles every booking the charge covered', function () {
         ->and($unsettled)->toBe([]);
 
     foreach ([$first, $second] as $booking) {
-        expect($booking->fresh()->payment_status)->toBe(BookingPaymentStatus::DEPOSIT_PAID);
+        expect($booking->fresh()->payment_status)->toBe(BookingPaymentStatus::DEPOSIT_PAID)
+            ->and($booking->fresh()->status)->toBe(BookingStatus::CONFIRMED)
+            ->and($booking->fresh()->full_payment_received)->toBeFalse();
     }
+});
+
+it('confirms a paid deposit without collecting its arrival balance or confirming twice', function () {
+    $booking = depositBooking('20:00', '21:00', 125, 25);
+    $balance = Payment::create([
+        'payment_id'=>generatePaymentId($booking->id, 'remaining'), 'booking_id'=>$booking->id,
+        'user_id'=>$this->customer->id, 'currency'=>'QAR', 'amount'=>100,
+        'type'=>PaymentType::REMAINING, 'status'=>PaymentStatus::PENDING, 'method'=>PaymentMethod::CASH,
+    ]);
+    settle([$booking->id]);
+    settle([$booking->id]);
+
+    expect($booking->fresh()->status)->toBe('confirmed')
+        ->and($booking->fresh()->due_amount)->toBe(100.0)
+        ->and($balance->fresh()->status)->toBe('pending')
+        ->and($booking->history()->where('action', 'booking_confirmed')->count())->toBe(1);
+});
+
+it('projects old deposit-paid bookings as confirmed in customer responses without rewriting history', function () {
+    $booking = depositBooking('20:00', '21:00', 125, 25);
+    $booking->payments()->update(['status'=>'paid']);
+    $booking->update(['payment_status'=>'deposit_paid']);
+
+    foreach (['/api/customer/bookings/upcoming', '/api/customer/bookings/by-ids?booking_ids='.$booking->id] as $url) {
+        $this->actingAs($this->customer)->getJson($url)->assertSuccessful()
+            ->assertJsonPath('data.bookings.0.customer_status', 'confirmed')
+            ->assertJsonPath('data.bookings.0.status_label', 'confirmed')
+            ->assertJsonPath('data.bookings.0.due_amount', 100);
+    }
+    expect($booking->fresh()->status)->toBe('pending')
+        ->and($booking->history()->where('action','booking_confirmed')->count())->toBe(0);
+
+    $booking->update(['date'=>now()->subDay()->toDateString()]);
+    $this->actingAs($this->customer)->getJson('/api/customer/bookings/recent')->assertSuccessful()
+        ->assertJsonPath('data.bookings.0.customer_status', 'confirmed');
+});
+
+it('does not confirm an unpaid or refunded deposit, or revive a terminal booking', function () {
+    $booking = depositBooking('20:00', '21:00', 125, 25);
+    autoConfirmBookingIfPaid($booking);
+    expect($booking->fresh()->customer_status)->toBe('pending');
+    $booking->update(['payment_status'=>'deposit_paid']);
+    $booking->payments()->update(['status'=>'refunded']);
+    autoConfirmBookingIfPaid($booking->fresh());
+    expect($booking->fresh()->status)->toBe('pending')
+        ->and($booking->fresh()->customer_status)->toBe('pending');
+    $booking->payments()->update(['status'=>'paid']);
+    foreach (['cancelled','completed'] as $status) {
+        $booking->update(['status'=>$status]);
+        autoConfirmBookingIfPaid($booking->fresh());
+        expect($booking->fresh()->status)->toBe($status)
+            ->and($booking->fresh()->customer_status)->toBe($status);
+    }
+});
+
+it('starts settled deposits confirmed but leaves unpaid deposits pending', function () {
+    expect(initialBookingStatus('deposit_paid', 125))->toBe('confirmed')
+        ->and(initialBookingStatus('pending',125))->toBe('pending');
+});
+
+it('still marks the booking fully paid when its deposit covers the whole price', function () {
+    $booking = depositBooking('20:00', '21:00', 25, 25);
+    settle([$booking->id]);
+    expect($booking->fresh()->status)->toBe('confirmed')
+        ->and($booking->fresh()->payment_status)->toBe('fully_paid')
+        ->and($booking->fresh()->full_payment_received)->toBeTrue()
+        ->and($booking->fresh()->due_amount)->toBe(0);
 });
 
 it('still pays the live booking when its sibling was cancelled', function () {

@@ -1144,12 +1144,9 @@ if (! function_exists('initialBookingStatus')) {
     /**
      * The status a brand-new booking starts at.
      *
-     * A booking is CONFIRMED only when there is nothing left to collect —
-     * either the money is already in (`fully_paid`), or none was ever due
-     * (payment explicitly skipped, or the booking costs nothing). Anything
-     * with a balance outstanding — cash on arrival, a deposit with the rest
-     * due at the venue — starts PENDING, and autoConfirmBookingIfPaid()
-     * promotes it the moment that balance is actually collected.
+     * A settled deposit confirms the reservation; the arrival balance remains
+     * unpaid. Full payment, skipped payment and free reservations also confirm.
+     * An unpaid deposit or cash-on-arrival booking still starts pending.
      *
      * Every path that creates a booking must go through here, so admin-made,
      * customer-made and hosted-game bookings all answer the question the
@@ -1158,6 +1155,7 @@ if (! function_exists('initialBookingStatus')) {
     function initialBookingStatus(?string $paymentStatus, float $totalPrice): string
     {
         if ($paymentStatus === BookingPaymentStatus::FULLY_PAID
+            || $paymentStatus === BookingPaymentStatus::DEPOSIT_PAID
             || $paymentStatus === BookingPaymentStatus::PAYMENT_SKIPPED
             || $totalPrice <= 0) {
             return BookingStatus::CONFIRMED;
@@ -1178,6 +1176,7 @@ if (! function_exists('autoConfirmBookingIfPaid')) {
 
             $totalPaid  = (float) $booking->payments()->where('status', PaymentStatus::PAID)->sum('amount');
             $totalPrice = (float) $booking->total_price;
+            $depositConfirms = $totalPaid < $totalPrice && $booking->hasPaidDeposit();
 
             // Nothing owed at all: a free booking, or one whose price was fully
             // covered by a promocode or loyalty. There is no payment left to
@@ -1186,13 +1185,13 @@ if (! function_exists('autoConfirmBookingIfPaid')) {
             $nothingToCollect = $totalPrice <= 0
                 && ! $booking->payments()->where('status', PaymentStatus::PENDING)->exists();
 
-            if (! $nothingToCollect && ($totalPrice <= 0 || $totalPaid < $totalPrice)) {
+            if (! $depositConfirms && ! $nothingToCollect && ($totalPrice <= 0 || $totalPaid < $totalPrice)) {
                 return;
             }
 
             // A payment-skipped booking keeps that payment_status — no money
             // changed hands, so calling it "fully paid" would misreport revenue.
-            if ($booking->payment_status !== BookingPaymentStatus::FULLY_PAID
+            if (! $depositConfirms && $booking->payment_status !== BookingPaymentStatus::FULLY_PAID
                 && $booking->payment_status !== BookingPaymentStatus::PAYMENT_SKIPPED) {
                 $booking->update([
                     'payment_status'        => BookingPaymentStatus::FULLY_PAID,
@@ -1205,7 +1204,9 @@ if (! function_exists('autoConfirmBookingIfPaid')) {
             $booking->history()->create([
                 'user_id'     => $booking->user_id,
                 'action'      => 'booking_confirmed',
-                'description' => 'Booking automatically confirmed after payment completion.',
+                'description' => $depositConfirms
+                    ? 'Booking automatically confirmed after deposit payment. Remaining balance is due on arrival.'
+                    : 'Booking automatically confirmed after payment completion.',
             ]);
 
             if ($booking->loyalty_points_earned > 0) {
