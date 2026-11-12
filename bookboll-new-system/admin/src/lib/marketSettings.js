@@ -3,9 +3,13 @@ export const MARKET_GROUPS = [
     { key: 'facility', label: 'Venue bookings' }, { key: 'event', label: 'Event seats' },
   ] },
   { key: 'memberships', label: 'Marketplace membership listings', short: 'Membership listings', help: 'Monthly subscription per listing in USD, on every business plan. Own-website membership listings require Premium. Existing subscriptions keep their agreed price until cancelled; new subscriptions use this rate.', fields: [{ key: 'membership_listing_monthly', label: 'Monthly listing fee', currency: true }] },
-  { key: 'website', label: 'Provider website fees', short: 'Provider website', help: 'Venue bookings on a business’s own website. The same fee applies to deposits and full online payments.', fields: [
+  { key: 'website', label: 'Provider website fees', short: 'Provider website', help: 'Venue bookings on a businessâ€™s own website. The same fee applies to deposits and full online payments.', fields: [
     { key: 'site_free', label: 'Free plan', automatic: 'Match marketplace rate' },
     { key: 'site_premium', label: 'Paid Premium plan', automatic: 'Half the marketplace rate' },
+  ] },
+  { key: 'comeback', label: 'Come back to the same venue', short: 'Comeback offer', help: 'After a customer’s first completed marketplace booking at each venue, send a personal code by email and WhatsApp where they have opted in. Valid for 7 days, once, at that venue on the marketplace. The discount comes only from Bookboll’s fee and is capped at that fee; the venue’s share stays unchanged.', fields: [
+    { key: 'comeback_enabled', label: 'Send comeback offers', boolean: true },
+    { key: 'comeback_discount_pct', label: 'Booking discount' },
   ] },
   { key: 'services', label: 'Services businesses can add', short: 'Services', help: 'Control which new services can be created. Existing listings, programs and events stay available.', fields: [
     { key: 'module_listings', label: 'Booking listings', boolean: true }, { key: 'module_classes', label: 'Membership listings', boolean: true }, { key: 'module_matchmaking', label: 'Events & tournaments', boolean: true },
@@ -17,7 +21,7 @@ export function overrideCount(settings) { return MARKET_FIELDS.filter(f => setti
 export function effectiveDraft(values, parent) { return Object.fromEntries(MARKET_FIELDS.map(f => [f.key, values[f.key] ?? parent[f.key]])) }
 export function marketValue(effective, key) {
   if (key === 'membership_listing_monthly') return `USD ${Number(effective[key] ?? 20).toFixed(2)}`
-  if (key.startsWith('module_')) return effective[key] ? 'Enabled' : 'Disabled'
+  if (key.startsWith('module_') || key === 'comeback_enabled') return effective[key] ? 'Enabled' : 'Disabled'
   const rate = effective[key] ?? Number(effective.facility) * (key === 'site_premium' ? .5 : 1)
   return `${Number(Number(rate).toFixed(4))}%`
 }

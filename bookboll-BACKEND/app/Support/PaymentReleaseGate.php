@@ -18,6 +18,9 @@ class PaymentReleaseGate
         'writer_acceptance'=>'Booking and payment entry points tested',
         'membership_listing_billing'=>'Listing billing and visibility lifecycle tested in Stripe test mode',
         'legacy_membership_retirement'=>'Legacy customer membership renewals ended and verified',
+        'promotion_funding'=>'Provider, platform and fixed-deposit promo allocations verified',
+        'provider_connect_settlement'=>'External-provider full-online split verified in Stripe test mode',
+        'comeback_delivery'=>'Comeback timing, consent and duplicate prevention verified',
     ];
     public const REFUNDS = [
         'stripe_test_mode'=>'Stripe refunds tested in test mode',
@@ -72,7 +75,7 @@ class PaymentReleaseGate
         try {
             $policy = json_decode(file_get_contents(config('payment_release.policy_file')), true, 512, JSON_THROW_ON_ERROR);
             $rules = array_column($policy['rules'], 'id');
-            $add('policy', 'Approved business rules available', count($rules) >= 24 && in_array('P17_SHARED_ONLINE_PAYMENTS', $rules, true) && in_array('P18_CHECKOUT_BALANCES', $rules, true) && in_array('P19_PAYMENT_REVIEW_ACTIONS',$rules,true) && in_array('P20_SUPERADMIN_BULK_ACTIONS',$rules,true) && in_array('P21_PAYMENT_ANALYTICS_PARITY',$rules,true) && in_array('P22_BOOKING_ACTIVITY_PARITY',$rules,true) && in_array('P23_MEMBERSHIP_CONTACT_LISTINGS',$rules,true) && in_array('P24_MANUAL_PROVIDER_MEMBERS',$rules,true) && count($rules) === count(array_unique($rules)), 'The release must cover every rule, including payment analytics parity, in the versioned payment policy.');
+            $add('policy', 'Approved business rules available', count($rules) >= 26 && in_array('P17_SHARED_ONLINE_PAYMENTS', $rules, true) && in_array('P18_CHECKOUT_BALANCES', $rules, true) && in_array('P19_PAYMENT_REVIEW_ACTIONS',$rules,true) && in_array('P20_SUPERADMIN_BULK_ACTIONS',$rules,true) && in_array('P21_PAYMENT_ANALYTICS_PARITY',$rules,true) && in_array('P22_BOOKING_ACTIVITY_PARITY',$rules,true) && in_array('P23_MEMBERSHIP_CONTACT_LISTINGS',$rules,true) && in_array('P24_MANUAL_PROVIDER_MEMBERS',$rules,true) && in_array('P25_PROMOTION_FUNDING',$rules,true) && in_array('P26_FIRST_VISIT_COMEBACK',$rules,true) && count($rules) === count(array_unique($rules)), 'The release must cover every rule, including payment analytics parity, in the versioned payment policy.');
             $missing = array_diff(array_map(fn ($p) => basename($p, '.php'), glob(database_path('migrations/*.php'))),
                 Schema::hasTable('migrations') ? DB::table('migrations')->pluck('migration')->all() : []);
             $schemaReady = !$missing && Schema::hasTable('payment_refunds') && Schema::hasColumn('payments', 'payment_refund_id')
@@ -117,7 +120,7 @@ class PaymentReleaseGate
                         && ($artifact['allocations_conserve'] ?? false) === true
                         && ($artifact['unexpected_changes'] ?? null) === 0;
                 }
-                if ($passed && ($scope === 'refunds' || $id === 'membership_listing_billing')) $passed = ($artifact['stripe_mode'] ?? '') === 'test';
+                if ($passed && ($scope === 'refunds' || in_array($id, ['membership_listing_billing','provider_connect_settlement'], true))) $passed = ($artifact['stripe_mode'] ?? '') === 'test';
                 $add($id, $label, $passed, $passed ? 'Verified evidence matches this release.' : 'Missing, failed, changed or mismatched release evidence.', $scope);
             }
             $legacyCount = DB::table('class_subscriptions')->whereNotNull('stripe_subscription_id')->whereNotIn('status', ['cancelled','canceled','expired','ended'])->count();

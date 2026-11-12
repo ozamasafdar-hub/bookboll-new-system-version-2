@@ -113,6 +113,21 @@ class ProviderPlanService
 
     /* ──────────────────────── Premium — start a plan ──────────────────────── */
 
+    public function previewPromo(Request $request)
+    {
+        if (!auth('sanctum')->check()) return sendError('Sign in to apply a plan promo.', [], 401);
+        $request->setUserResolver(fn () => auth('sanctum')->user());
+        [$business, $owner, $error] = $this->resolveBusiness($request);
+        if ($error) return $error;
+        $amount = PremiumPlan::billedAmount('yearly');
+        $result = $this->validatePlanPromo($request->promocode, (int) $business->owner_id, (string) $owner->email, $amount);
+        if (!$result['ok']) return sendError($result['reason'], [], 422);
+        return sendSuccess('Promocode applied successfully', ['promocode' => [
+            'code' => $result['code']->code, 'discount_amount' => $result['discount'],
+            'discount' => $result['code']->formatted_discount, 'new_order_amount' => $amount - $result['discount'],
+        ]]);
+    }
+
     public function checkout(Request $request)
     {
         $data = $request->validate([

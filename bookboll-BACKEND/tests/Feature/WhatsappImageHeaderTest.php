@@ -91,3 +91,19 @@ it('lists whether a template needs an image', function () {
     expect($list[0])->toMatchArray(['headerFormat' => 'IMAGE', 'headerImage' => 'https://scontent.test/sample.jpg', 'varCount' => 1])
         ->and($list[1])->toMatchArray(['headerFormat' => '', 'headerImage' => '']);
 });
+
+it('puts a video on the template header without creating an image parameter',function(){
+ $p=templatePayload(['name'=>'video_offer','headerVideoUrl'=>'https://cdn.test/court.mp4'],['Ali']);
+ expect($p['template']['components'][0])->toBe(['type'=>'header','parameters'=>[['type'=>'video','video'=>['link'=>'https://cdn.test/court.mp4']]]]);
+});
+it('uploads and submits a VIDEO header to Meta',function(){
+ config(['services.whatsapp.app_id'=>'999','services.whatsapp.graph_url'=>'https://graph.test/v25.0']);
+ Http::fake(['cdn.test/*'=>Http::response('MP4BYTES',200,['Content-Type'=>'video/mp4']),'graph.test/v25.0/999/uploads*'=>Http::response(['id'=>'upload:video']),'graph.test/v25.0/upload:video'=>Http::response(['h'=>'video-handle']),'graph.test/v25.0/222/message_templates'=>Http::response(['id'=>'tpl-video','status'=>'PENDING'])]);
+ expect(app(WhatsappService::class)->createTemplate(waSender(),['name'=>'video_offer','bodyText'=>'Book again','headerVideoUrl'=>'https://cdn.test/court.mp4'])['ok'])->toBeTrue();
+ Http::assertSent(fn($req)=>str_ends_with($req->url(),'/message_templates') && $req['components'][0]['format']==='VIDEO');
+});
+it('rejects a mismatched video mime and competing image/video headers',function(){
+ config(['services.whatsapp.app_id'=>'999']); Http::fake(['cdn.test/*'=>Http::response('PNG',200,['Content-Type'=>'image/png'])]);
+ expect(app(WhatsappService::class)->createTemplate(waSender(),['name'=>'x','bodyText'=>'Hi','headerVideoUrl'=>'https://cdn.test/a.mp4'])['ok'])->toBeFalse();
+ expect(app(WhatsappService::class)->createTemplate(waSender(),['name'=>'x','bodyText'=>'Hi','headerVideoUrl'=>'https://cdn.test/a.mp4','headerImageUrl'=>'https://cdn.test/a.png'])['ok'])->toBeFalse();
+});

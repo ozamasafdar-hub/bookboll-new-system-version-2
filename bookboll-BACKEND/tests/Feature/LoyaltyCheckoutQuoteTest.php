@@ -64,7 +64,7 @@ function askQuote(User $u, Listing $l, array $over = [])
 {
     return test()->actingAs($u)->postJson('/api/customer/loyalty/checkout-quote', array_merge([
         'kind' => 'listing', 'country_id' => QA, 'currency' => 'QAR',
-        'checkout' => ['listing_id' => $l->id, 'slots' => [['start_time' => '10:00']]],
+        'checkout' => ['listing_id' => $l->id, 'slots' => [['date'=>now()->addDay()->toDateString(), 'start_time' => '10:00','end_time'=>'11:00']]],
     ], $over));
 }
 
@@ -149,7 +149,7 @@ it('prices from the server and ignores money the browser sends', function () {
 
     // A hostile client claiming a huge order and commission.
     $res = askQuote($u, $l, ['checkout' => [
-        'listing_id' => $l->id, 'slots' => [['start_time' => '10:00']],
+        'listing_id' => $l->id, 'slots' => [['date'=>now()->addDay()->toDateString(), 'start_time' => '10:00','end_time'=>'11:00']],
         'total' => 100000, 'commission' => 99999, 'discount' => 50000,
     ]])->assertOk();
 

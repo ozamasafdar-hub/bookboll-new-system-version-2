@@ -963,6 +963,7 @@ Route::post('whatsapp/webhook', [WhatsappWebhookController::class, 'handle'])->n
 | lands on our own public disk rather than a third-party host, so the key never
 | ships in the bundle and the files stay ours to serve, back up and delete.
 */
+Route::post('uploads/whatsapp-media', [UploadController::class, 'whatsappMedia'])->middleware(['auth:sanctum','throttle:30,1'])->name('uploads.whatsapp-media');
 Route::post('uploads/image', [UploadController::class, 'image'])
     ->middleware('auth:sanctum')->name('uploads.image');
 

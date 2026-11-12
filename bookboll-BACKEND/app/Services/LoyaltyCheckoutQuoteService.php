@@ -59,7 +59,11 @@ class LoyaltyCheckoutQuoteService
             // hosted event may have no court at all (an own-spot event).
             'checkout.listing_id'  => 'nullable|integer|exists:listings,id',
             'checkout.program_id'  => 'nullable|integer|exists:class_programs,id',
-            'checkout.slots'       => 'nullable|array',
+            'checkout.slots' => 'nullable|array',
+            'checkout.selection_by_date' => 'nullable|array',
+            'checkout.addons' => 'nullable|array',
+            'checkout.add_ons' => 'nullable|array',
+            'checkout.players' => 'nullable|integer|min:1',
             'checkout.payment_method' => 'nullable|string|max:64',
             'checkout.surface'     => 'nullable|string|in:marketplace,site',
             'checkout.game_date'   => 'nullable|date',
@@ -180,13 +184,36 @@ class LoyaltyCheckoutQuoteService
                 return [null, sendError('That currency does not match this booking.', [], 422), null];
             }
 
-            $totalMinor = Money::toMinor($this->orderTotal($listing, $checkout), $currency);
+            $price = app(CustomerBookingQuoteService::class);
+            if (!empty($checkout['selection_by_date'])) {
+                $checkout['slots'] = [];
+                foreach ($checkout['selection_by_date'] as $day => $items) foreach ($items as $slot) $checkout['slots'][] = ['date'=>$day,'start_time'=>$slot['start_time']??null,'end_time'=>$slot['end_time']??null,'quantity'=>max(1,(int)($checkout['players']??1))];
+            }
+            foreach ($checkout['slots'] ?? [] as $slot) {
+                if (empty($slot['date']) || empty($slot['start_time']) || empty($slot['end_time'])) return [null,sendError('Select complete booking slots before applying rewards.',[],422),null];
+            }
+            if (empty($checkout['slots'])) return [null,sendError('Select booking slots before applying rewards.',[],422),null];
+            $slots = $price->normalizeCustomerSlots($listing, $checkout);
+            $addOns = $checkout['add_ons'] ?? array_column($checkout['addons'] ?? [], 'id');
+            $quote = $price->quoteSlots($listing, $slots, $addOns);
+            $gross = $quote['combined_subtotal']; $promo = null;
+            if (!empty($checkout['promocode'])) {
+                $promo = \App\Models\Promocode::where('code', strtoupper(trim($checkout['promocode'])))->active()->first();
+                if (!$promo || !$promo->isValidForOrder($gross, $user->id, $checkout['payment_method'] ?? 'online_payment', $listing->venue_id, $listing->id)) return [null, sendError('Refresh your promo code before using rewards.', [], 422), null];
+            }
+            $promotion = \App\Support\BookingPromotion::breakdown($promo, $listing, array_column($quote['slots'], 'subtotal'), $checkout['surface'] ?? 'marketplace', $checkout['payment_method'] ?? 'online_payment');
+            $discount = $promotion['discount'];
+            if ($promo && $discount <= 0) return [null, sendError('This promo has no available discount for these slots.', [], 422), null];
+            $totalMinor = Money::toMinor($gross - $discount, $currency);
             $method = ($checkout['payment_method'] ?? '') === 'deposit_remaining_on_arrival' ? 'deposit' : 'online';
             $channel = ($checkout['surface'] ?? 'marketplace') === CommissionPolicy::CHANNEL_SITE
                 ? CommissionPolicy::CHANNEL_SITE
                 : CommissionPolicy::CHANNEL_MARKETPLACE;
 
             $policy = CommissionPolicy::quote($listing, $channel, $totalMinor, $currency, $method);
+            $fee = $promotion['fee'];
+            $policy['fee_minor'] = Money::toMinor($fee, $currency);
+            $policy['due_now_minor'] = $method === 'deposit' ? $policy['fee_minor'] : $totalMinor;
 
             return [[
                 'currency'    => $currency,

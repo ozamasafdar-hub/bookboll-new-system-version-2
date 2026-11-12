@@ -50,6 +50,11 @@ export async function validatePromo(rawCode, ctx = {}) {
       venue_id: ctx.locationId ?? undefined,
       listing_id: ctx.listingId ?? undefined,
       payment_method: ctx.paymentMethod ?? undefined,
+      surface: ctx.surface || 'marketplace',
+      quantity: ctx.bookingCount || 1,
+      applicable_to: ctx.applicableTo || 'facility',
+      slots: ctx.slots,
+      add_ons: ctx.addOns,
     },
   })
 
@@ -59,7 +64,7 @@ export async function validatePromo(rawCode, ctx = {}) {
   const discount = Number(p?.discount_amount) || 0
   if (discount <= 0) return { ok: false, reason: 'This code gives no discount on this order.' }
 
-  return { ok: true, code: { code: p?.code || code, discount: p?.discount || '' }, discount }
+  return { ok: true, code: { code: p?.code || code, discount: p?.discount || '' }, discount, platformFunded: Number(p?.platform_funded_amount) || 0, platformFee: p?.platform_fee == null ? null : Number(p.platform_fee) }
 }
 
 /** @deprecated No-op. Laravel records the redemption and bumps usage_count itself

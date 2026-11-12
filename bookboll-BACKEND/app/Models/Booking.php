@@ -59,11 +59,13 @@ class Booking extends Model
         'commission_currency',
         'loyalty_quote_id',
         'loyalty_discount',
+        'platform_promo_discount', 'promotion_snapshot',
         'record_purpose',
     ];
 
     protected $casts = [
         'creation_context'      => 'array',
+        'promotion_snapshot' => 'array',
         'loyalty_policy'        => 'array',
         'financial_context'     => 'array',
         'payment_breakdown'     => 'array',

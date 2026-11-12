@@ -15,7 +15,7 @@ Schedule::command('slot-locks:clear')->everyFiveMinutes();
 // memory limit is shared by all of them plus the queue worker. A pile-up there
 // got a task SIGKILLed by the host. The reminders only queue mail now, but they
 // still walk the customer base, so they get a quiet minute of their own.
-Schedule::command('send-booking-reminders')->dailyAt('00:20')->withoutOverlapping();
+Schedule::command('send-booking-reminders')->everyMinute()->withoutOverlapping();
 
 // withoutOverlapping() for the same reason its sibling below has it: a run that
 // outlasts its minute would otherwise have the next one start alongside it, and

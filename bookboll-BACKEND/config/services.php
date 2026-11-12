@@ -86,6 +86,8 @@ return [
 
 
     'whatsapp' => [
+        'comeback_template' => env('WHATSAPP_COMEBACK_TEMPLATE'),
+        'comeback_language' => env('WHATSAPP_COMEBACK_LANGUAGE', 'en_US'),
         // Meta Graph API version and Bookboll's own access token. A token typed into
         // the WhatsApp settings page wins; this is the fallback (and the only place a
         // platform token needs to live in production).

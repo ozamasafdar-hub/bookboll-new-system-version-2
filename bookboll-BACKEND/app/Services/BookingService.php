@@ -2147,6 +2147,9 @@ class BookingService
             $listing, $channel, Money::toMinor($orderTotal, $currency), $currency, $method
         );
 
+        $fee = (float) $formData['_remaining_promo_fee'];
+        $policy['fee_minor'] = Money::toMinor($fee, $currency);
+        $policy['due_now_minor'] = $method === 'deposit' ? $policy['fee_minor'] : $policy['total_minor'];
         $result = $rewards->reserve(
             $quoteId,
             isset($formData['loyalty_points']) ? (int) $formData['loyalty_points'] : null,
@@ -2262,7 +2265,7 @@ class BookingService
         $totalDiscount = 0;
         $promocode     = null;
         if (! empty($formData['promocode'] ?? null)) {
-            $promocode = Promocode::where('code', $formData['promocode'])->active()->first();
+            $promocode = Promocode::where('code', strtoupper(trim($formData['promocode'])))->active()->lockForUpdate()->first();
 
             if (! $promocode) {
                 return ['errors' => ['promocode' => ['Invalid or inactive promocode']]];
@@ -2280,20 +2283,29 @@ class BookingService
                 return ['errors' => ['promocode' => ['Promocode is not applicable']]];
             }
 
-            $totalDiscount = $promocode->applyDiscount($combinedSubtotal);
         }
+
+        $weights = array_column($quote['slots'], 'subtotal');
+        $promotion = \App\Support\BookingPromotion::breakdown($promocode, $listing, $weights, $formData['surface'] ?? 'marketplace', $formData['payment_method']);
+        $totalDiscount = $promotion['discount'];
+        if ($promocode && $totalDiscount <= 0) return ['errors' => ['promocode' => ['This code has no available discount for this checkout.']]];
 
         if ($giftCardBalanceUsed > 0) {
             $totalAfterDiscount  = $combinedSubtotal - $totalDiscount;
             $giftCardBalanceUsed = min($giftCardBalanceUsed, $totalAfterDiscount);
         }
 
+        $platformPromo = $promotion['platform_discount'];
+
         // Rewards, applied where BOTH payment entry points pass. The discount
         // is whatever the server quoted, never what the client asked for.
+        $formData['_remaining_promo_fee'] = $promotion['fee'];
         $rewards = $this->applyRewardsQuote($user, $listing, $formData, $combinedSubtotal - $totalDiscount);
         if (isset($rewards['errors'])) {
             return ['errors' => $rewards['errors']];
         }
+        $remainingFee = $promotion['fee'];
+        if ($rewards['discount'] > round(max(0, $remainingFee), 2)) return ['errors' => ['loyalty_quote_id' => ['Rewards exceed the fee remaining after this promo. Refresh your rewards quote.']]];
         $totalDiscount = round($totalDiscount + $rewards['discount'], 2);
 
         if ($giftCardBalanceUsed > 0) {
@@ -2302,7 +2314,16 @@ class BookingService
             $giftCardBalanceUsed = min($giftCardBalanceUsed, max(0, $combinedSubtotal - $totalDiscount));
         }
 
+        $promoParts = $promotion['parts'];
+        $platformParts = $promotion['platform_parts'];
+        $feeWeights = $promotion['fee_parts'];
+        $rewardParts = \App\Support\BookingPromotion::distribute($rewards['discount'], $feeWeights);
+        if (abs(array_sum($rewardParts) - $rewards['discount']) > 0.001) return ['errors' => ['loyalty_quote_id' => ['Refresh your rewards quote for these slots.']]];
+        $discountParts = array_map(fn ($i) => $promoParts[$i] + $rewardParts[$i], array_keys($weights));
+
         return [
+            'platformPromoDiscount' => $platformPromo,
+            'platformPromoDiscounts' => $platformParts,
             'listing'             => $listing,
             'formData'            => $formData,
             'quote'               => $quote,
@@ -2317,9 +2338,9 @@ class BookingService
             // The reward rides inside `discounts` for the customer's total, and
             // separately here so each booking knows how much of ITS discount is
             // Bookboll's money — that part comes off the deposit, not the venue.
-            'loyaltyDiscounts'    => $this->splitAmountAcrossBookings($rewards['discount'], $totalBookings),
-            'discounts'           => $this->splitAmountAcrossBookings($totalDiscount, $totalBookings),
-            'giftCardAmounts'     => $this->splitAmountAcrossBookings($giftCardBalanceUsed, $totalBookings),
+            'loyaltyDiscounts'    => $rewardParts,
+            'discounts'           => $discountParts,
+            'giftCardAmounts'     => \App\Support\BookingPromotion::distribute($giftCardBalanceUsed, array_map(fn ($i) => $weights[$i] - $discountParts[$i], array_keys($weights))),
         ];
     }
 
@@ -2333,7 +2354,10 @@ class BookingService
     {
         logger('Customer booking creation request', ['Request' => $request->all()]);
 
-        $user = $request->user_id ? User::find($request->user_id) : auth()->user();
+        $actor = auth()->user() ?? $request->user();
+        $staff = AccessScope::isPlatform($actor) || AccessScope::isProviderScoped($actor);
+        $user = $staff && $request->user_id ? User::findOrFail($request->user_id) : $actor;
+        if (!$user) return sendError('Sign in before booking.', [], 401);
 
         if ($preparedCheckout === null) {
             if (! $this->hasSlotSelection($request)) {
@@ -2407,6 +2431,7 @@ class BookingService
                 $bookingDiscount       = $discounts[$discountIndex] ?? 0;
                 $bookingGiftCardAmount = $giftCardAmounts[$discountIndex] ?? 0;
                 $bookingLoyalty        = $loyaltyDiscounts[$discountIndex] ?? 0;
+                $slotFormData['platform_promo_discount'] = $preparedCheckout['platformPromoDiscounts'][$discountIndex] ?? 0;
                 $discountIndex++;
 
                 $booking = $this->createSingleBooking(
@@ -2701,6 +2726,10 @@ class BookingService
 
         $booking = $this->bookingModel::with(['user', 'venue', 'listing', 'payments', 'addOns', 'resourcesAllocated', 'promocode'])
             ->findOrFail($bookingId);
+
+        if (($booking->promocode_id || $booking->loyalty_quote_id) && $request->hasAny(['total_price','subtotal','discount_amount','remove_promocode','venue_id','listing_id','date','start_time','end_time','payment_method','selected_add_ons','add_ons','user_id'])) {
+            return sendError('This booking has a saved promo or rewards allocation. Cancel and rebook to change its price or session; collected payments must use payment review or refund.', [], 422);
+        }
 
         if ($fromMobile) {
             if (! in_array($booking->status, [BookingStatus::PENDING, BookingStatus::CONFIRMED], true)) {
@@ -3830,8 +3859,8 @@ class BookingService
             'commission_standard_pct'  => $quote['standard_rate_pct'],
             'commission_effective_pct' => $quote['effective_rate_pct'],
             'commission_plan_eligible' => $quote['plan_eligible'],
-            'commission_fee_minor'     => $quote['fee_minor'],
-            'merchant_share_minor'     => $quote['merchant_share_minor'],
+            'commission_fee_minor' => $fee = Money::toMinor(\App\Support\BookingPromotion::fee($listing, $totalPrice, $channel, $formData['payment_method'] ?? 'online_payment'), $currency),
+            'merchant_share_minor' => max(0, Money::toMinor($totalPrice, $currency) - $fee),
             'commission_currency'      => $quote['currency'],
         ];
     }
@@ -3872,14 +3901,16 @@ class BookingService
              * non-commission share of every reward.
              */
             $loyaltyDiscount = max(0.0, min(round($loyaltyDiscount, 2), $totalPrice + max(0.0, $loyaltyDiscount)));
-            $preRewardTotal  = round($totalPrice + $loyaltyDiscount, 2);
+            $platformPromo = max(0, (float) ($formData['platform_promo_discount'] ?? 0));
+            $fundedDiscount = $loyaltyDiscount + $platformPromo;
+            $preRewardTotal = round($totalPrice + $fundedDiscount, 2);
             // [deposit, remaining] with the reward taken off the deposit first; only
             // what a (fixed, smaller) deposit cannot absorb comes off the remainder.
-            $netOfReward = function (float $deposit, float $remaining) use ($loyaltyDiscount): array {
-                $onDeposit = min($loyaltyDiscount, max(0.0, $deposit));
+            $netOfReward = function (float $deposit, float $remaining) use ($fundedDiscount): array {
+                $onDeposit = min($fundedDiscount, max(0.0, $deposit));
                 return [
                     round($deposit - $onDeposit, 2),
-                    round(max(0.0, $remaining - ($loyaltyDiscount - $onDeposit)), 2),
+                    round(max(0.0, $remaining - ($fundedDiscount - $onDeposit)), 2),
                 ];
             };
 
@@ -3900,18 +3931,7 @@ class BookingService
                 default                        => BookingPaymentStatus::PENDING,
             };
 
-            $depositAmount = 0;
-
-            if (! empty($listing->payment_options) && isset($listing->payment_options['deposit'])) {
-                $deposit = $listing->payment_options['deposit'];
-
-                if (! empty($deposit['amount']) && $deposit['amount'] > 0) {
-                    $depositAmount = $deposit['amount'];
-                } elseif (! empty($deposit['percentage']) && $deposit['percentage'] > 0) {
-                    $depositAmount = floor($preRewardTotal * ($deposit['percentage'] / 100));
-                }
-                $depositAmount = min($depositAmount, max(0, $preRewardTotal));
-            }
+            $depositAmount = \App\Support\BookingPromotion::fee($listing, $preRewardTotal, $formData['surface'] ?? 'marketplace', $formData['payment_method']);
 
             $remainingAmount = max(0, $preRewardTotal - $depositAmount);
             [$depositAmount, $remainingAmount] = $netOfReward((float) $depositAmount, (float) $remainingAmount);
@@ -3949,6 +3969,8 @@ class BookingService
                 // what to give back.
                 'loyalty_quote_id' => $formData['loyalty_quote_id'] ?? null,
                 'loyalty_discount' => $loyaltyDiscount > 0 ? $loyaltyDiscount : null,
+                'platform_promo_discount' => $platformPromo,
+                'promotion_snapshot' => $promocode ? ['code' => $promocode->code, 'recipient' => $promocode->recipient ?: 'bookboll', 'discount' => round($discount - $loyaltyDiscount, 2), 'platform_funded' => $platformPromo, 'comeback' => (bool) $promocode->comeback_booking_id] : null,
             ]);
 
             $resources = $listing->resourceRequirements()->select('resources.id', 'listing_resource.quantity')->get();
@@ -3963,25 +3985,8 @@ class BookingService
 
             if ($isPaymentSkipped) {
             } elseif ($paymentStatus == BookingPaymentStatus::DEPOSIT_PAID || ($paymentStatus == BookingPaymentStatus::PENDING && $formData['payment_method'] === 'deposit_remaining_on_arrival')) {
-                $paymentOptions = $listing ? $listing->payment_options : null;
+                $depositAmount = \App\Support\BookingPromotion::fee($listing, $preRewardTotal, $formData['surface'] ?? 'marketplace', $formData['payment_method']);
 
-                if (! $paymentOptions || empty($paymentOptions['deposit'])) {
-                    throw new Exception('Deposit configuration missing for this listing.');
-                }
-
-                $deposit = $paymentOptions['deposit'];
-
-                if (! empty($deposit['amount']) && $deposit['amount'] > 0) {
-                    $depositAmount = $deposit['amount'];
-                } elseif (! empty($deposit['percentage']) && $deposit['percentage'] > 0) {
-                    $depositAmount = round($preRewardTotal * ($deposit['percentage'] / 100), 2);
-                } else {
-                    throw new Exception('Invalid deposit configuration: must specify amount or percentage.');
-                }
-
-                if ($depositAmount > $preRewardTotal) {
-                    $depositAmount = $preRewardTotal;
-                }
                 // Same rule as the booking columns above: reward off the deposit.
                 [$depositAmount, $remainingRowAmount] = $netOfReward((float) $depositAmount, (float) ($preRewardTotal - $depositAmount));
 
@@ -5215,6 +5220,9 @@ class BookingService
             $payload['players'] = $data['players'];
         }
 
+        if (($booking->promocode_id || $booking->loyalty_quote_id) && array_intersect(array_keys($payload), ['total_price','subtotal','venue_id','listing_id','date','start_time','end_time','payment_method','players','user_id'])) {
+            return sendError('This booking has a saved promo or rewards allocation. Cancel and rebook to change its price or session; collected payments must use payment review or refund.', [], 422);
+        }
         $booking->update($payload);
         $booking->load(['user', 'listing', 'venue', 'payments', 'promocode']);
 

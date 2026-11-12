@@ -146,8 +146,8 @@ export function slugifyTemplateName(s) {
   return String(s || '').toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60)
 }
 
-export function createWaTemplate(ownerId, { name, language, category, headerText, bodyText, footerText, examples, headerImageUrl }) {
-  return invokeWhatsapp({ action: 'create_template', ownerId, name, language, category, headerText, bodyText, footerText, examples, headerImageUrl: headerImageUrl || undefined })
+export function createWaTemplate(ownerId, { name, language, category, headerText, bodyText, footerText, examples, headerImageUrl, headerVideoUrl }) {
+  return invokeWhatsapp({ action: 'create_template', ownerId, name, language, category, headerText, bodyText, footerText, examples, headerImageUrl: headerImageUrl || undefined, headerVideoUrl: headerVideoUrl || undefined })
 }
 
 export function deleteWaTemplate(ownerId, name) {

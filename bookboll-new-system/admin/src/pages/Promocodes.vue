@@ -371,7 +371,7 @@ async function save() {
   if (form.value.discount_type === 'percentage' && Number(form.value.discount_value) > 100)
                                             { formError.value = 'Percentage cannot exceed 100%.'; return }
 
-  // Provider codes always deduct from their own share; a Premium-plan code is always a
+  // Provider codes discount the price before percentage fees; fixed deposits stay fixed. A Premium-plan code is a
   // Bookboll-fee discount (it reduces what a business pays Bookboll for its subscription).
   const recipient    = form.value.applicable_to === 'provider_plan'
     ? 'bookboll'
@@ -550,11 +550,11 @@ function usagePercent(c) {
       </div>
     </FilterBar>
 
-    <div v-if="isPlatformAdmin" class="promo-type-tabs" aria-label="Discount funding"><button :aria-pressed="filterTab === 'all'" @click="filterTab = 'all'">All codes</button><button :aria-pressed="filterTab === 'bookboll'" @click="filterTab = 'bookboll'"><ShieldCheck :size="16" />Bookboll fee</button><button :aria-pressed="filterTab === 'provider'" @click="filterTab = 'provider'"><Store :size="16" />Provider share</button></div>
+    <div v-if="isPlatformAdmin" class="promo-type-tabs" aria-label="Discount funding"><button :aria-pressed="filterTab === 'all'" @click="filterTab = 'all'">All codes</button><button :aria-pressed="filterTab === 'bookboll'" @click="filterTab = 'bookboll'"><ShieldCheck :size="16" />Bookboll fee</button><button :aria-pressed="filterTab === 'provider'" @click="filterTab = 'provider'"><Store :size="16" />Provider discount</button></div>
     <!-- Architecture info banner (platform admins) -->
     <div v-if="isPlatformAdmin" class="arch-banner">
       <div><ShieldCheck :size="17" class="arch-icon bookboll" /><span><strong>Bookboll fee</strong>Discount funded by Bookboll’s commission.</span></div>
-      <div><Store :size="17" class="arch-icon provider" /><span><strong>Provider share</strong>Discount funded by the provider’s offline collection.</span></div>
+      <div><Store :size="17" class="arch-icon provider" /><span><strong>Provider discount</strong>Booking price reduced first; percentage fee follows the new price. Fixed deposits stay fixed.</span></div>
     </div>
 
     <div class="workspace-section-heading"><h2>Discount codes</h2><span>{{ loading ? 'Loading…' : `${promoTotal} results` }}</span></div>
@@ -767,17 +767,17 @@ function usagePercent(c) {
             >
               <div class="rb-icon provider"><Store :size="18" /></div>
               <div class="rb-text">
-                <div class="rb-title">Provider's Share</div>
-                <div class="rb-desc">The provider absorbs this discount from their offline collection amount.</div>
+                <div class="rb-title">Provider discount</div>
+                <div class="rb-desc">Discount the booking price first, then calculate Bookboll's percentage. Fixed deposits stay fixed.</div>
               </div>
               <div class="rb-check"><Check :size="14" /></div>
             </button>
           </div>
 
           <!-- Provider role: show read-only label -->
-          <div v-else class="recipient-note">
+          <div v-else-if="!isProviderPlan" class="recipient-note">
             <Store :size="14" />
-            Provider codes always deduct from <strong>your share</strong> of the payment — not from Bookboll's platform fee.
+            Your code reduces the booking price first. Bookboll's percentage fee uses that discounted price. A fixed deposit stays fixed; the discount cannot exceed the remaining venue share.
           </div>
 
           <!-- Applicable To -->
@@ -794,7 +794,7 @@ function usagePercent(c) {
             </div>
             <div v-if="isProviderPlan" class="recipient-note" style="margin-top:10px">
               <Store :size="14" />
-              This code is applied when a business <strong>upgrades to Bookboll Premium</strong> ($59/mo). It discounts <strong>Bookboll's subscription fee</strong> — no venue scope applies.
+              This code is applied when a business <strong>upgrades to Bookboll Premium</strong> (US$588/year). It discounts <strong>Bookboll's subscription fee</strong> — no venue scope applies.
             </div>
           </div>
 

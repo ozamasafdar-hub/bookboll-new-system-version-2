@@ -50,7 +50,7 @@ final class PaymentFinancialContext
             'fee_rate' => PaymentReportRules::channel($booking->getAttributes()) === 'admin' ? 0 : $booking->commission_effective_pct,
             'fee_minor' => $booking->commission_fee_minor,
             'net_fee_minor' => $booking->commission_fee_minor === null ? null : max(0,
-                (int) $booking->commission_fee_minor - Money::toMinor($booking->loyalty_discount ?? 0, $booking->commission_currency)),
+                (int) $booking->commission_fee_minor - Money::toMinor((float) ($booking->loyalty_discount ?? 0) + (float) ($booking->platform_promo_discount ?? 0), $booking->commission_currency)),
             'total_minor' => $booking->commission_currency ? Money::toMinor($booking->total_price, $booking->commission_currency) : null,
             'currency' => $booking->commission_currency,
             'payment_method' => $booking->payment_method,

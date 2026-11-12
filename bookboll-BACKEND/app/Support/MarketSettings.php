@@ -10,6 +10,7 @@ use Nnjeim\World\Models\City;
 class MarketSettings
 {
     public const DEFAULTS = [
+        'comeback_enabled' => true, 'comeback_discount_pct' => 10.0,
         'membership_listing_monthly' => 20,'facility' => 15.0, 'program' => 15.0, 'event' => 10.0,
         // Null preserves the existing standard / half-standard own-site policy.
         'site_free' => null, 'site_premium' => null,

@@ -71,6 +71,19 @@ class UploadController extends Controller
         ]);
     }
 
+    public function whatsappMedia(Request $request)
+    {
+        abort_unless($request->user()->roles->contains(fn ($role) => $role->name !== 'customer'), 403);
+        $request->validate(['media'=>'required|file|mimetypes:image/jpeg,image/png,video/mp4|max:16384']);
+        $file = $request->file('media'); $type = $file->getMimeType();
+        if ($type !== 'video/mp4' && $file->getSize() > 5 * 1024 * 1024) return sendError('Images must be 5 MB or smaller.',[],422);
+        $extension = match($type) { 'video/mp4'=>'mp4','image/png'=>'png',default=>'jpg' };
+        $path = $file->storeAs('uploads/whatsapp/'.now()->format('Y/m'),Str::uuid().'.'.$extension,'public');
+        if (!$path) return sendError('Could not upload media.',[],500);
+        Upload::create(['user_id'=>$request->user()->id,'disk'=>'public','path'=>$path,'folder'=>'uploads/whatsapp','mime'=>$type,'size_bytes'=>$file->getSize(),'original_name'=>mb_substr($file->getClientOriginalName(),0,255)]);
+        return sendSuccess('Media uploaded',['url'=>Storage::disk('public')->url($path),'type'=>$type,'size'=>$file->getSize()]);
+    }
+
     /** An allow-list, so `folder` can never climb out of the uploads directory. */
     private function safeFolder(?string $folder): string
     {

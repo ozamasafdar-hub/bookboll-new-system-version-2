@@ -1016,7 +1016,7 @@ class StripeService
         // A balance after a deposit carries no reward (it was taken off the
         // deposit); a full payment's reward is Bookboll's, so the venue is paid
         // on the court price, not on what was left after the discount.
-        $loyaltyRedeem = $depositAlreadyPaid ? 0.0 : max(0.0, (float) ($booking->loyalty_discount ?? 0));
+        $loyaltyRedeem = $depositAlreadyPaid ? 0.0 : max(0.0, (float) ($booking->loyalty_discount ?? 0) + (float) ($booking->platform_promo_discount ?? 0));
         $this->creditProviderWallet($booking, (float) $pendingPayments->sum('amount'), $depositAlreadyPaid, $loyaltyRedeem, $pendingPayments->pluck('id')->all());
 
         // The charge is confirmed, so the points reserved at checkout are now

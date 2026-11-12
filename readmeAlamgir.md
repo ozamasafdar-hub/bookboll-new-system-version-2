@@ -1,3 +1,12 @@
+# Promotions and comeback offers — 13 November 2026
+
+**Latest owner-confirmed rules:** [Implementation, examples, deployment and mandatory evidence](docs/payments/PROMOTIONS_AND_COMEBACK.md).
+
+- Provider promos discount the booking first; Bookboll's percentage is calculated from that discounted price. A configured fixed deposit remains fixed. Bookboll-funded promos/comeback offers are capped at the available platform share; provider revenue is untouched.
+- The existing reminder command now issues a same-venue, single-use offer after the first marketplace session ends: default 10%, seven-day expiry, global/country/city controls, email/WhatsApp opt-in and duplicate prevention. Preview never sends marketing messages.
+- Photo/video WhatsApp template upload and uncropped preview are supported. Membership discovery uses the listing's venue geography.
+- Deploy the new MySQL migration with all frontends/backend. CI and runtime checks P25/P26 enforce these rules. Full-online provider settlement requires actual Stripe test-mode transfer evidence, not a wallet balance; see the linked guide's outstanding integration requirement.
+
 # Current membership model — 13 November 2026
 
 **Authoritative update:** Keep information-only customer discovery and offline enrolment, but provide private subscriber management for provider staff. [Manual member register: implementation and required checks](docs/memberships/MANUAL_MEMBER_REGISTER.md).

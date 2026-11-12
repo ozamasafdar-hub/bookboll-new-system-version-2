@@ -249,6 +249,7 @@ class WhatsappService
                 'language'       => $t['language'] ?? '',
                 'bodyText'       => $bodyText,
                 'varCount'       => self::variableCount($bodyText),
+                'headerVideo' => ($headComp['format'] ?? '') === 'VIDEO' ? (string) (($headComp['example']['header_handle'] ?? [])[0] ?? '') : '',
                 'headerText'     => ($headComp['format'] ?? '') === 'TEXT' ? ($headComp['text'] ?? '') : '',
                 // IMAGE templates need an image on every send; the composer asks for one.
                 'headerFormat'   => strtoupper((string) ($headComp['format'] ?? '')),
@@ -284,17 +285,21 @@ class WhatsappService
         $footerText = mb_substr(trim((string) ($input['footerText'] ?? '')), 0, 60);
 
         $components     = [];
+        $headerVideoUrl = trim((string) ($input['headerVideoUrl'] ?? ''));
         $headerImageUrl = trim((string) ($input['headerImageUrl'] ?? ''));
+        if ($headerVideoUrl && $headerImageUrl) return ['ok'=>false,'error'=>'Choose one image or video header.'];
+        $format = $headerVideoUrl ? 'VIDEO' : 'IMAGE';
+        $headerImageUrl = $headerVideoUrl ?: $headerImageUrl;
         if ($headerImageUrl !== '') {
             // An image header. Meta will not take a URL here — the bytes go through
             // its resumable upload API first and the returned handle is the example
             // reviewers see. One header per template, so the image wins over text.
             try {
-                $handle = $this->uploadHeaderMedia($sender['token'], $headerImageUrl);
+                $handle = $this->uploadHeaderMedia($sender['token'], $headerImageUrl, $format);
             } catch (\Throwable $e) {
-                return ['ok' => false, 'error' => 'Could not upload the header image to Meta: '.$e->getMessage()];
+                return ['ok' => false, 'error' => 'Could not upload the header media to Meta: '.$e->getMessage()];
             }
-            $components[] = ['type' => 'HEADER', 'format' => 'IMAGE', 'example' => ['header_handle' => [$handle]]];
+            $components[] = ['type' => 'HEADER', 'format' => $format, 'example' => ['header_handle' => [$handle]]];
         } elseif ($headerText !== '') {
             $components[] = ['type' => 'HEADER', 'format' => 'TEXT', 'text' => $headerText];
         }
@@ -355,6 +360,7 @@ class WhatsappService
         }
 
         $template  = $input['template'] ?? ['name' => 'hello_world', 'language' => 'en_US'];
+        if (!empty($input['headerVideoUrl'])) $template['headerVideoUrl'] = $input['headerVideoUrl'];
         if (! empty($input['headerImageUrl'])) {
             $template['headerImageUrl'] = $input['headerImageUrl'];
         }
@@ -424,6 +430,7 @@ class WhatsappService
         if (empty($template['name'])) {
             return ['ok' => false, 'error' => 'Template is required for campaigns.'];
         }
+        if (!empty($input['headerVideoUrl'])) $template['headerVideoUrl'] = $input['headerVideoUrl'];
         if (! empty($input['headerImageUrl'])) {
             $template['headerImageUrl'] = $input['headerImageUrl'];
         }
@@ -597,7 +604,7 @@ class WhatsappService
      * the file, then send the bytes. Needs the Meta APP id (not the WABA) —
      * `META_APP_ID` — because upload sessions belong to the app.
      */
-    protected function uploadHeaderMedia(string $token, string $url): string
+    protected function uploadHeaderMedia(string $token, string $url, string $format = 'IMAGE'): string
     {
         $appId = (string) config('services.whatsapp.app_id', '');
         if ($appId === '') {
@@ -613,11 +620,11 @@ class WhatsappService
         }
         $bytes = $file->body();
         $type  = strtolower(explode(';', (string) $file->header('Content-Type'))[0] ?: 'image/jpeg');
-        if (! in_array($type, ['image/jpeg', 'image/png'], true)) {
-            throw new \RuntimeException('WhatsApp header images must be JPEG or PNG.');
+        if ($format === 'VIDEO' ? $type !== 'video/mp4' : !in_array($type, ['image/jpeg', 'image/png'], true)) {
+            throw new \RuntimeException($format === 'VIDEO' ? 'WhatsApp videos must be MP4 (H.264/AAC).' : 'WhatsApp header images must be JPEG or PNG.');
         }
-        if (strlen($bytes) > 5 * 1024 * 1024) {
-            throw new \RuntimeException('WhatsApp header images must be 5 MB or smaller.');
+        if (strlen($bytes) > ($format === 'VIDEO' ? 16 : 5) * 1024 * 1024) {
+            throw new \RuntimeException($format === 'VIDEO' ? 'WhatsApp videos must be 16 MB or smaller.' : 'WhatsApp header images must be 5 MB or smaller.');
         }
 
         $base    = rtrim(config('services.whatsapp.graph_url', 'https://graph.facebook.com/v25.0'), '/');
@@ -674,7 +681,10 @@ class WhatsappService
         $components = [];
         // An IMAGE-header template is rejected by Meta without this parameter on
         // every message; the URL must be public https (Meta fetches it).
+        $video = trim((string) ($template['headerVideoUrl'] ?? ''));
         $image = trim((string) ($template['headerImageUrl'] ?? ''));
+        if ($image && $video) throw new \InvalidArgumentException('Choose one image or video header.');
+        if ($video !== '') $components[] = ['type'=>'header','parameters'=>[['type'=>'video','video'=>['link'=>$video]]]];
         if ($image !== '') {
             $components[] = ['type' => 'header', 'parameters' => [['type' => 'image', 'image' => ['link' => $image]]]];
         }

@@ -324,10 +324,13 @@ async function applyPromo() {
     locationId: loc.value?.id || null,
     listingId: l.value?.id || route.params.id,
     paymentMethod: PAY_MAP[payMethod.value],
+    surface: surface.value, bookingCount: bookingCount.value,
+    slots: Object.entries(selectedByDate.value).flatMap(([date, slots]) => slots.map(s => ({ date, start_time: s.start_time, end_time: s.end_time, quantity: players.value || 1 }))),
+    addOns: selectedAddons.value.map(a => a.id),
   })
   promoBusy.value = false
   if (!res.ok) { promo.value = null; promoError.value = res.reason; return }
-  promo.value = { code: res.code, discount: res.discount }
+  promo.value = { code: res.code, discount: res.discount, platformFunded: res.platformFunded, platformFee: res.platformFee }
 }
 function removePromo() { promo.value = null; promoInput.value = ''; promoError.value = '' }
 
@@ -348,7 +351,16 @@ const paymentError = computed(() => bookingUnavailable.value ? unavailableMessag
 // A fixed deposit is charged once per booking, and the server books one slot per booking.
 const bookingCount = computed(() => fullQuote.value.totalSlots || 1)
 // cur is the VENUE's currency, so the deposit rounds to the same minor unit the server bills in.
-const paySplit = computed(() => paymentSelected.value ? paymentSplit(payMethod.value, payableTotal.value, plan.value.depositPct, plan.value.depositAmount, bookingCount.value, cur.value) : null)
+const paySplit = computed(() => {
+  if (!paymentSelected.value) return null
+  const funded = Number(promo.value?.platformFunded) || 0
+  const split = paymentSplit(payMethod.value, payableTotal.value + funded, plan.value.depositPct, plan.value.depositAmount, bookingCount.value, cur.value)
+  if (payMethod.value === 'deposit' && promo.value?.platformFee != null) return { ...split, online: promo.value.platformFee, deposit: promo.value.platformFee, arrival: Math.max(0, payableTotal.value - promo.value.platformFee), total: payableTotal.value }
+  if (payMethod.value === 'cash') return { ...split, total: payableTotal.value, arrival: payableTotal.value }
+  return { ...split, online: Math.max(0, split.online - funded), deposit: Math.max(0, split.deposit - funded), total: payableTotal.value }
+})
+watch(fullQuote, () => { if (promo.value) { promo.value = null; promoError.value = 'Booking changed. Apply your promo code again.' } })
+watch(payMethod, () => { if (promo.value) { promo.value = null; promoError.value = 'Payment method changed. Apply your promo code again.' } })
 const depositLabel = computed(() => depositTag(plan.value.depositPct, plan.value.depositAmount, bookingCount.value))
 function solePaymentMethod() { return data.value && plan.value.methods.length === 1 ? plan.value.methods[0] : '' }
 watch(plan, (p, previous) => {

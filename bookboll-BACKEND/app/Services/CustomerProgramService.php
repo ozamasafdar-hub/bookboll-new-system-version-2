@@ -89,79 +89,19 @@ class CustomerProgramService
             });
         }
 
+        // A listing belongs to its actual venue, never every market its owner serves.
+        // Orphan/imported records have no reliable geography and stay out of discovery.
         if ($isQatar) {
-            $cityIds = QatarMarketGeo::allCityIds();
-            $venueQuery = Venue::query()->where(function ($q) use ($cityIds, $qatarId) {
-                if ($cityIds) {
-                    $q->whereIn('city_id', $cityIds);
-                }
-                if ($qatarId) {
-                    $q->orWhere('country_id', $qatarId);
-                }
-            });
-
-            $venueIds = (clone $venueQuery)->pluck('id');
-            $ownerIds = (clone $venueQuery)->whereNotNull('owner_user_id')->pluck('owner_user_id');
-
-            $query->where(function ($q) use ($venueIds, $ownerIds) {
-                $has = false;
-                if ($venueIds->isNotEmpty()) {
-                    $q->whereIn('venue_id', $venueIds);
-                    $has = true;
-                }
-                if ($ownerIds->isNotEmpty()) {
-                    $method = $has ? 'orWhereIn' : 'whereIn';
-                    $q->{$method}('mapped_owner_user_id', $ownerIds);
-                    $has = true;
-                }
-                // Seeded/imported rows often lack venue_id — still show them on marketplace.
-                $q->orWhereNull('venue_id');
+            $query->whereHas('venue', function ($v) use ($qatarId) {
+                $v->where('country_id', $qatarId)->orWhere(fn ($fallback) => $fallback->whereNull('country_id')->whereIn('city_id', QatarMarketGeo::allCityIds()));
             });
         } elseif ($scopeCountryId) {
-            $venueQuery = Venue::query()->where(function ($q) use ($scopeCountryId) {
-                $q->where('country_id', $scopeCountryId)
-                    ->orWhereIn('city_id', City::query()->where('country_id', $scopeCountryId)->select('id'));
-            });
-            $venueIds = (clone $venueQuery)->pluck('id');
-            $ownerIds = (clone $venueQuery)->whereNotNull('owner_user_id')->pluck('owner_user_id');
-
-            $query->where(function ($q) use ($venueIds, $ownerIds) {
-                $has = false;
-                if ($venueIds->isNotEmpty()) {
-                    $q->whereIn('venue_id', $venueIds);
-                    $has = true;
-                }
-                if ($ownerIds->isNotEmpty()) {
-                    $method = $has ? 'orWhereIn' : 'whereIn';
-                    $q->{$method}('mapped_owner_user_id', $ownerIds);
-                    $has = true;
-                }
-                if (! $has) {
-                    $q->whereRaw('1 = 0');
-                }
+            $query->whereHas('venue', function ($v) use ($scopeCountryId) {
+                $v->where('country_id', $scopeCountryId)
+                    ->orWhere(fn ($fallback) => $fallback->whereNull('country_id')->whereIn('city_id', City::where('country_id', $scopeCountryId)->select('id')));
             });
         } elseif ($cityId) {
-            $cityId = (int) $cityId;
-            $venueIds = Venue::query()->where('city_id', $cityId)->pluck('id');
-            $ownerIds = Venue::query()
-                ->where('city_id', $cityId)
-                ->whereNotNull('owner_user_id')
-                ->pluck('owner_user_id');
-
-            $query->where(function ($q) use ($venueIds, $ownerIds) {
-                $has = false;
-                if ($venueIds->isNotEmpty()) {
-                    $q->whereIn('venue_id', $venueIds);
-                    $has = true;
-                }
-                if ($ownerIds->isNotEmpty()) {
-                    $method = $has ? 'orWhereIn' : 'whereIn';
-                    $q->{$method}('mapped_owner_user_id', $ownerIds);
-                    $has = true;
-                }
-                // Seeded/imported rows often lack venue_id — still show them on marketplace.
-                $q->orWhereNull('venue_id');
-            });
+            $query->whereHas('venue', fn ($v) => $v->where('city_id', (int) $cityId));
         }
 
         $programs = $query->orderBy('sort_order')->orderBy('name')->get()->filter(fn ($p) => $this->isVisible($p, $brandOwner));

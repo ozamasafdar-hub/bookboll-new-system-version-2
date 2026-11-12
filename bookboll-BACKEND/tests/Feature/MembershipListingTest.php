@@ -153,3 +153,14 @@ it('allows an authorized manager to create a listing for a business without an o
  $this->assertSame(200,$response->status(),(string)$response->json('message'));
  $this->getJson('/api/admin/membership-listings')->assertOk()->assertJsonCount(2,'data.programs');
 });
+
+it('discovers memberships by their own venue country, never another venue of the same owner',function(){
+ foreach ([[179,'Qatar','QA','QAT'],[167,'Pakistan','PK','PAK']] as [$id,$name,$iso2,$iso3]) \Nnjeim\World\Models\Country::firstOrCreate(['id'=>$id],compact('name','iso2','iso3')+['phone_code'=>'0','region'=>'Asia','subregion'=>'Asia','status'=>1]);
+ $this->venue->update(['country_id'=>179]); listingSub($this,['paid_until'=>now()->addDay()]);
+ $otherVenue=Venue::create(['name'=>'Pakistan Academy','owner_user_id'=>$this->owner->id,'country_id'=>167,'currency_override'=>'PKR']);
+ foreach ([$otherVenue->id,null] as $venueId) {
+  $p=$this->program->replicate(['uuid']);$p->name='Other country or orphan';$p->venue_id=$venueId;$p->save();
+  MembershipListingSubscription::create(['program_id'=>$p->id,'business_id'=>$this->business->id,'payer_id'=>$this->owner->id,'amount'=>20,'currency'=>'USD','status'=>'active','paid_until'=>now()->addDay()]);
+ }
+ $this->getJson('/api/marketplace/programs?country_iso=QA')->assertOk()->assertJsonCount(1,'data.programs')->assertJsonPath('data.programs.0.name','QA Football');
+});

@@ -74,3 +74,9 @@ export async function uploadImage(file, folder = '') {
     return { error: e.message || 'Upload failed. Try again.' }
   }
 }
+
+export async function uploadWhatsappMedia(file) {
+  const body = new FormData(); body.append('media', file)
+  const res = await apiFetch('/uploads/whatsapp-media', { method: 'POST', body })
+  return res.success ? { url: res.data?.url } : { error: Object.values(res.errors || {}).flat()[0] || res.message || 'Upload failed.' }
+}

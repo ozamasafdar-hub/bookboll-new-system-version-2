@@ -962,10 +962,6 @@ class PaymentService
             Stripe::setApiKey(config('services.stripe.secret'));
 
             // Use Checkout Session instead of PaymentLink for better control and consistency
-            $user->createOrGetStripeCustomer();
-            if (!$user->stripe_id) {
-                throw new Exception('Failed to create Stripe customer');
-            }
 
             $returnUrls = $this->stripeService->checkoutReturnUrls();
 
@@ -1807,10 +1803,6 @@ class PaymentService
 
             Stripe::setApiKey(config('services.stripe.secret'));
 
-            $user->createOrGetStripeCustomer();
-            if (!$user->stripe_id) {
-                throw new Exception('Failed to create Stripe customer');
-            }
 
             $bookingService = app(\App\Services\BookingService::class);
 
@@ -1851,7 +1843,7 @@ class PaymentService
                 // it: work the deposit out on the pre-reward price, then reduce it.
                 // Mirrors BookingService::createSingleBooking, so the Stripe charge
                 // and the deposit row it settles are the same number.
-                $loyaltyDiscount = max(0.0, (float) ($prepared['loyaltyDiscount'] ?? 0));
+                $loyaltyDiscount = max(0.0, (float) ($prepared['loyaltyDiscount'] ?? 0) + (float) ($prepared['platformPromoDiscount'] ?? 0));
                 $paymentAmount = max(0.0, round($this->depositToCharge(
                     $listing,
                     $totalPrice + $loyaltyDiscount,
@@ -1894,6 +1886,18 @@ class PaymentService
                 throw new Exception('Failed to get main booking ID');
             }
 
+            $paymentAmount = (float) Payment::whereIn('booking_id', $allBookingIds)->where('type', $paymentType === 'deposit' ? PaymentType::DEPOSIT : PaymentType::FULL)->sum('amount');
+            if ($paymentAmount <= 0 && $paymentType === 'deposit' && $totalPrice > 0) {
+                foreach ($allBookingIds as $id) {
+                    Payment::where('booking_id', $id)->where('type', PaymentType::DEPOSIT)->update(['status' => PaymentStatus::PAID, 'date' => now()->toDateString()]);
+                    $booking = Booking::findOrFail($id);
+                    $booking->update(['payment_status' => BookingPaymentStatus::DEPOSIT_PAID, 'status' => BookingStatus::CONFIRMED, 'full_payment_received' => false]);
+                    if ($booking->loyalty_quote_id && ($quote = \App\Models\LoyaltyCheckoutQuote::where('quote_id',$booking->loyalty_quote_id)->first())) app(LoyaltyRedemptionService::class)->consume($quote,$booking->id);
+                    $booking->history()->create(['user_id'=>$user->id,'action'=>'payment_received','description'=>'Deposit covered by Bookboll discount; arrival balance remains pending.']);
+                }
+                DB::commit();
+                return sendSuccess('Booking confirmed; the discounted deposit is covered. Pay the remaining balance at the venue.', ['bookings' => Booking::whereIn('id', $allBookingIds)->get(), 'free_booking' => true, 'remaining_on_arrival' => true]);
+            }
             if ($paymentAmount <= 0) {
                 $this->markBookingsAsFullyPaidFree($createdBookings, $totalPrice, $totalDiscount);
                 DB::commit();
@@ -2020,6 +2024,9 @@ class PaymentService
                 ]],
             ];
 
+            $user->createOrGetStripeCustomer();
+            if (!$user->stripe_id) throw new Exception('Failed to create Stripe customer');
+            $sessionData['customer'] = $user->stripe_id;
             $session = \Stripe\Checkout\Session::create($sessionData);
 
             \App\Models\StripeSession::create([
@@ -2086,6 +2093,7 @@ class PaymentService
                 createBookingInvoiceWithNotification($booking, $user);
             }
             autoConfirmBookingIfPaid($booking);
+            if ($booking->loyalty_quote_id && ($quote = \App\Models\LoyaltyCheckoutQuote::where('quote_id',$booking->loyalty_quote_id)->first())) app(LoyaltyRedemptionService::class)->consume($quote,$booking->id);
         }
     }
 

@@ -87,19 +87,41 @@ class PromocodeController extends Controller
             'payment_method' => 'nullable|string',
             'venue_id'       => 'nullable|exists:venues,id',
             'listing_id'     => 'nullable|exists:listings,id',
-            'quantity'       => 'nullable|numeric',
+            'quantity' => 'nullable|integer|min:1|max:100',
+            'surface' => 'nullable|in:marketplace,site',
+            'applicable_to' => 'nullable|in:facility,provider_plan',
+            'slots' => 'nullable|array|max:100',
+            'slots.*.date' => 'required_with:slots|date',
+            'slots.*.start_time' => 'required_with:slots|date_format:H:i',
+            'slots.*.end_time' => 'required_with:slots|date_format:H:i',
+            'slots.*.quantity' => 'nullable|integer|min:1|max:100',
+            'add_ons' => 'nullable|array',
+            'add_ons.*' => 'integer|exists:add_ons,id',
         ]);
 
-        $promocode = Promocode::with('users')->where('code', $request->promocode)->active()->first();
+        if ($request->applicable_to === 'provider_plan') return app(\App\Services\ProviderPlanService::class)->previewPromo($request);
+        $listing = $request->listing_id ? \App\Models\Listing::find($request->listing_id) : null;
+        if (!$listing) return sendError('Choose a listing before applying a booking promo.', [], 422);
+        $grossAmounts = [(float) $request->order_amount];
+        if ($request->filled('slots')) {
+            $pricing = app(\App\Services\CustomerBookingQuoteService::class);
+            $quote = $pricing->quoteSlots($listing, $pricing->normalizeCustomerSlots($listing, $request->only('slots')), $request->add_ons ?? []);
+            $grossAmounts = array_column($quote['slots'], 'subtotal');
+        } elseif ((int) $request->quantity > 1) {
+            $grossAmounts = \App\Support\BookingPromotion::distribute((float) $request->order_amount, array_fill(0, (int) $request->quantity, 1));
+        }
+        $gross = round(array_sum($grossAmounts), 2);
+
+        $promocode = Promocode::with('users')->where('code', strtoupper(trim($request->promocode)))->active()->first();
 
         if (! $promocode) {
             return sendError('Invalid or inactive promocode');
         }
 
-        $user_id  = $request->user_id ?? auth()->user()?->id ?? null;
+        $user_id = auth('sanctum')->id();
 
         $isValid = $promocode->isValidForOrder(
-            $request->order_amount,
+            $gross,
             $user_id,
             $request->payment_method,
             $request->venue_id,
@@ -110,14 +132,17 @@ class PromocodeController extends Controller
             return sendError('Promocode is not applicable');
         }
 
-        $discount = $promocode->applyDiscount($request->order_amount);
+        $split = \App\Support\BookingPromotion::breakdown($promocode, $listing, $grossAmounts, $request->surface ?? 'marketplace', $request->payment_method ?? 'online_payment');
+        $discount = $split['discount'];
 
         return sendSuccess('Promocode applied successfully', [
             'promocode' => [
-                'discount_amount'  => $discount,
+                'discount_amount' => $discount,
+                'platform_funded_amount' => \App\Support\BookingPromotion::platformFunded($promocode) ? $discount : 0,
                 'code'             => $promocode->code,
                 'discount'         => $promocode->formatted_discount,
-                'new_order_amount' => $request->order_amount - $discount,
+                'new_order_amount' => $gross - $discount,
+                'platform_fee' => $split['fee'],
             ],
         ]);
     }

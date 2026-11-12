@@ -11,6 +11,7 @@ class Promocode extends Model
     use LogsModelActivity, TracksCreator;
 
     protected $fillable = [
+        'comeback_booking_id', 'starts_at', 'ends_at',
         'created_by',
         'code',
         'status',
@@ -44,6 +45,7 @@ class Promocode extends Model
     ];
 
     protected $casts = [
+        'starts_at' => 'datetime', 'ends_at' => 'datetime',
         'valid_from'             => 'date',
         'expires_at'             => 'date',
         'used_by_users'          => 'array',
@@ -99,7 +101,7 @@ class Promocode extends Model
             })
             ->where(function ($q) {
                 $q->whereNull('expires_at')
-                    ->orWhere('expires_at', '>=', now());
+                    ->orWhereDate('expires_at', '>=', now()->toDateString());
             });
     }
 
@@ -119,11 +121,13 @@ class Promocode extends Model
             return false;
         }
 
+        if (($this->starts_at && now()->lt($this->starts_at)) || ($this->ends_at && now()->gte($this->ends_at))) return false;
+
         if ($this->valid_from && now()->lt($this->valid_from)) {
             return false;
         }
 
-        if ($this->expires_at && now()->gt($this->expires_at)) {
+        if ($this->expires_at && now()->gt($this->expires_at->copy()->endOfDay())) {
             return false;
         }
 
@@ -132,10 +136,26 @@ class Promocode extends Model
         }
 
         if ($this->payment_methods !== 'all') {
-            if ($this->payment_methods == 'online_only' && !in_array($paymentMethod, ['online', 'online_payment'])) {
+            if ($this->payment_methods == 'online_only' && !in_array($paymentMethod, ['online', 'online_payment', 'deposit_remaining_on_arrival'])) {
                 return false;
             }
         }
+
+        if (!$venueId && ($this->venues->isNotEmpty() || $this->location_ids || $this->recipient === 'provider')) return false;
+        if (!$listingId && ($this->listings->isNotEmpty() || $this->listing_ids)) return false;
+        if ($this->location_ids && !in_array((int) $venueId, array_map('intval', $this->location_ids), true)) return false;
+        if ($this->listing_ids && !in_array((int) $listingId, array_map('intval', $this->listing_ids), true)) return false;
+        $venue = $venueId ? Venue::find($venueId) : null;
+        if ($listingId && (int) Listing::whereKey($listingId)->value('venue_id') !== (int) $venueId) return false;
+        if ($this->location_id && !$this->location_ids && (int)$venueId !== (int)$this->location_id) return false;
+        $providerOwners = $this->owner_user_ids ?: ($this->owner_user_id ? [$this->owner_user_id] : []);
+        if ($this->recipient === 'provider' && (!$providerOwners || !in_array((int)$venue?->owner_user_id, array_map('intval',$providerOwners), true))) return false;
+        if ($this->owner_user_ids && !in_array((int) $venue?->owner_user_id, array_map('intval', $this->owner_user_ids), true)) return false;
+        if ($this->applicable_to && !in_array($this->applicable_to, ['all','facility'], true)) return false;
+        $user = $userId ? User::find($userId) : null;
+        if ($this->audience === 'specific' && (!$user || !in_array(strtolower($user->email), array_map('strtolower', $this->target_emails ?? []), true))) return false;
+        if ($this->audience === 'new' && (!$user || Booking::where('user_id', $userId)->whereNotIn('status', ['cancelled'])->where('is_free', false)->exists())) return false;
+        if (!$userId && $this->users->isNotEmpty()) return false;
 
         if ($venueId && $this->venues->isNotEmpty() && ! $this->venues->contains($venueId)) {
             return false;
@@ -149,9 +169,10 @@ class Promocode extends Model
             return false;
         }
 
-        if ($this->per_user_limit && $userId) {
+        $perUserLimit = $this->per_user_limit ?: $this->per_customer_limit;
+        if ($perUserLimit && $userId) {
             $userUsed = $this->used_by_users[$userId] ?? 0;
-            if ($userUsed >= $this->per_user_limit) {
+            if ($userUsed >= $perUserLimit) {
                 return false;
             }
         }

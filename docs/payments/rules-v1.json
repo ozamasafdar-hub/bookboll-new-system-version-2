@@ -371,6 +371,35 @@
       "tests": [
         "bookboll-BACKEND/tests/Feature/ProviderMemberTest.php"
       ]
+    },
+    {
+      "id": "P25_PROMOTION_FUNDING",
+      "rule": "Provider promotions reduce the booking price before percentage commission. Configured marketplace fixed deposits stay fixed; provider discounts cannot consume them. Bookboll promotions and rewards are capped at the remaining platform share and preserve venue revenue. Per-slot rounding, saved funding snapshots and charge/ledger conservation apply to both surfaces and both payment methods. Manual bookings retain zero fee.",
+      "implementation": [
+        "bookboll-BACKEND/app/Support/BookingPromotion.php",
+        "bookboll-BACKEND/app/Services/BookingService.php",
+        "bookboll-BACKEND/app/Services/PaymentService.php",
+        "bookboll-BACKEND/app/Support/PaymentFinancialContext.php"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/BookingPromotionFundingTest.php",
+        "bookboll-BACKEND/tests/Feature/LoyaltyVenueBookingFundingTest.php"
+      ],
+      "production_acceptance": "Test percentage/fixed fees, provider/platform discounts, rewards, multiple unequal slots, zero-fee deposits and Stripe test-mode external connected settlement. Actual transfer evidence is mandatory; a provider ledger credit does not prove a payout."
+    },
+    {
+      "id": "P26_FIRST_VISIT_COMEBACK",
+      "rule": "After the first completed marketplace session at each venue, offer the opted-in customer up to the configured percentage off one same-venue marketplace booking within seven days; cap at platform share. Default 10%, global/country/city inheritance. Exclude staff/site/skipped/cancelled/event sessions. Deliver once per consented channel; preview never sends. No historical blast.",
+      "implementation": [
+        "bookboll-BACKEND/app/Services/ComebackOfferService.php",
+        "bookboll-BACKEND/app/Jobs/DeliverComebackOffer.php",
+        "bookboll-BACKEND/app/Console/Commands/SendBookingReminders.php"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/SendBookingRemindersTest.php",
+        "bookboll-BACKEND/tests/Feature/WhatsappImageHeaderTest.php"
+      ],
+      "production_acceptance": "Verify timezone/session end, scope, consent, expiry, inherited controls, duplicate execution, approved WhatsApp template and email with test recipients; retain per-channel outcomes and review uncertain delivery before retry."
     }
   ],
   "analytics_acceptance": {

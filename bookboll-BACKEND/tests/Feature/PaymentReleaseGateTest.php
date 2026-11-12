@@ -121,7 +121,7 @@ it('blocks previous acceptance without required payment workflow checks', functi
     $status = (new CompletedRunnerFixtureGate)->status();
     expect($status['production_ready'])->toBeFalse()
         ->and(collect($status['checks'])->keyBy('id')['financial_regression']['passed'])->toBeFalse();
-})->with(['P20_SUPERADMIN_BULK_ACTIONS', 'P21_PAYMENT_ANALYTICS_PARITY','P22_BOOKING_ACTIVITY_PARITY','P23_MEMBERSHIP_CONTACT_LISTINGS','P24_MANUAL_PROVIDER_MEMBERS']);
+})->with(['P20_SUPERADMIN_BULK_ACTIONS', 'P21_PAYMENT_ANALYTICS_PARITY','P22_BOOKING_ACTIVITY_PARITY','P23_MEMBERSHIP_CONTACT_LISTINGS','P24_MANUAL_PROVIDER_MEMBERS','P25_PROMOTION_FUNDING','P26_FIRST_VISIT_COMEBACK']);
 
 it('rejects a tampered signature or artifact without trusting checked boxes', function () {
     signReleaseFixture();

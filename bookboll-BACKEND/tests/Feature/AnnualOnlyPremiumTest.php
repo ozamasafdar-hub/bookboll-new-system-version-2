@@ -33,6 +33,13 @@ function premiumOwner(): User
     return $owner->fresh();
 }
 
+it('previews a plan promo against the signed in business and actual annual price',function(){
+    $owner=premiumOwner();
+    \App\Models\Promocode::create(['code'=>'QAPLAN10','description'=>'QA plan promo','status'=>'active','applicable_to'=>'provider_plan','recipient'=>'bookboll','owner_user_id'=>$owner->id,'discount_type'=>'percentage','discount_value'=>10]);
+    $this->actingAs($owner,'sanctum')->postJson('/api/promocodes/apply',['promocode'=>'QAPLAN10','order_amount'=>1,'applicable_to'=>'provider_plan'])
+        ->assertOk()->assertJsonPath('data.promocode.discount_amount',58.8)->assertJsonPath('data.promocode.new_order_amount',529.2);
+});
+
 it('refuses a monthly checkout instead of quietly charging a year', function () {
     $this->actingAs(premiumOwner())
         ->postJson('/api/admin/plan/checkout', ['billing' => 'monthly'])
