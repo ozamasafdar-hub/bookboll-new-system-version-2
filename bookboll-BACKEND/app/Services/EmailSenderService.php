@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Business;
 use App\Support\AccessScope;
+use App\Support\SmtpErrors;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -180,24 +181,7 @@ class EmailSenderService
     /** Turn the mail layer's exception into something a provider can act on. */
     protected function readableSmtpError(\Throwable $e): string
     {
-        $msg = $e->getMessage();
-
-        // Matched case-insensitively on stems: Symfony says "Failed to authenticate",
-        // not "Authentication", and the exact wording moves between versions.
-        return match (true) {
-            stripos($msg, 'authenticat') !== false   => 'The mail server rejected those credentials — check the username and password. (Gmail and Outlook need an app password, not your normal one.)',
-            stripos($msg, 'could not be established') !== false,
-            stripos($msg, 'refused') !== false,
-            stripos($msg, 'timed out') !== false,
-            stripos($msg, 'timeout') !== false        => 'Could not reach that mail server on this port. Check the host, port and encryption.',
-            stripos($msg, 'ssl') !== false,
-            stripos($msg, 'tls') !== false,
-            stripos($msg, 'certificate') !== false    => 'The encryption setting does not match the server. Try TLS on 587, or SSL on 465.',
-            stripos($msg, 'sender') !== false,
-            stripos($msg, 'from address') !== false   => 'The mail server refused this "from" address — it usually has to match the account you authenticate with.',
-            stripos($msg, 'recipient') !== false      => 'The mail server refused the recipient address.',
-            default                                   => 'The mail server refused the message: '.mb_strimwidth($msg, 0, 200, '…'),
-        };
+        return SmtpErrors::readable($e);
     }
 
     /** @param array<string, mixed> $tested */
