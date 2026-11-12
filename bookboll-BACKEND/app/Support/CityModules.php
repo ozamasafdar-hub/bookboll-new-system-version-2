@@ -17,8 +17,7 @@ use Nnjeim\World\Models\City;
  * client-side check is only a courtesy: the rule is enforced here so posting
  * straight to the API is refused the same way.
  *
- * NULL / missing reads as ON, so a city seeded before the columns existed keeps
- * behaving exactly as it did.
+ * NULL inherits the country/global policy; explicit switches remain overrides.
  */
 class CityModules
 {
@@ -29,18 +28,9 @@ class CityModules
     /** Is $module enabled for the city a venue sits in? */
     public static function enabledForVenue($venueId, string $module): bool
     {
-        if (! $venueId || ! Schema::hasColumn('cities', $module)) {
-            return true;
-        }
+        $venue = $venueId ? Venue::find($venueId) : null;
+        return app(MarketSettings::class)->module($module, $venue?->country_id, $venue?->city_id);
 
-        $cityId = Venue::whereKey($venueId)->value('city_id');
-        if (! $cityId) {
-            return true;   // no city recorded — nothing to gate on
-        }
-
-        $value = City::whereKey($cityId)->value($module);
-
-        return $value === null || (bool) $value;
     }
 
     /** The city's display name, for the refusal message. */

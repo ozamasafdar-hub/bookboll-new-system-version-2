@@ -446,16 +446,8 @@ class MarketplaceCatalogService
             'country_id' => 'nullable|integer',
         ]);
 
-        $loyalty = LoyaltyProgram::defaults();
-
-        if (! empty($data['country_id'])) {
-            $row = LoyaltyProgram::where('country_id', $data['country_id'])->first();
-            if ($row) {
-                $loyalty = $row->only(array_keys($loyalty));
-            } else {
-                $loyalty['country_id'] = (int) $data['country_id'];
-            }
-        }
+        $loyalty = LoyaltyProgram::effective($data['country_id'] ?? null)->only(array_keys(LoyaltyProgram::defaults()));
+        $loyalty['country_id'] = $data['country_id'] ?? null;
 
         return sendSuccess('Loyalty config fetched successfully', ['loyalty' => $loyalty]);
     }

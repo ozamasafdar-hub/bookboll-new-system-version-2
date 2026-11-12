@@ -1,188 +1,96 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
-import { MapPin, ChevronDown, Search, Check, Percent, Award, X, ToggleLeft, ToggleRight,
-  CalendarDays, GraduationCap, Users, Plus, Trash2 } from 'lucide-vue-next'
+import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue'
+import { Globe2, MapPin, ChevronDown, Search, Check, Percent, Award, X, ToggleLeft, ToggleRight, Plus, Trash2, RefreshCw, Settings2 } from 'lucide-vue-next'
 import PaginationBar from '../components/PaginationBar.vue'
+import MarketSettingsEditor from '../components/MarketSettingsEditor.vue'
 import { useCurrentUser } from '../lib/currentUser.js'
 import { pushToast } from '../lib/toast.js'
 import { logAudit, AUDIT } from '../lib/audit.js'
-import {
-  fetchGeographyCountries,
-  fetchGeographyCities,
-  updateCountryStatus,
-  updateCityStatus,
-  bulkUpdateCityStatus,
-  saveCommissionRate,
-  updateCityModule,
-} from '../lib/geography.js'
+import { fetchGeographyCountries, fetchGeographyCities, updateCountryStatus, updateCityStatus, bulkUpdateCityStatus, resetCountryRewards } from '../lib/geography.js'
 import { DEFAULT_LOYALTY, loadLoyaltyPrograms, saveLoyaltyProgram } from '../lib/loyalty.js'
-
 const { isSuperAdmin, isCountryAdmin } = useCurrentUser()
 const canManageGeo = computed(() => isSuperAdmin.value || isCountryAdmin.value)
-
-// ── Per-city service modules ─────────────────────────────────────────────────
-// A city can have any of Bookboll's three services switched off; the matching
-// creation flow is then refused there (the API enforces it too). A missing or
-// null flag reads as ON, so a city added before the switch existed is unchanged.
-const CITY_MODULES = [
-  { key: 'module_listings',    short: 'Listings',    label: 'booking listings',    icon: CalendarDays  },
-  { key: 'module_classes',     short: 'Memberships', label: 'membership programs', icon: GraduationCap },
-  { key: 'module_matchmaking', short: 'Matchmaking', label: 'player matchmaking',  icon: Users         },
-]
-const moduleSaving = ref(new Set())
-
-async function toggleModule(city, key) {
-  if (!canManageGeo.value) return
-  const saveKey = city.id + '_' + key
-  if (moduleSaving.value.has(saveKey)) return
-  moduleSaving.value = new Set(moduleSaving.value).add(saveKey)
-
-  const next = city[key] === false
-  const res = await updateCityModule(city.id, key, next)
-
-  moduleSaving.value.delete(saveKey)
-  moduleSaving.value = new Set(moduleSaving.value)
-
-  // Only reflect a write that actually landed — a stale pill misleads admins
-  // about what providers can create in this city.
-  if (!res.success) {
-    pushToast(res.message || `Could not update ${key.replace('module_', '')} for ${city.name}.`, 'error')
-    return
-  }
-  city[key] = next
-  logAudit({
-    action: AUDIT.UPDATED,
-    entity_type: 'city',
-    entity_id: city.id,
-    details: `${next ? 'Enabled' : 'Disabled'} ${key.replace('module_', '')} for ${city.name}`,
-  })
-}
-
-const countries = ref([])
-/** @type {import('vue').Ref<Record<number|string, Array>>} */
-const citiesByCountry = ref({})
-const citiesLoaded = ref(new Set())
-const citiesLoading = ref(new Set())
-const expanded = ref(new Set())
-const search = ref('')
-const saving = ref(new Set())
-const savedRecently = ref(new Set())
-const loading = ref(true)
-
-const countryPage = ref(1)
-const countryPerPage = ref(25)
-const countryTotal = ref(0)
-const countryTotalPages = computed(() => Math.max(1, Math.ceil(countryTotal.value / countryPerPage.value) || 1))
-
-const countryVisiblePages = computed(() => {
-  const total = countryTotalPages.value
-  const cur = countryPage.value
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
-  const pages = new Set([1, total, cur])
-  if (cur > 1) pages.add(cur - 1)
-  if (cur < total) pages.add(cur + 1)
-  return Array.from(pages).sort((a, b) => a - b)
-})
-
-const commissionRates = ref({})
-const commissionSaving = ref(new Set())
-const commissionSaved = ref(new Set())
-
-const DEFAULT_RATE = 15
-const DEFAULT_EVENT_RATE = 10
-
-function getRateObj(countryId) {
-  const key = String(countryId)
-  if (!commissionRates.value[key] && !commissionRates.value[countryId]) {
-    commissionRates.value[key] = { facility: DEFAULT_RATE, program: DEFAULT_RATE, event: DEFAULT_EVENT_RATE }
-  }
-  return commissionRates.value[key] || commissionRates.value[countryId]
-}
-
-async function saveCommission(countryId, type) {
-  const rate = parseFloat(getRateObj(countryId)[type])
-  if (isNaN(rate) || rate < 0 || rate > 100) {
-    pushToast('Commission must be a number between 0 and 100.', 'error')
-    return
-  }
-  const key = `${countryId}_${type}`
-  commissionSaving.value = new Set(commissionSaving.value).add(key)
-  const res = await saveCommissionRate(countryId, type, rate)
-  commissionSaving.value.delete(key)
-  commissionSaving.value = new Set(commissionSaving.value)
-  if (!res.success) {
-    pushToast(res.message || 'Could not save the commission rate.', 'error')
-    return
-  }
-  commissionSaved.value = new Set(commissionSaved.value).add(key)
-  const cName = countries.value.find(c => c.id === countryId)?.name || 'country'
-  logAudit({
-    action: AUDIT.UPDATED,
-    entity_type: 'commission_rate',
-    entity_id: countryId,
-    details: `Set ${type === 'facility' ? 'facility' : type === 'event' ? 'events per-seat' : 'membership'} commission to ${rate}% for ${cName}`,
-  })
-  setTimeout(() => {
-    commissionSaved.value.delete(key)
-    commissionSaved.value = new Set(commissionSaved.value)
-  }, 1500)
-}
-
-function mergeCommissionRates(rates) {
-  const next = { ...commissionRates.value }
-  for (const [cid, obj] of Object.entries(rates || {})) {
-    next[cid] = {
-      facility: Number(obj.facility ?? DEFAULT_RATE),
-      program: Number(obj.program ?? DEFAULT_RATE),
-      event: Number(obj.event ?? DEFAULT_EVENT_RATE),
-    }
-  }
-  commissionRates.value = next
-}
-
+const countries = ref([]), globalSettings = ref(null), globalRewards = ref(DEFAULT_LOYALTY)
+const loading = ref(true), loadError = ref(''), search = ref(''), statusFilter = ref(''), sort = ref('venues')
+const expanded = ref(new Set()), saving = ref(new Set()), savedRecently = ref(new Set())
+const citiesByCountry = ref({}), citiesLoaded = ref(new Set()), citiesLoading = ref(new Set())
+const citySearch = ref({}), cityLimit = ref({}), editor = ref(null), bulkSaving = ref(false), bulkTarget = ref(null)
+const countryPage = ref(1), countryPerPage = ref(25), countryTotal = ref(0)
+const countryTotalPages = computed(() => Math.max(1, Math.ceil(countryTotal.value / countryPerPage.value)))
+const countryVisiblePages = computed(() => Array.from({ length: countryTotalPages.value }, (_, i) => i + 1).filter(p => p === 1 || p === countryTotalPages.value || Math.abs(p - countryPage.value) <= 1))
+const fees = [{ key: 'facility', label: 'Venue bookings' }, { key: 'program', label: 'Memberships' }, { key: 'event', label: 'Event seats' }]
+let loadSeq = 0, searchTimer
 async function load(page = countryPage.value) {
-  loading.value = true
-  const res = await fetchGeographyCountries({
-    page,
-    records_per_page: countryPerPage.value,
-    search: search.value.trim() || undefined,
-  })
-  loading.value = false
-  if (!res.success) {
-    pushToast(res.message || 'Could not load countries.', 'error')
-    countries.value = []
-    countryTotal.value = 0
-    return
-  }
-
-  countries.value = res.data?.countries || []
-  mergeCommissionRates(res.data?.commission_rates)
-
-  const pagination = res.data?.pagination || {}
-  countryTotal.value = Number(pagination.total ?? countries.value.length) || 0
-  if (pagination.current_page) countryPage.value = Number(pagination.current_page)
+  const seq = ++loadSeq
+  loading.value = true; loadError.value = ''
+  try {
+    const res = await fetchGeographyCountries({ page, records_per_page: countryPerPage.value, search: search.value.trim() || undefined, status: statusFilter.value || undefined, sort: sort.value })
+    if (seq !== loadSeq) return
+    if (!res.success) throw new Error(res.message || 'Could not load countries.')
+    countries.value = res.data.countries || []
+    globalSettings.value = res.data.global_settings
+    countryTotal.value = Number(res.data.pagination?.total || 0)
+    countryPage.value = Number(res.data.pagination?.current_page || page)
+  } catch (e) { if (seq === loadSeq) loadError.value = e.message }
+  finally { if (seq === loadSeq) loading.value = false }
 }
-
-let searchTimer
-function scheduleLoad() {
-  clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    countryPage.value = 1
-    load(1)
-  }, 300)
+watch(search, () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => load(1), 300) })
+watch([statusFilter, sort, countryPerPage], () => load(1))
+onBeforeUnmount(() => { clearTimeout(searchTimer); loadSeq++ })
+function countryGoTo(page) { load(page) }
+function citiesOf(id) { return citiesByCountry.value[id] || [] }
+function matchingCities(id) { const q = (citySearch.value[id] || '').toLowerCase(); return citiesOf(id).filter(c => c.name.toLowerCase().includes(q)) }
+function shownCities(id) { return matchingCities(id).slice(0, cityLimit.value[id] || 12) }
+async function ensureCities(id, force = false) {
+  if ((!force && citiesLoaded.value.has(id)) || citiesLoading.value.has(id)) return
+  citiesLoading.value = new Set(citiesLoading.value).add(id)
+  try {
+    const res = await fetchGeographyCities(id)
+    if (!res.success) throw new Error(res.message || 'Could not load cities.')
+    citiesByCountry.value[id] = res.data.cities || []
+    citiesLoaded.value = new Set(citiesLoaded.value).add(id)
+  } catch (e) { pushToast(e.message, 'error') }
+  finally { citiesLoading.value.delete(id); citiesLoading.value = new Set(citiesLoading.value) }
 }
-
-watch(search, () => scheduleLoad())
-watch(countryPerPage, () => {
-  countryPage.value = 1
-  load(1)
-})
-
-function countryGoTo(p) {
-  countryPage.value = p
-  load(p)
+function toggle(id) { expanded.value = expanded.value.has(id) ? new Set() : new Set([id]); if (expanded.value.has(id)) ensureCities(id) }
+async function refresh() { await load(); for (const id of expanded.value) await ensureCities(id, true); await loadLoyalty() }
+function openSettings(scope, item = {}) { editor.value = { scope, id: Number(item.id || 0), name: item.name || 'Global defaults' } }
+async function settingsSaved() { editor.value = null; pushToast('Settings saved.', 'success'); citiesLoaded.value = new Set(); await refresh() }
+async function toggleStatus(item, type) {
+  const key = type + item.id
+  if (!canManageGeo.value || saving.value.has(key)) return
+  saving.value = new Set(saving.value).add(key)
+  try {
+    const target = item.status === 'active' ? 'inactive' : 'active'
+    const res = await (type === 'country' ? updateCountryStatus : updateCityStatus)(item.id, target)
+    if (!res.success) throw new Error(res.message || 'Could not save availability.')
+    item.status = target
+    pushToast(`${item.name} ${target === 'active' ? 'enabled' : 'disabled'}.`, 'success')
+  } catch (e) { pushToast(e.message, 'error') }
+  finally { saving.value.delete(key); saving.value = new Set(saving.value) }
 }
-
+async function applyBulkAvailability() {
+  const { country, status } = bulkTarget.value
+  bulkSaving.value = true
+  try {
+    await ensureCities(country.id)
+    const ids = citiesOf(country.id).filter(c => c.status !== status).map(c => c.id)
+    if (ids.length) {
+      const res = await bulkUpdateCityStatus(country.id, status, ids)
+      if (!res.success) throw new Error(res.message || 'Could not update cities.')
+      await ensureCities(country.id, true)
+    }
+    bulkTarget.value = null
+    pushToast('City availability updated.', 'success')
+  } catch (e) { pushToast(e.message, 'error') }
+  finally { bulkSaving.value = false }
+}
+async function useGlobalRewards(country) {
+  const res = await resetCountryRewards(country.id)
+  if (!res.success) return pushToast(res.message || 'Could not reset rewards.', 'error')
+  await loadLoyalty(); pushToast(`${country.name} now uses global rewards.`, 'success')
+}
+function overrideLabel(item) { const count = Object.keys(item.settings?.overrides || {}).length; return count ? `${count} custom setting${count === 1 ? '' : 's'}` : 'Uses parent defaults' }
 /* ── Loyalty programs (per country) ──────────────────────────────────────────
    A country with no saved row falls back to DEFAULT_LOYALTY, so every country
    always has an effective program — saving is what creates the row. */
@@ -193,15 +101,16 @@ async function loadLoyalty() {
   if (!isSuperAdmin.value) return
   const res = await loadLoyaltyPrograms()
   if (res.error) { pushToast(res.error, 'error'); return }
+  globalRewards.value = res.defaults || DEFAULT_LOYALTY
   loyaltyPrograms.value = res.byCountry
-  loyaltyTiers.value = res.tiers || []
+  loyaltyTiers.value = (res.tiers || []).filter(t => t.is_active !== false)
   loyaltyLoaded.value = true
 }
 
 /** The saved row for a country, or null when it's still on platform defaults. */
 const programFor = (countryId) => loyaltyPrograms.value[countryId] || null
 /** What actually applies — the saved row, else the platform defaults. */
-const effectiveProgram = (countryId) => programFor(countryId) || DEFAULT_LOYALTY
+const effectiveProgram = (countryId) => programFor(countryId) || globalRewards.value
 
 function loyaltySummary(country) {
   const p = effectiveProgram(country.id)
@@ -213,12 +122,6 @@ function loyaltySummary(country) {
 // Each country's own ladder. A customer's tier is the highest one whose
 // threshold their lifetime points reach, so the ladder is per country: what
 // counts as "Legend" in one market is not the same spend in another.
-const PRESET_TIERS = [
-  { name: 'Rookie', color: '#92400e', bg_color: '#fef3c7', threshold: 0,     multiplier: 1   },
-  { name: 'Star',   color: '#475569', bg_color: '#f1f5f9', threshold: 1000,  multiplier: 1.2 },
-  { name: 'Legend', color: '#b45309', bg_color: '#fef9c3', threshold: 5000,  multiplier: 1.5 },
-  { name: 'GOAT',   color: '#0f766e', bg_color: '#ccfbf1', threshold: 15000, multiplier: 2   },
-]
 function defaultLTier(sortOrder = 0) {
   return { name: '', color: '#92400e', bg_color: '#fef3c7', threshold: 0, multiplier: 1, sort_order: sortOrder }
 }
@@ -230,13 +133,13 @@ function removeLTier(i) { lTiers.value.splice(i, 1) }
 /** This country's ladder, falling back to the presets when it has none yet. */
 function tiersForProgram(programId) {
   const mine = loyaltyTiers.value.filter(t => t.program_id === programId)
-  const base = mine.length ? mine : PRESET_TIERS
+  const base = mine
   return base
     .slice()
     .sort((a, b) => Number(a.threshold || 0) - Number(b.threshold || 0))
     .map((t, i) => ({
       name: t.name, color: t.color || '#92400e', bg_color: t.bg_color || '#fef3c7',
-      threshold: Number(t.threshold || 0), multiplier: Number(t.multiplier || 1), sort_order: i,
+      threshold: Number(t.threshold || 0), multiplier: Number(t.multiplier ?? 1), sort_order: i,
     }))
 }
 
@@ -258,16 +161,23 @@ async function saveLoyalty() {
   if (!country || lSaving.value) return
   lTriedSave.value = true
   if (!lForm.value.name?.trim()) { pushToast('Program name is required.', 'error'); return }
+  for (const [key, min, max] of [['earn_rate', 0, 999999], ['redeem_rate', 1, 2147483647], ['min_redeem', 0, 2147483647], ['max_redeem_pct', 0, 100], ['expiry_months', 0, 600]]) {
+    const value = Number(lForm.value[key])
+    if (lForm.value[key] === '' || !Number.isFinite(value) || value < min || value > max || (key !== 'earn_rate' && !Number.isInteger(value))) {
+      pushToast('Check reward rates, limits and expiry before saving.', 'error'); return
+    }
+  }
 
   lSaving.value = true
   const res = await saveLoyaltyProgram(country.id, lForm.value, lTiers.value)
   lSaving.value = false
   if (res.error) { pushToast(res.error, 'error'); return }
 
-  loyaltyPrograms.value = { ...loyaltyPrograms.value, [country.id]: res.program }
+  if (country.id === null) globalRewards.value = res.program
+  else loyaltyPrograms.value = { ...loyaltyPrograms.value, [country.id]: res.program }
   // Replace this program's tiers with what the server actually stored.
   if (res.tiers) {
-    const pid = res.program?.id ?? null
+    const pid = country.id === null ? null : res.program?.id ?? null
     loyaltyTiers.value = [...loyaltyTiers.value.filter(t => t.program_id !== pid), ...res.tiers]
   }
   logAudit({
@@ -278,6 +188,7 @@ async function saveLoyalty() {
   })
   pushToast(`Loyalty program saved for ${country.name}.`, 'success')
   closeLoyalty()
+  await loadLoyalty()
 }
 
 /** Summary-card toggle: flips is_active on the saved row, creating it if needed. */
@@ -285,7 +196,8 @@ async function toggleLoyaltyActive(country) {
   const current = effectiveProgram(country.id)
   const res = await saveLoyaltyProgram(country.id, { ...current, is_active: !current.is_active })
   if (res.error) { pushToast(res.error, 'error'); return }
-  loyaltyPrograms.value = { ...loyaltyPrograms.value, [country.id]: res.program }
+  if (country.id === null) globalRewards.value = res.program
+  else loyaltyPrograms.value = { ...loyaltyPrograms.value, [country.id]: res.program }
   logAudit({
     action: res.program.is_active ? AUDIT.ENABLED : AUDIT.DISABLED,
     entity_type: 'loyalty_program',
@@ -294,324 +206,45 @@ async function toggleLoyaltyActive(country) {
   })
 }
 
+
 onMounted(() => { load(1); loadLoyalty() })
-
-function citiesOf(countryId) {
-  return citiesByCountry.value[countryId] || citiesByCountry.value[String(countryId)] || []
-}
-
-async function ensureCities(countryId) {
-  if (citiesLoaded.value.has(countryId) || citiesLoading.value.has(countryId)) return
-  citiesLoading.value = new Set(citiesLoading.value).add(countryId)
-  const res = await fetchGeographyCities(countryId)
-  citiesLoading.value.delete(countryId)
-  citiesLoading.value = new Set(citiesLoading.value)
-  if (!res.success) {
-    pushToast(res.message || 'Could not load cities.', 'error')
-    return
-  }
-  citiesByCountry.value = {
-    ...citiesByCountry.value,
-    [countryId]: res.data?.cities || [],
-  }
-  citiesLoaded.value = new Set(citiesLoaded.value).add(countryId)
-}
-
-function toggle(id) {
-  if (expanded.value.has(id)) {
-    expanded.value.delete(id)
-  } else {
-    expanded.value.add(id)
-    ensureCities(id)
-  }
-  expanded.value = new Set(expanded.value)
-}
-
-function flash(id) {
-  savedRecently.value = new Set(savedRecently.value).add(id)
-  setTimeout(() => {
-    savedRecently.value.delete(id)
-    savedRecently.value = new Set(savedRecently.value)
-  }, 1200)
-}
-
-async function toggleCountry(country) {
-  if (saving.value.has(country.id)) return
-  saving.value = new Set(saving.value).add(country.id)
-  const newStatus = country.status === 'active' ? 'inactive' : 'active'
-  const res = await updateCountryStatus(country.id, newStatus)
-  saving.value.delete(country.id)
-  saving.value = new Set(saving.value)
-  if (!res.success) {
-    pushToast(res.message || `Could not update ${country.name}.`, 'error')
-    return
-  }
-  country.status = res.data?.country?.status || newStatus
-  flash(country.id)
-  logAudit({
-    action: newStatus === 'active' ? AUDIT.ENABLED : AUDIT.DISABLED,
-    entity_type: 'country',
-    entity_id: country.id,
-    details: `${newStatus === 'active' ? 'Enabled' : 'Disabled'} country ${country.name}`,
-  })
-}
-
-async function toggleCity(city) {
-  if (saving.value.has(city.id)) return
-  saving.value = new Set(saving.value).add(city.id)
-  const newStatus = city.status === 'active' ? 'inactive' : 'active'
-  const res = await updateCityStatus(city.id, newStatus)
-  saving.value.delete(city.id)
-  saving.value = new Set(saving.value)
-  if (!res.success) {
-    pushToast(res.message || `Could not update ${city.name}.`, 'error')
-    return
-  }
-  city.status = res.data?.city?.status || newStatus
-  flash(city.id)
-}
-
-const bulkSaving = ref(false)
-async function toggleAllCities(countryId, targetStatus) {
-  if (bulkSaving.value) return
-  await ensureCities(countryId)
-  const batch = citiesOf(countryId).filter(c => c.status !== targetStatus)
-  if (!batch.length) return
-  bulkSaving.value = true
-  const res = await bulkUpdateCityStatus(countryId, targetStatus, batch.map(c => c.id))
-  bulkSaving.value = false
-  if (!res.success) {
-    pushToast(res.message || 'Could not update the cities.', 'error')
-    return
-  }
-  batch.forEach(c => { c.status = targetStatus })
-}
-
-function activeCount(countryId) {
-  return citiesOf(countryId).filter(c => c.status === 'active').length
-}
-
-function cityCountLabel(country) {
-  if (citiesLoaded.value.has(country.id)) {
-    return `${activeCount(country.id)} / ${citiesOf(country.id).length}`
-  }
-  return String(country.cities_count ?? 0)
-}
 </script>
 
 <template>
   <div class="page admin-workspace countries-workspace">
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">Countries &amp; Cities</h1>
-        <div class="page-subtitle">Enable countries &amp; cities, and set each country's commission rates</div>
-      </div>
-    </div>
-
-    <div class="geo-guide"><div><MapPin :size="22" /><strong>Market availability</strong><span>Enable countries and cities for location selection.</span></div><div><Percent :size="22" /><strong>Local commission</strong><span>Set listing, membership and event rates per country.</span></div><div><Award :size="22" /><strong>Country rewards</strong><span>Configure how points are earned and redeemed.</span></div></div>
-    <div class="workspace-section-heading"><h2>Find a market</h2><span>{{ countryTotal }} matching countries</span></div>
-    <!-- Search bar -->
-    <div class="search-bar">
-      <Search :size="15" class="search-icon" />
-      <input v-model="search" placeholder="Search countries or cities…" class="search-input" />
-    </div>
-
-    <!-- Legend -->
-    <div class="legend">
-      <span class="legend-item"><span class="cb active"></span> Enabled — appears in location dropdowns</span>
-      <span class="legend-item"><span class="cb"></span> Disabled — hidden from location dropdowns</span>
-    </div>
-
-    <!-- Country list -->
-    <div class="country-list">
-      <div
-        v-for="country in countries"
-        :key="country.id"
-        class="country-row-wrap"
-        :class="{ inactive: country.status !== 'active', expanded: expanded.has(country.id) }"
-      >
-        <!-- Country header row -->
-        <div class="country-row" role="button" tabindex="0" :aria-expanded="expanded.has(country.id)" @keydown.enter.self.prevent="toggle(country.id)" @keydown.space.self.prevent="toggle(country.id)" @click="toggle(country.id)">
-          <!-- Checkbox -->
-          <div
-            class="cb-wrap" role="checkbox" tabindex="0" :aria-label="`Enable ${country.name}`" :aria-checked="country.status === 'active'" @keydown.space.stop.prevent="toggleCountry(country)" @keydown.enter.stop.prevent="toggleCountry(country)"
-            @click.stop="toggleCountry(country)"
-            :title="country.status === 'active' ? 'Disable country' : 'Enable country'"
-          >
-            <div class="cb" :class="{ active: country.status === 'active', saving: saving.has(country.id) }">
-              <Check v-if="country.status === 'active'" :size="11" stroke-width="3" />
-            </div>
-          </div>
-
-          <!-- Flag-style ISO badge -->
-          <div class="iso-badge">{{ country.iso_code }}</div>
-
-          <!-- Name -->
-          <div class="country-name">{{ country.name }}<small>{{ country.status === 'active' ? 'Enabled' : 'Disabled' }}</small></div>
-
-          <!-- Meta -->
-          <div class="country-meta">
-            <span v-if="country.currency_code" class="meta-pill">{{ country.currency_code }}</span>
-            <span class="meta-pill city-count">
-              <MapPin :size="10" />
-              {{ cityCountLabel(country) }} cities
-            </span>
-          </div>
-
-          <!-- Expand toggle -->
-          <div class="expand-btn" :class="{ open: expanded.has(country.id) }">
-            <ChevronDown :size="15" />
-          </div>
+    <div class="page-header"><div><h1 class="page-title">Countries &amp; cities</h1><p class="page-subtitle">Manage market availability, platform fees and rewards.</p></div><button class="btn btn-secondary" :disabled="loading" @click="refresh"><RefreshCw :size="15"/> Refresh</button></div>
+    <section v-if="globalSettings" class="geo-defaults" aria-label="Global defaults">
+      <div class="geo-defaults-head"><div class="geo-title-icon"><Globe2 :size="22"/><div><h2>Global defaults</h2><p>Global → country → city. More specific settings take priority.</p></div></div><button v-if="isSuperAdmin" class="btn btn-primary" @click="openSettings('global')"><Settings2 :size="15"/> Edit defaults</button></div>
+      <div class="geo-default-values"><div v-for="fee in fees" :key="fee.key"><span>{{ fee.label }}</span><strong>{{ globalSettings.effective[fee.key] }}<small>%</small></strong></div><div class="geo-rewards-default"><span>Country rewards</span><strong>{{ globalRewards.is_active ? 'Enabled' : 'Disabled' }}</strong><button v-if="isSuperAdmin && loyaltyLoaded" class="geo-link" @click="openLoyalty({ id: null, name: 'Global defaults', currency_code: 'currency unit' })">Edit rewards <Award :size="13"/></button></div></div>
+      <p class="geo-inheritance-note">Existing country rates and city switches are kept as overrides. Choose “Use parent default” to follow changes here. Rewards are shared by all cities within each country.</p>
+    </section>
+    <div class="geo-toolbar"><label class="geo-search"><Search :size="16"/><input v-model="search" aria-label="Search countries or cities" placeholder="Search countries or cities…" /></label><label>Availability<select v-model="statusFilter"><option value="">All countries</option><option value="active">Enabled</option><option value="inactive">Disabled</option></select></label><label>Sort by<select v-model="sort"><option value="venues">Most venues first</option><option value="businesses">Most businesses first</option><option value="name">Country name</option></select></label></div>
+    <div class="geo-list-caption"><strong>{{ countryTotal }} countries</strong><span>Venue counts include all onboarded locations. Businesses count once per country where registered or operating.</span></div>
+    <p v-if="loadError" role="alert" class="geo-error">{{ loadError }} <button class="geo-link" @click="load()">Try again</button></p>
+    <div v-else class="geo-table" :aria-busy="loading">
+      <div class="geo-columns" aria-hidden="true"><span>Country</span><span>Venues</span><span>Businesses</span><span>Availability</span><span></span></div>
+      <article v-for="country in countries" :key="country.id" class="geo-country" :class="{ expanded: expanded.has(country.id) }">
+        <div class="geo-country-row">
+          <button class="geo-country-name" :aria-expanded="expanded.has(country.id)" @click="toggle(country.id)"><span class="geo-iso">{{ country.iso_code }}</span><span><strong>{{ country.name }}</strong><small>{{ country.currency_code || '—' }} · {{ country.cities_count.toLocaleString() }} cities</small></span></button>
+          <div class="geo-count"><strong>{{ country.venues_count.toLocaleString() }}</strong><small>venues</small></div><div class="geo-count"><strong>{{ country.businesses_count.toLocaleString() }}</strong><small>businesses</small></div>
+          <button class="geo-status" :class="{ enabled: country.status === 'active' }" :disabled="!canManageGeo || saving.has('country' + country.id)" :aria-label="`${country.name} availability: ${country.status === 'active' ? 'enabled' : 'disabled'}`" :aria-pressed="country.status === 'active'" @click="toggleStatus(country, 'country')"><span></span>{{ country.status === 'active' ? 'Enabled' : 'Disabled' }}</button>
+          <button class="btn btn-secondary btn-sm geo-manage" :aria-label="`Manage ${country.name}`" :aria-expanded="expanded.has(country.id)" @click="toggle(country.id)">Manage <ChevronDown :size="14" :class="{ rotated: expanded.has(country.id) }"/></button>
         </div>
-
-        <!-- Cities + Commission panel -->
-        <div v-if="expanded.has(country.id)" class="cities-panel">
-
-          <!-- Commission rates (Super Admin + Country Admin in jurisdiction) -->
-          <div v-if="canManageGeo" class="commission-section">
-            <div class="commission-section-title">
-              <Percent :size="13" />
-              Commission Rates for {{ country.name }}
-            </div>
-            <div class="commission-row">
-              <div class="commission-field">
-                <label class="commission-label">Facility Listings (%)</label>
-                <div class="commission-input-wrap">
-                  <input
-                    type="number" min="0" max="100" step="0.5"
-                    class="commission-input"
-                    :value="getRateObj(country.id).facility"
-                    @input="getRateObj(country.id).facility = $event.target.value"
-                    @blur="saveCommission(country.id, 'facility')"
-                    @keydown.enter="saveCommission(country.id, 'facility')"
-                  />
-                  <span class="pct-suffix">%</span>
-                </div>
-              </div>
-              <div class="commission-field">
-                <label class="commission-label">Membership Programs (%)</label>
-                <div class="commission-input-wrap">
-                  <input
-                    type="number" min="0" max="100" step="0.5"
-                    class="commission-input"
-                    :value="getRateObj(country.id).program"
-                    @input="getRateObj(country.id).program = $event.target.value"
-                    @blur="saveCommission(country.id, 'program')"
-                    @keydown.enter="saveCommission(country.id, 'program')"
-                  />
-                  <span class="pct-suffix">%</span>
-                </div>
-              </div>
-              <div class="commission-field">
-                <label class="commission-label">Events — per seat (%)</label>
-                <div class="commission-input-wrap">
-                  <input
-                    type="number" min="0" max="100" step="0.5"
-                    class="commission-input"
-                    :value="getRateObj(country.id).event"
-                    @input="getRateObj(country.id).event = $event.target.value"
-                    @blur="saveCommission(country.id, 'event')"
-                    @keydown.enter="saveCommission(country.id, 'event')"
-                  />
-                  <span class="pct-suffix">%</span>
-                </div>
-              </div>
-              <div class="commission-status">
-                <span v-if="commissionSaving.has(`${country.id}_facility`) || commissionSaving.has(`${country.id}_program`)" class="cr-saving">Saving…</span>
-                <span v-else-if="commissionSaved.has(`${country.id}_facility`) || commissionSaved.has(`${country.id}_program`)" class="cr-saved"><Check :size="12" /> Saved</span>
-                <span v-else class="cr-hint">Tab or Enter to save</span>
-              </div>
-            </div>
-            <div class="commission-note">
-              Default rates for {{ country.name }} (platform default: 15%). Facility bookings use this rate live (a per-listing override wins);
-              membership programs use it as the default commission when a new program is created here.
-            </div>
-          </div>
-
-          <!-- Loyalty program summary (super admin only) -->
-          <div v-if="isSuperAdmin && loyaltyLoaded" class="loyalty-section">
-            <div class="loyalty-left">
-              <div class="ly-card-head" style="border:none; background:none; padding:0 0 8px;">
-                <Award :size="15" />Loyalty Program
-              </div>
-              <div class="loyalty-summary">
-                <button
-                  class="ly-status-toggle"
-                  :class="effectiveProgram(country.id).is_active ? 'on' : 'off'"
-                  :title="effectiveProgram(country.id).is_active ? 'Click to deactivate' : 'Click to activate'"
-                  @click.stop="toggleLoyaltyActive(country)"
-                >
-                  <ToggleRight v-if="effectiveProgram(country.id).is_active" :size="14" />
-                  <ToggleLeft v-else :size="14" />
-                  {{ effectiveProgram(country.id).is_active ? 'Active' : 'Inactive' }}
-                </button>
-                <span class="loyalty-sum-text">{{ loyaltySummary(country) }}</span>
-                <span v-if="!programFor(country.id)" class="loyalty-sum-text muted">· platform default</span>
-              </div>
-            </div>
-            <button class="btn btn-secondary btn-sm" @click.stop="openLoyalty(country)">
-              <Award :size="13" />Edit
-            </button>
-          </div>
-
-          <!-- Cities -->
-          <div class="cities-panel-header">
-            <span>Cities</span>
-            <div style="display:flex;gap:8px;">
-              <button class="link-btn" :disabled="bulkSaving || citiesLoading.has(country.id)" @click.stop="toggleAllCities(country.id, 'active')">Enable all</button>
-              <button class="link-btn muted" :disabled="bulkSaving || citiesLoading.has(country.id)" @click.stop="toggleAllCities(country.id, 'inactive')">Disable all</button>
-            </div>
-          </div>
-          <div v-if="citiesLoading.has(country.id)" class="no-cities">Loading cities…</div>
-          <div v-else class="cities-grid">
-            <div
-              v-for="city in citiesOf(country.id)"
-              :key="city.id"
-              class="city-item"
-              :class="{ inactive: city.status !== 'active' }"
-            >
-              <div class="city-top" @click="toggleCity(city)">
-                <div class="cb sm" :class="{ active: city.status === 'active', saving: saving.has(city.id) }">
-                  <Check v-if="city.status === 'active'" :size="9" stroke-width="3" />
-                </div>
-                <span class="city-name">{{ city.name }}</span>
-                <Check v-if="savedRecently.has(city.id)" :size="11" class="saved-flash" />
-              </div>
-              <!-- Service module toggles — only for an active city, and only for
-                   someone who may manage geography. -->
-              <div v-if="city.status === 'active' && canManageGeo" class="city-modules">
-                <button
-                  v-for="mod in CITY_MODULES"
-                  :key="mod.key"
-                  class="mod-pill"
-                  :class="{ 'mod-off': city[mod.key] === false }"
-                  :title="(city[mod.key] !== false ? 'Click to disable ' : 'Click to enable ') + mod.label"
-                  :disabled="moduleSaving.has(city.id + '_' + mod.key)"
-                  @click.stop="toggleModule(city, mod.key)"
-                >
-                  <component :is="mod.icon" :size="9" />
-                  {{ mod.short }}
-                </button>
-              </div>
-            </div>
-            <div v-if="!citiesOf(country.id).length" class="no-cities">No cities configured for this country.</div>
-          </div>
+        <div v-if="expanded.has(country.id)" class="geo-country-body">
+          <div class="geo-country-settings"><div><h3>{{ country.name }} settings <small>{{ overrideLabel(country) }}</small></h3><p><span v-for="fee in fees" :key="fee.key">{{ fee.label }} <b>{{ country.settings.effective[fee.key] }}%</b><small> · {{ country.settings.sources[fee.key] }}</small></span></p></div><button v-if="canManageGeo" class="btn btn-secondary btn-sm" @click="openSettings('country', country)">Edit country settings</button></div>
+          <div v-if="isSuperAdmin && loyaltyLoaded" class="geo-rewards-row"><div><h3>Rewards <small>{{ programFor(country.id) ? 'Country override' : 'Global default' }}</small></h3><p>{{ effectiveProgram(country.id).is_active ? loyaltySummary(country) : 'Rewards disabled' }}</p></div><div class="geo-actions"><button v-if="programFor(country.id)" class="geo-link" @click="useGlobalRewards(country)">Use global rewards</button><button class="btn btn-secondary btn-sm" @click="openLoyalty(country)">Edit rewards</button></div></div>
+          <div class="geo-city-heading"><div><h3>Cities in {{ country.name }}</h3><p>Availability controls location pickers. Service settings control what can be added.</p></div><div v-if="canManageGeo" class="geo-actions"><button class="geo-link" :disabled="citiesLoading.has(country.id)" @click="bulkTarget = { country, status: 'active' }">Enable all</button><button class="geo-link" :disabled="citiesLoading.has(country.id)" @click="bulkTarget = { country, status: 'inactive' }">Disable all</button></div></div>
+          <label class="geo-search geo-city-search"><Search :size="15"/><input v-model="citySearch[country.id]" :aria-label="'Search cities in ' + country.name" placeholder="Find a city…" @input="cityLimit[country.id] = 12" /></label>
+          <p v-if="citiesLoading.has(country.id)" role="status">Loading cities…</p>
+          <div v-else class="geo-city-list"><div v-for="city in shownCities(country.id)" :key="city.id" class="geo-city"><div><strong>{{ city.name }}</strong><small>{{ overrideLabel(city) }} · Bookings {{ city.settings.effective.facility }}% · Events {{ city.settings.effective.event }}%</small></div><button class="geo-status" :class="{ enabled: city.status === 'active' }" :disabled="!canManageGeo || saving.has('city' + city.id)" :aria-label="`${city.name} availability: ${city.status === 'active' ? 'enabled' : 'disabled'}`" :aria-pressed="city.status === 'active'" @click="toggleStatus(city, 'city')"><span></span>{{ city.status === 'active' ? 'Enabled' : 'Disabled' }}</button><button v-if="canManageGeo" class="btn btn-secondary btn-sm" :aria-label="'Edit ' + city.name + ' settings'" @click="openSettings('city', city)">Settings</button></div><p v-if="!matchingCities(country.id).length" class="geo-empty">No cities match this search.</p></div>
+          <button v-if="matchingCities(country.id).length > shownCities(country.id).length" class="btn btn-secondary btn-sm geo-more" @click="cityLimit[country.id] = (cityLimit[country.id] || 12) + 24">Show more cities ({{ shownCities(country.id).length }} of {{ matchingCities(country.id).length }})</button>
         </div>
-      </div>
-
-      <div v-if="loading" class="empty-state">Loading countries…</div>
-      <div v-else-if="!countries.length" class="empty-state">
-        {{ search.trim() ? `No countries match "${search}"` : 'No countries found.' }}
-      </div>
+      </article>
+      <p v-if="loading && !countries.length" role="status" class="geo-empty">Loading markets…</p><p v-else-if="!loading && !countries.length" class="geo-empty">No countries match these filters.</p>
     </div>
-    <PaginationBar
-      v-if="!loading && countryTotal > 0"
-      :page="countryPage" :perPage="countryPerPage" :totalPages="countryTotalPages"
-      :total="countryTotal" :visiblePages="countryVisiblePages"
-      @update:perPage="countryPerPage = $event"
-      @goTo="countryGoTo"
-    />
-
+    <PaginationBar v-if="countryTotal > 0" :page="countryPage" :perPage="countryPerPage" :totalPages="countryTotalPages" :total="countryTotal" :visiblePages="countryVisiblePages" @update:perPage="countryPerPage = $event" @goTo="countryGoTo"/>
+    <MarketSettingsEditor v-if="editor" :scope="editor.scope" :scope-id="editor.id" :name="editor.name" @close="editor = null" @saved="settingsSaved"/>
+    <Teleport to="body"><div v-if="bulkTarget" class="ly-backdrop" @click.self="!bulkSaving && (bulkTarget = null)"><section class="ly-modal geo-confirm" v-dialog role="dialog" aria-modal="true" aria-labelledby="geo-bulk-title"><div class="ly-head"><h2 id="geo-bulk-title">{{ bulkTarget.status === 'active' ? 'Enable' : 'Disable' }} all cities in {{ bulkTarget.country.name }}?</h2></div><div class="ly-body"><p>This changes availability for every city in this country, including cities outside the search results. Service overrides and existing bookings stay unchanged.</p></div><div class="ly-foot"><button class="btn btn-secondary" :disabled="bulkSaving" @click="bulkTarget = null">Cancel</button><button class="btn btn-primary" :disabled="bulkSaving" @click="applyBulkAvailability">{{ bulkSaving ? 'Saving…' : 'Confirm availability change' }}</button></div></section></div></Teleport>
     <!-- ── Loyalty program editor (per country) ─────────────────────────── -->
     <Teleport to="body">
       <div v-if="loyaltyCountry" class="ly-backdrop" @click.self="closeLoyalty">
@@ -619,7 +252,7 @@ function cityCountLabel(country) {
           <div class="ly-head">
             <div>
               <div class="ly-title"><Award :size="17" />Loyalty Program — {{ loyaltyCountry.name }}</div>
-              <div class="ly-sub">Per-country earn &amp; redeem rules</div>
+              <div class="ly-sub">{{ loyaltyCountry.id === null ? 'Shared defaults for every country without its own rewards program' : 'Country rewards · shared by all cities in this country' }}</div>
             </div>
             <div class="ly-head-right">
               <button class="ly-toggle" @click="lForm.is_active = !lForm.is_active" :title="lForm.is_active ? 'Click to deactivate' : 'Click to activate'">
@@ -643,7 +276,7 @@ function cityCountLabel(country) {
                 <div class="ly-rules-grid">
                   <div class="form-group">
                     <label class="form-label">Points per {{ loyaltyCountry.currency_code || 'unit' }} spent</label>
-                    <input type="number" v-model="lForm.earn_rate" min="0" step="0.1" />
+                    <input type="number" v-model="lForm.earn_rate" min="0" step="0.1" /><div class="ly-hint">New marketplace bookings earn this rate × the customer’s tier multiplier, on the booking total after discounts. Replaces fixed listing points.</div>
                   </div>
                   <div class="form-group">
                     <label class="form-label">Points for {{ loyaltyCountry.currency_code || 'unit' }} 1 discount</label>
@@ -660,7 +293,7 @@ function cityCountLabel(country) {
                   </div>
                   <div class="form-group">
                     <label class="form-label">Points expire after (months, 0 = never)</label>
-                    <input type="number" v-model="lForm.expiry_months" min="0" />
+                    <input type="number" v-model="lForm.expiry_months" min="0" max="600" /><div class="ly-hint">Applies to rewards promised by new bookings. Existing points keep their original expiry.</div>
                   </div>
                 </div>
               </div>
@@ -681,7 +314,7 @@ function cityCountLabel(country) {
                   <div class="ly-tier-fields">
                     <div class="form-group sm"><label class="form-label">Name</label><input v-model="t.name" placeholder="e.g. Legend" /></div>
                     <div class="form-group sm"><label class="form-label">Threshold</label><input type="number" v-model="t.threshold" min="0" /></div>
-                    <div class="form-group sm"><label class="form-label">Multiplier</label><input type="number" v-model="t.multiplier" min="1" step="0.1" /></div>
+                    <div class="form-group sm"><label class="form-label">Multiplier</label><input type="number" v-model="t.multiplier" min="0" step="0.1" /></div>
                     <div class="ly-color-pair">
                       <div class="form-group sm"><label class="form-label">Text</label><input type="color" v-model="t.color" class="ly-color-input" /></div>
                       <div class="form-group sm"><label class="form-label">Bg</label><input type="color" v-model="t.bg_color" class="ly-color-input" /></div>
@@ -695,11 +328,11 @@ function cityCountLabel(country) {
           </div>
 
           <div class="ly-foot">
-            <div class="ly-foot-hint">Toggle <b>Active</b> above to disable rewards — every country falls back to the platform default program.</div>
+            <div class="ly-foot-hint">Turning rewards off disables them for this scope. Countries with their own program keep their settings.</div>
             <div style="display:flex; align-items:center; gap:10px;">
               <button class="btn btn-secondary" @click="closeLoyalty">Cancel</button>
               <button class="btn btn-primary" :disabled="lSaving" @click="saveLoyalty">
-                {{ lSaving ? 'Saving…' : (programFor(loyaltyCountry.id) ? 'Save changes' : 'Create program') }}
+                {{ lSaving ? 'Saving…' : 'Save rewards' }}
               </button>
             </div>
           </div>
@@ -710,209 +343,9 @@ function cityCountLabel(country) {
 </template>
 
 <style scoped>
-.search-bar {
-  position: relative; margin-bottom: 14px;
-}
-.search-icon {
-  position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none;
-}
-/* Scoped by the wrapper on purpose. style.css styles text inputs with
-   `input:not([type="radio"]):not([type="checkbox"])`, and those two :not()s push it to
-   specificity 0-2-1 — above the 0-2-0 that a single scoped class reaches. A bare
-   `.search-input` therefore lost its padding to the global `10px 12px`, dropping the
-   36px left inset so the text printed straight over the magnifier icon.
-   `.search-bar .search-input` is 0-3-0 and wins. */
-.search-bar .search-input {
-  width: 100%; padding: 9px 12px 9px 36px; border: 1px solid var(--border);
-  border-radius: 10px; font-size: 14px; background: var(--surface, #ffffff);
-}
-.search-bar .search-input:focus { outline: none; border-color: var(--primary); }
-
-.legend {
-  display: flex; gap: 20px; margin-bottom: 14px; flex-wrap: wrap;
-}
-.legend-item {
-  display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-muted);
-}
-
-/* Checkbox */
-.cb {
-  width: 18px; height: 18px; border-radius: 5px; border: 2px solid var(--border);
-  display: flex; align-items: center; justify-content: center;
-  background: var(--surface, #ffffff); flex-shrink: 0; transition: all 0.12s; cursor: pointer;
-}
-.cb.active { background: var(--primary); border-color: var(--primary); color: #fff; }
-.cb.saving { opacity: 0.5; }
-.cb.sm { width: 15px; height: 15px; border-radius: 4px; }
-
-.cb-wrap { padding: 6px; margin: -6px; flex-shrink: 0; }
-
-.country-list { display: flex; flex-direction: column; gap: 6px; }
-
-.country-row-wrap {
-  background: var(--surface, #ffffff); border: 1px solid var(--border); border-radius: 12px;
-  overflow: hidden; transition: box-shadow 0.15s;
-}
-.country-row-wrap:hover { box-shadow: 0 2px 8px rgba(0,0,0,.07); }
-.country-row-wrap.inactive { opacity: 0.65; }
-
-.country-row {
-  display: flex; align-items: center; gap: 12px; padding: 12px 16px;
-  cursor: pointer; user-select: none;
-}
-.country-row:hover { background: var(--surface-hover, #fafafa); }
-
-.iso-badge {
-  font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: 5px;
-  background: var(--bg, #f1f5f9); color: var(--text-secondary, #475569); letter-spacing: .04em; flex-shrink: 0;
-  min-width: 34px; text-align: center;
-}
-
-.country-name { flex: 1; font-weight: 600; font-size: 14px; }
-
-.country-meta { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.meta-pill {
-  font-size: 12px; padding: 2px 8px; border-radius: 999px;
-  background: var(--bg); color: var(--text-muted); border: 1px solid var(--border);
-  display: inline-flex; align-items: center; gap: 4px;
-}
-.city-count { color: var(--primary-ink); background: var(--positive-bg, #f0fdf4); border-color: var(--positive-border, #bbf7d0); }
-
-.expand-btn {
-  color: var(--text-muted); transition: transform 0.2s; flex-shrink: 0;
-  display: flex; align-items: center;
-}
-.expand-btn.open { transform: rotate(180deg); }
-
-/* Cities panel */
-.cities-panel {
-  border-top: 1px solid var(--border); background: var(--surface-hover, #fafafa); padding: 14px 18px 18px;
-}
-.cities-panel-header {
-  display: flex; justify-content: space-between; align-items: center;
-  font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;
-  letter-spacing: .05em; margin-bottom: 12px;
-}
-.link-btn {
-  font-size: 12px; color: var(--primary-ink); font-weight: 500; padding: 0;
-  background: none; border: none; cursor: pointer; text-decoration: underline;
-}
-.link-btn.muted { color: var(--text-muted); }
-.link-btn:hover { opacity: 0.75; }
-
-.cities-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px;
-}
-
-.city-item {
-  display: flex; flex-direction: column;
-  border: 1px solid var(--border); border-radius: 8px;
-  background: var(--surface, #ffffff); transition: border-color 0.12s; font-size: 13px;
-  overflow: hidden;
-}
-.city-item:hover { border-color: var(--primary); }
-.city-item.inactive { opacity: 0.55; }
-
-.city-top {
-  display: flex; align-items: center; gap: 8px;
-  padding: 7px 10px; cursor: pointer;
-}
-.city-top:hover { background: var(--positive-bg, #f0fdf4); }
-.city-name { flex: 1; }
-
-/* Service module pill row */
-.city-modules {
-  display: flex; gap: 4px; padding: 0 10px 7px; flex-wrap: wrap;
-}
-.mod-pill {
-  display: inline-flex; align-items: center; gap: 3px;
-  font-size: 10px; font-weight: 600; padding: 2px 6px;
-  border-radius: 4px; border: none; cursor: pointer;
-  background: var(--positive-bg, #dcfce7); color: var(--positive-ink, #15803d);
-  transition: opacity 0.1s, background 0.15s;
-  letter-spacing: 0.01em; line-height: 1.4;
-}
-.mod-pill.mod-off {
-  background: var(--danger-bg, #fee2e2); color: var(--danger-ink, #991b1b);
-  text-decoration: line-through; text-decoration-color: #ef4444;
-}
-.mod-pill:hover:not(:disabled) { opacity: 0.75; }
-.mod-pill:disabled { opacity: 0.4; cursor: wait; }
-
-.city-modules { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 8px 7px 26px; }
-.mod-pill {
-  display: inline-flex; align-items: center; gap: 3px;
-  font-size: 10px; font-weight: 600; padding: 2px 6px;
-  border-radius: 4px; border: none; cursor: pointer;
-  background: var(--positive-bg, #dcfce7); color: var(--positive-ink, #15803d);
-  transition: opacity 0.1s, background 0.15s;
-  letter-spacing: 0.01em; line-height: 1.4;
-}
-.mod-pill.mod-off {
-  background: var(--danger-bg, #fee2e2); color: var(--danger-ink, #991b1b);
-  text-decoration: line-through; text-decoration-color: #ef4444;
-}
-.mod-pill:hover:not(:disabled) { opacity: 0.75; }
-.mod-pill:disabled { opacity: 0.4; cursor: wait; }
-
-.saved-flash { color: var(--primary-ink); flex-shrink: 0; animation: fadeout 1.2s ease forwards; }
-@keyframes fadeout { 0% { opacity:1 } 80% { opacity:1 } 100% { opacity:0 } }
-
-.no-cities { font-size: 13px; color: var(--text-muted); padding: 8px 0; }
-
-/* Commission rates section */
-.commission-section {
-  background: var(--surface-hover, #f8fafc); border: 1px solid var(--border, #e2e8f0); border-radius: 10px;
-  padding: 14px 16px; margin-bottom: 16px;
-}
-.commission-section-title {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 12px; font-weight: 700; color: var(--text-muted);
-  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 12px;
-}
-.commission-row { display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
-.commission-field { display: flex; flex-direction: column; gap: 5px; }
-.commission-label { font-size: 12px; font-weight: 500; color: var(--text-muted); }
-.commission-input-wrap { position: relative; display: flex; align-items: center; }
-.commission-input {
-  width: 90px; padding: 7px 28px 7px 10px; border: 1px solid var(--border);
-  border-radius: 8px; font-size: 14px; font-weight: 600; background: var(--surface, #ffffff);
-  appearance: textfield; -moz-appearance: textfield;
-}
-.commission-input::-webkit-inner-spin-button,
-.commission-input::-webkit-outer-spin-button { -webkit-appearance: none; }
-.commission-input:focus { outline: none; border-color: var(--primary); }
-.pct-suffix {
-  position: absolute; right: 9px; font-size: 13px; color: var(--text-muted);
-  pointer-events: none;
-}
-.commission-status { display: flex; align-items: center; padding-bottom: 2px; }
-.cr-hint { font-size: 12px; color: var(--text-muted); }
-.cr-saving { font-size: 12px; color: var(--text-muted); font-style: italic; }
-.cr-saved { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--primary-ink); font-weight: 600; }
-.commission-note { font-size: 12px; color: var(--text-muted); margin-top: 10px; line-height: 1.5; }
-
-.empty-state {
-  text-align: center; padding: 40px; color: var(--text-muted); font-size: 14px;
-  background: var(--surface, #ffffff); border: 1px solid var(--border); border-radius: 12px;
-}
-
-/* ── Loyalty section (in expanded country panel) ──────────────────────────── */
-.loyalty-section {
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  background: var(--surface-hover, #f8fafc); border: 1px solid var(--border, #e2e8f0); border-radius: 10px;
-  padding: 14px 16px; margin-bottom: 16px; flex-wrap: wrap;
-}
-.loyalty-left { min-width: 0; }
-.loyalty-summary { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.ly-status-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px; border: 1px solid transparent; cursor: pointer; }
-.ly-status-toggle.on { background: var(--positive-bg, #dcfce7); color: var(--positive-ink, #166534); }
-.ly-status-toggle.on:hover { background: #bbf7d0; }
-.ly-status-toggle.off { background: var(--bg, #f1f5f9); color: var(--text-muted, #64748b); }
-.ly-status-toggle.off:hover { background: var(--border, #e2e8f0); }
-.loyalty-sum-text { font-size: 13px; color: var(--text); }
-.loyalty-sum-text.muted { color: var(--text-muted); }
-
+.geo-defaults,.geo-table{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}.geo-defaults{margin:24px 0}.geo-defaults-head{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:22px 24px}.geo-title-icon{display:flex;align-items:center;gap:14px}.geo-title-icon>svg{color:var(--primary-ink);flex-shrink:0}h2{font-size:18px;margin:0}h3{font-size:14px;margin:0}p{font-size:13px;color:var(--text-muted);line-height:1.55;margin:5px 0 0}.geo-default-values{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--border)}.geo-default-values>div{padding:16px 24px;border-right:1px solid var(--border);position:relative}.geo-default-values>div:last-child{border-right:0}.geo-default-values span{display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px}.geo-default-values strong{font-size:24px;line-height:1.2}.geo-default-values strong small{font-size:16px;margin-left:3px}.geo-rewards-default strong{font-size:18px}.geo-rewards-default .geo-link{display:flex;margin-top:8px;gap:5px;align-items:center}.geo-inheritance-note{padding:12px 24px;background:var(--bg);border-top:1px solid var(--border);margin:0;font-size:12px}.geo-toolbar{display:flex;align-items:flex-end;gap:12px;margin:26px 0 16px}.geo-toolbar>label:not(.geo-search){font-size:12px;color:var(--text-muted);min-width:165px}.geo-toolbar select{display:block;margin-top:6px;width:100%}.geo-search{position:relative;display:block;flex:1}.geo-search>svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted)}.geo-search input{width:100%;padding-left:38px}.geo-list-caption{display:flex;gap:15px;justify-content:space-between;align-items:center;margin:12px 0;font-size:12px;color:var(--text-muted)}.geo-list-caption strong{white-space:nowrap;color:var(--text)}.geo-columns,.geo-country-row{display:grid;grid-template-columns:minmax(190px,1fr) 85px 95px 108px 102px;align-items:center;gap:16px;padding:16px 20px}.geo-columns{font-size:11px;color:var(--text-muted);background:var(--bg);padding-top:12px;padding-bottom:12px}.geo-country+.geo-country{border-top:1px solid var(--border)}.geo-country-name{display:flex;align-items:center;gap:12px;background:none;border:0;color:var(--text);text-align:left;cursor:pointer;padding:0}.geo-country-name strong{font-size:14px}.geo-country-name small,.geo-city small{display:block;font-size:12px;color:var(--text-muted);margin-top:4px}.geo-iso{background:var(--bg);border:1px solid var(--border);border-radius:6px;width:36px;padding:8px 0;text-align:center;font-size:11px;font-weight:700;flex-shrink:0}.geo-count strong{font-size:17px;font-variant-numeric:tabular-nums}.geo-count small{display:none}.geo-status{display:inline-flex;gap:7px;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:6px;padding:7px 8px;background:var(--bg);color:var(--text-muted);font-size:12px;cursor:pointer}.geo-status span{width:6px;height:6px;border-radius:50%;background:currentColor}.geo-status.enabled{color:var(--positive-ink);background:var(--positive-bg);border-color:var(--positive-border,var(--border))}.geo-status:disabled{cursor:default;opacity:.65}.geo-country.expanded>.geo-country-row{background:var(--primary-soft,var(--bg))}.rotated{transform:rotate(180deg)}.geo-country-body{padding:20px 24px 24px;border-top:1px solid var(--border);background:var(--bg)}.geo-country-settings,.geo-rewards-row,.geo-city-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}.geo-country-settings h3 small,.geo-rewards-row h3 small{font-size:11px;color:var(--text-muted);font-weight:400;margin-left:8px}.geo-country-settings p{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;margin-top:8px}.geo-country-settings p small{font-size:11px}.geo-rewards-row{padding:18px 0;margin:16px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}.geo-actions{display:flex;align-items:center;gap:14px}.geo-link{border:0;background:none;padding:0;color:var(--primary-ink);font-size:12px;text-decoration:underline;cursor:pointer}.geo-city-heading{margin-top:24px}.geo-city-search{max-width:400px;margin:14px 0}.geo-city-list{border:1px solid var(--border);border-radius:8px;background:var(--surface);overflow:hidden}.geo-city{display:grid;grid-template-columns:1fr 105px 78px;gap:16px;align-items:center;padding:13px 16px}.geo-city+.geo-city{border-top:1px solid var(--border)}.geo-city strong{font-size:13px}.geo-more{margin-top:12px}.geo-empty{text-align:center;padding:24px}.geo-error{color:var(--danger-ink);padding:18px}.geo-confirm{max-width:520px}.geo-confirm h2{font-size:18px}.geo-confirm p{margin:0}
+@media(max-width:900px){.geo-columns,.geo-country-row{grid-template-columns:minmax(160px,1fr) 60px 75px 98px 90px;gap:10px;padding:14px}.geo-default-values>div{padding:14px}.geo-list-caption{align-items:flex-start;flex-direction:column;gap:4px}.geo-country-settings{align-items:flex-start;flex-direction:column}}
+@media(max-width:600px){.geo-defaults-head{align-items:flex-start;flex-direction:column;padding:18px}.geo-default-values{grid-template-columns:1fr 1fr}.geo-default-values>div{border-bottom:1px solid var(--border)}.geo-toolbar{flex-wrap:wrap}.geo-search{flex-basis:100%}.geo-toolbar>label:not(.geo-search){flex:1;min-width:130px}.geo-toolbar input,.geo-toolbar select{font-size:16px}.geo-columns{display:none}.geo-country-row{grid-template-columns:1fr 1fr;gap:12px;padding:16px}.geo-country-name{grid-column:1/-1}.geo-count small{display:inline;margin-left:5px;font-size:12px;color:var(--text-muted)}.geo-manage{justify-self:end}.geo-status{min-height:36px}.geo-country-body{padding:16px}.geo-country-settings p{gap:6px;flex-direction:column}.geo-rewards-row,.geo-city-heading{flex-direction:column;align-items:flex-start}.geo-city{grid-template-columns:1fr auto;padding:12px;gap:10px}.geo-city>div{grid-column:1/-1}.geo-city-search{max-width:none}.geo-defaults .btn{width:100%}}
 /* ── Loyalty editor modal ─────────────────────────────────────────────────── */
 .ly-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,.5); display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; z-index: 1000; overflow-y: auto; }
 .ly-modal { width: 100%; max-width: 760px; background: var(--surface, #ffffff); border-radius: 16px; box-shadow: 0 24px 60px rgba(0,0,0,.25); display: flex; flex-direction: column; }
@@ -997,4 +430,5 @@ function cityCountLabel(country) {
   .country-meta .meta-pill:first-child { display: none; }
   .country-meta .meta-pill.city-count { display: inline-flex; }
 }
+
 </style>

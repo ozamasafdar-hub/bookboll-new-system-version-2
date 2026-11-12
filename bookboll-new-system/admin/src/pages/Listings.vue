@@ -394,7 +394,7 @@ const cid = v => (v === null || v === undefined || v === '') ? '' : String(v)
 
 function countryOfLocation(loc) {
   const city = cities.value.find(c => cid(c.id) === cid(loc?.city_id))
-  return city?.country_id || null
+  return city?.country_id || loc?.country_id || null
 }
 
 function cityOfLocation(loc) {
@@ -1051,7 +1051,7 @@ function defaultForm() {
 function countryIdOfLocation(locationId) {
   const loc = locations.value.find(l => cid(l.id) === cid(locationId))
   const city = cities.value.find(c => cid(c.id) === cid(loc?.city_id))
-  return city?.country_id || null
+  return city?.country_id || loc?.country_id || null
 }
 
 /* ── Effective commission rate for the listing being edited ─── */
@@ -1060,7 +1060,9 @@ const effectiveCommissionRate = computed(() => {
     return Number(form.value.commission_rate)
   }
   const countryId = countryIdOfLocation(form.value.location_id)
-  return commissionRates.value[countryId]?.facility ?? 15
+  const loc = locations.value.find(l => cid(l.id) === cid(form.value.location_id))
+  const city = cities.value.find(c => cid(c.id) === cid(loc?.city_id))
+  return city?.commission_rates?.facility ?? commissionRates.value[countryId]?.facility ?? 15
 })
 
 /* ── Live money example for Booking & payments ───────────────

@@ -125,11 +125,11 @@ it('reads rules and tiers from the requested country programme only', function (
         ->and(collect($res->json('data.tiers'))->pluck('slug')->all())->not->toContain('gold');
 });
 
-it('returns a null programme rather than inventing rules for an unconfigured country', function () {
+it('uses global rewards for a country without an override', function () {
     $res = $this->actingAs(User::factory()->create())
         ->getJson('/api/customer/loyalty?country_id='.PAKISTAN)->assertOk();
 
-    expect($res->json('data.program'))->toBeNull()
+    expect($res->json('data.program.earn_rate'))->toBe(1)
         ->and($res->json('data.tiers'))->toBe([]);
 });
 

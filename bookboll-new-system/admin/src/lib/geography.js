@@ -63,3 +63,13 @@ export async function updateCityModule(id, module, enabled) {
     body: { module, enabled },
   })
 }
+
+export function loadMarketSettings(scope, id = 0) {
+  return apiFetch(`/admin/geography/settings/${scope}/${id}`)
+}
+export function saveMarketSettings(scope, id, values) {
+  return apiFetch(`/admin/geography/settings/${scope}/${id}`, { method: 'PUT', body: { values } })
+}
+export function resetCountryRewards(countryId) {
+  return apiFetch('/admin/geography/loyalty-programs', { method: 'PUT', body: { country_id: countryId, use_global: true } })
+}

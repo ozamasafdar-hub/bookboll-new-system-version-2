@@ -214,25 +214,12 @@ class BookingWalletService
     /** Listing override → the venue's country rate → the platform default. */
     public function courtCommissionPct(?Listing $listing): float
     {
-        if (! $listing) {
-            return self::COURT_COMMISSION_PCT;
-        }
-
-        if ($listing->commission_rate !== null && $listing->commission_rate !== '') {
+        if ($listing && $listing->commission_rate !== null && $listing->commission_rate !== '') {
             return (float) $listing->commission_rate;
         }
+        return app(\App\Support\MarketSettings::class)->rate('facility',
+            $listing ? $this->countryIdForVenue($listing->venue) : null, $listing?->venue?->city_id);
 
-        $countryId = $this->countryIdForVenue($listing->venue);
-        if ($countryId) {
-            $rate = CommissionRate::where('country_id', $countryId)
-                ->where('listing_type', 'facility')
-                ->value('rate_percent');
-            if ($rate !== null) {
-                return (float) $rate;
-            }
-        }
-
-        return self::COURT_COMMISSION_PCT;
     }
 
     /**

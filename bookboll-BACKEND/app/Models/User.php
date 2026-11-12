@@ -363,6 +363,13 @@ class User extends Authenticatable
 
     public function addLoyaltyPoints(int $points, $booking_id = null, $reason = 'added by system', ?int $countryId = null): void
     {
+        if ($points <= 0) return;
+        $booking = $booking_id ? Booking::find($booking_id) : null;
+        $policy = $booking?->loyalty_policy;
+        if ($policy && ! ($policy['eligible'] ?? false)) return;
+        $countryId = $policy['country_id'] ?? $countryId ?? $this->loyaltyCountryForBooking($booking_id);
+        // Legacy promises have no policy snapshot and retain their original non-expiring points.
+        $months = (int) ($policy['expiry_months'] ?? 0);
         $this->loyaltyPoints()->create([
             'points'     => $points,
             'reason'     => $reason,
@@ -371,7 +378,8 @@ class User extends Authenticatable
             // Which country's programme this belongs to. Resolved from the
             // booking's venue when not supplied, because earn and redeem rates
             // are per country and an untagged point is spendable nowhere.
-            'country_id' => $countryId ?: $this->loyaltyCountryForBooking($booking_id),
+            'country_id' => $countryId,
+            'expires_at' => $months > 0 ? now()->addMonthsNoOverflow($months) : null,
         ]);
         $this->updateLoyaltyTier();
     }

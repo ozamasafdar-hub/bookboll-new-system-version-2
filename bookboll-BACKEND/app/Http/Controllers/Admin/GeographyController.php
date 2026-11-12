@@ -54,4 +54,9 @@ class GeographyController extends Controller
     {
         return $this->geography->upsertLoyaltyProgram($request);
     }
+    public function settings(Request $request, string $scope, int $id)
+    {
+        return $this->geography->settings($request, $scope, $id);
+    }
+
 }

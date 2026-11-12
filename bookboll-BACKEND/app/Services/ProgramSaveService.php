@@ -34,7 +34,7 @@ use Illuminate\Support\Facades\DB;
  */
 class ProgramSaveService
 {
-    public const PLATFORM_COMMISSION = 20;
+    public const PLATFORM_COMMISSION = 15;
 
     /** Fields that require approval before customers see them. */
     protected const CONTENT_KEYS = ['name', 'description', 'photo_url', 'images'];
@@ -141,6 +141,13 @@ class ProgramSaveService
             return PremiumPlan::denied('own_site_only');
         }
 
+        $venue = $venueId ? Venue::find($venueId) : null;
+        $defaultRate = app(\App\Support\MarketSettings::class)->rate('program', $venue?->country_id, $venue?->city_id);
+        // Providers cannot set their own platform fee; country/city defaults apply.
+        // Existing agreements are retained unless platform staff explicitly edit them.
+        if (! $isAdmin || ! isset($data['commission_percentage'])) {
+            $data['commission_percentage'] = $existing?->commission_percentage ?? $defaultRate;
+        }
         $base = $this->buildAttributes($data, $ownerId);
 
         // A draft is never live and no money can move, so it skips review entirely.
@@ -358,7 +365,7 @@ class ProgramSaveService
             'day_of_week_mask'         => $isGym ? [0, 1, 2, 3, 4, 5, 6] : ($d['day_of_week_mask'] ?? []),
             'session_time'             => $isGym ? null : ($d['session_time'] ?? '18:00'),
             'capacity'                 => $isGym ? 0 : (int) ($d['capacity'] ?? 12),
-            'commission_percentage'    => max(self::PLATFORM_COMMISSION, (float) ($d['commission_percentage'] ?? self::PLATFORM_COMMISSION)),
+            'commission_percentage'    => (float) ($d['commission_percentage'] ?? self::PLATFORM_COMMISSION),
             'free_trial_days'          => (int) ($d['free_trial_days'] ?? 0),
             'free_trial_enabled'       => (bool) ($d['free_trial_enabled'] ?? false),
             'program_type'             => $isGym ? 'ongoing' : ($d['program_type'] ?? 'ongoing'),

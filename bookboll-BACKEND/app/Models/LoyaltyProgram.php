@@ -11,6 +11,7 @@ class LoyaltyProgram extends Model
 
     protected $fillable = [
         'country_id',
+        'inherits_global',
         'name',
         'earn_rate',
         'redeem_rate',
@@ -25,6 +26,7 @@ class LoyaltyProgram extends Model
     {
         return [
             'country_id'     => 'integer',
+            'inherits_global' => 'boolean',
             'earn_rate'      => 'float',
             'redeem_rate'    => 'integer',
             'redeem_value'   => 'float',
@@ -43,7 +45,8 @@ class LoyaltyProgram extends Model
      */
     public static function defaults(): array
     {
-        return [
+        $saved = static::whereNull('country_id')->first();
+        return array_replace([
             'country_id'     => null,
             'name'           => 'Bookboll Rewards',
             'earn_rate'      => 1.0,
@@ -53,7 +56,17 @@ class LoyaltyProgram extends Model
             'max_redeem_pct' => 100,
             'expiry_months'  => 12,
             'is_active'      => true,
-        ];
+        ], $saved ? $saved->only(['name', 'earn_rate', 'redeem_rate', 'redeem_value', 'min_redeem', 'max_redeem_pct', 'expiry_months', 'is_active']) : []);
+    }
+
+    public static function effective(?int $countryId): self
+    {
+        $local = $countryId ? static::where('country_id', $countryId)->first() : null;
+        if ($local && ! $local->inherits_global) return $local;
+        $global = static::whereNull('country_id')->first() ?? new static(static::defaults());
+        // Country balances stay separate even when they share the same policy.
+        $global->setRelation('tiers', LoyaltyTier::whereNull('program_id')->where('is_active', true)->orderBy('order')->get());
+        return $global;
     }
 
     protected function activityLogName(): string

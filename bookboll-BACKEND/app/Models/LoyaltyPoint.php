@@ -19,7 +19,13 @@ class LoyaltyPoint extends Model
         'booking_id',
         'order_id',
         'country_id',
+        'expires_at',
     ];
+
+    protected function casts(): array
+    {
+        return ['expires_at' => 'datetime'];
+    }
 
     public function user()
     {

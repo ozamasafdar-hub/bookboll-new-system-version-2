@@ -741,7 +741,7 @@ class BookingService
                     'status'                => initialBookingStatus($paymentStatus, (float) $totalPrice),
                     'start_time'            => $bookingData['start_time'],
                     'listing_id'            => $bookingData['listing_id'],
-                    'loyalty_points_earned' => $listing->loyalty_points ?? 0,
+                    // Rewards are snapshotted centrally from the country/global policy.
                     'full_payment_received' => in_array($paymentMethod, [
                         BookingPaymentMethod::PAID_CHEQUE,
                         BookingPaymentMethod::PAID_WIRE_TRANSFER,
@@ -3933,7 +3933,7 @@ class BookingService
                 'end_time'              => $endTimeCarbon,
                 'listing_id'            => $formData['listing_id'],
                 'payment_method'        => $formData['payment_method'],
-                'loyalty_points_earned' => $listing->loyalty_points ?? 0,
+                // Rewards are snapshotted centrally from the country/global policy.
                 'gift_card_amount'      => $giftCardAmount,
                 'full_payment_received' => $paymentStatus == BookingPaymentStatus::FULLY_PAID,
                 'is_free'               => $isPaymentSkipped,
@@ -5089,7 +5089,7 @@ class BookingService
                 'players'               => (int) ($data['players'] ?? 1),
                 'origin'                => 'manual_admin',
                 'promocode_id'          => $data['promocode_id'] ?? null,
-                'loyalty_points_earned' => $listing->loyalty_points ?? 0,
+                // Rewards are snapshotted centrally from the country/global policy.
                 'full_payment_received' => $mapped['status'] === BookingPaymentStatus::FULLY_PAID,
                 'is_free'               => $mapped['status'] === BookingPaymentStatus::PAYMENT_SKIPPED,
                 'created_by'            => auth()->id(),
@@ -5133,14 +5133,6 @@ class BookingService
                         ? "Full payment for booking #{$booking->booking_id}"
                         : "Payment pending for booking #{$booking->booking_id}",
                 ]);
-            }
-
-            if (($listing->loyalty_points ?? 0) > 0) {
-                $user->addLoyaltyPoints(
-                    (int) $listing->loyalty_points,
-                    $booking->id,
-                    "Loyalty points earned for booking #{$booking->booking_id}"
-                );
             }
 
             $booking->history()->create([

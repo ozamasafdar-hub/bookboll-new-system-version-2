@@ -23,6 +23,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->scoped(\App\Support\PaymentReleaseGate::class);
+        $this->app->scoped(\App\Support\MarketSettings::class);
     }
 
     public function boot(): void

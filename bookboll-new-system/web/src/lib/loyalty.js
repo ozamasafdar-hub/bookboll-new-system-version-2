@@ -14,7 +14,7 @@
  * callers gate that with isWhiteLabel.
  *
  * EARNING is server-side: Laravel stamps bookings.loyalty_points_earned from the
- * listing and credits the ledger idempotently on confirmation (BookingService).
+ * country/global earn rate and tier multiplier, and credits the ledger idempotently on confirmation (BookingService).
  * REDEEMING at checkout is not yet supported by the API, so there is no client-side
  * write path here — the balance and ledger are read via /customer/loyalty
  * (customerSession.loadCustomerRewards).
@@ -91,7 +91,7 @@ export function maxRedeemable({ points, platformFee, orderTotal, cfg = DEFAULT_L
 // match and the tables aren't the source of truth — so they are no-ops now.
 //
 // Earning: Laravel already does it. BookingService stamps
-// bookings.loyalty_points_earned from listings.loyalty_points and calls
+// bookings.loyalty_points_earned from the snapshotted country/global earn rate and tier multiplier and calls
 // User::addLoyaltyPoints() once, guarded against double-credit, on confirmation.
 // Calling award from the client would only ever have double-counted.
 //

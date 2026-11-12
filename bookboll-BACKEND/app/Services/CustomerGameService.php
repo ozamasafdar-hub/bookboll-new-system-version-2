@@ -115,10 +115,12 @@ class CustomerGameService
 
         $plan = $listing ? $this->paymentPlan($listing, $this->venueFor($listing)) : null;
 
+        $venue = $listing ? $this->venueFor($listing) : null;
+        $enabled = app(\App\Support\MarketSettings::class)->module('module_matchmaking', $venue?->country_id ?? auth()->user()?->country_id, $venue?->city_id);
         return sendSuccess('Game config', [
-            'games_enabled'       => true,
-            'tournaments_enabled' => true,
-            'hangout_enabled'     => true,
+            'games_enabled'       => $enabled,
+            'tournaments_enabled' => $enabled,
+            'hangout_enabled'     => $enabled,
             'court_commission_pct' => $this->courtCommissionPct($listing),
             'seat_fee_pct'         => $this->seatFeePct($listing, $community),
             // What a FREE event at the host's own spot pays to publish, so the wizard
@@ -218,6 +220,9 @@ class CustomerGameService
         }
 
         $venue = $listing ? $this->venueFor($listing) : null;
+        if (! app(\App\Support\MarketSettings::class)->module('module_matchmaking', $venue?->country_id ?? $this->hostCountryId($host, $data), $venue?->city_id)) {
+            return sendError('New events are disabled in this location.', [], 422);
+        }
 
         try {
             $charge = $this->priceHost($host, $listing, $data);
@@ -1003,17 +1008,8 @@ class CustomerGameService
     /** Listing override → the venue's country rate → platform default. */
     protected function courtCommissionPct(?Listing $listing): float
     {
-        if (! $listing) {
-            return self::COURT_COMMISSION_PCT;
-        }
+        return app(BookingWalletService::class)->courtCommissionPct($listing);
 
-        if ($listing->commission_rate !== null && $listing->commission_rate !== '') {
-            return (float) $listing->commission_rate;
-        }
-
-        $rate = $this->countryRate($this->venueFor($listing)?->country_id, 'facility');
-
-        return $rate ?? self::COURT_COMMISSION_PCT;
     }
 
     /**
@@ -1030,15 +1026,9 @@ class CustomerGameService
             }
         }
 
-        $rate = $this->countryRate($listing ? $this->venueFor($listing)?->country_id : $countryId, 'event');
+        $venue = $listing ? $this->venueFor($listing) : null;
+        return app(\App\Support\MarketSettings::class)->rate('event', $venue?->country_id ?? $countryId, $venue?->city_id);
 
-        if ($rate !== null) {
-            return $rate;
-        }
-
-        $global = $this->setting('global_commission_event');
-
-        return is_numeric($global) ? (float) $global : self::SEAT_FEE_PCT;
     }
 
     protected function countryRate(?int $countryId, string $listingType): ?float
@@ -2313,6 +2303,9 @@ class CustomerGameService
             }
         }
 
+        foreach ($listings as $listing) {
+            if ($error = \App\Support\CityModules::guard($listing->venue_id, \App\Support\CityModules::MATCHMAKING, 'New events')) return $error;
+        }
         try {
             $charge = $this->priceTournament($host, $listings, $matches, $data);
         } catch (\RuntimeException $e) {

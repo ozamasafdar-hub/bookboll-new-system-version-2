@@ -338,7 +338,7 @@ class CustomerProgramService
             ? $this->discountedPrice($listPrice, $interval, $discountMonths)
             : $listPrice;
         $hasTrial = $mode === 'trial' && ($trialDays > 0 || $trialSessions > 0);
-        $commission = (float) ($program->commission_percentage ?: 15);
+        $commission = (float) ($program->commission_percentage ?? 15);
         $platformFee = round($amount * $commission / 100, 2);
         $providerPayout = round($amount - $platformFee, 2);
         $joiningFee = max(0, (float) ($program->joining_fee ?: 0));
@@ -916,7 +916,7 @@ class CustomerProgramService
 
         // The rate this programme charges, with the same fallback the charge
         // uses. Inventing a rate here would discount revenue nobody collected.
-        $commissionPct = (float) ($program->commission_percentage ?: 15);
+        $commissionPct = (float) ($program->commission_percentage ?? 15);
 
         return [
             'currency'    => strtoupper((string) ($program->currency ?: 'AED')),

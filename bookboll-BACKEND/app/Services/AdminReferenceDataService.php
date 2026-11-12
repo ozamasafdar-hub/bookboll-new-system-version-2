@@ -61,13 +61,10 @@ class AdminReferenceDataService
             'countries' => $this->countries($user),
             // Per-country commission, used by Listings and Memberships to show the
             // effective rate on a venue or programme.
-            'commission_rates' => CommissionRate::query()
-                ->get(['country_id', 'listing_type', 'rate_percent'])
-                ->map(fn (CommissionRate $r) => [
-                    'country_id'   => $r->country_id,
-                    'listing_type' => $r->listing_type,
-                    'rate_percent' => (float) $r->rate_percent,
-                ])->values(),
+            'commission_rates' => $this->countries($user)->flatMap(fn ($c) => collect(['facility', 'program', 'event'])->map(fn ($type) => [
+                'country_id' => $c['id'], 'listing_type' => $type,
+                'rate_percent' => app(\App\Support\MarketSettings::class)->rate($type, (int) $c['id']),
+            ])),
             'scope'     => [
                 'owner_user_id'  => $ownerId,
                 'is_global'      => AccessScope::isGlobal($user),
@@ -168,9 +165,10 @@ class AdminReferenceDataService
             'id'                 => $c->id,
             'name'               => $c->name,
             'country_id'         => $c->country_id,
-            'module_listings'    => (bool) ($c->module_listings ?? true),
-            'module_classes'     => (bool) ($c->module_classes ?? true),
-            'module_matchmaking' => (bool) ($c->module_matchmaking ?? true),
+            'commission_rates' => array_intersect_key(app(\App\Support\MarketSettings::class)->config($c->country_id, $c)['effective'], array_flip(['facility', 'program', 'event'])),
+            'module_listings'    => app(\App\Support\MarketSettings::class)->config($c->country_id, $c)['effective']['module_listings'],
+            'module_classes'     => app(\App\Support\MarketSettings::class)->config($c->country_id, $c)['effective']['module_classes'],
+            'module_matchmaking' => app(\App\Support\MarketSettings::class)->config($c->country_id, $c)['effective']['module_matchmaking'],
         ])->values();
     }
 

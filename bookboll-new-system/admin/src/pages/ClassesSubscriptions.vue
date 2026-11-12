@@ -796,7 +796,7 @@ async function saveDraft() {
     day_of_week_mask: isGym ? [0, 1, 2, 3, 4, 5, 6] : (pgForm.value.day_of_week_mask || []),
     session_time: isGym ? null : (pgForm.value.session_time || '18:00'),
     capacity: isGym ? 0 : (Number(pgForm.value.capacity) || 12),
-    commission_percentage: Math.max(PLATFORM_COMMISSION, Number(pgForm.value.commission_percentage) || PLATFORM_COMMISSION),
+    commission_percentage: Math.max(0, Number(pgForm.value.commission_percentage ?? PLATFORM_COMMISSION)),
     free_trial_days: Number(pgForm.value.free_trial_days) || 0,
     free_trial_enabled: false,
     status: 'inactive',   // drafts are never live (already hidden from the storefront)
@@ -959,7 +959,7 @@ async function saveProgram() {
   if (!pgTrialAccepted.value) return
 
   // enforce min 20% commission
-  const commission = Math.max(PLATFORM_COMMISSION, Number(pgForm.value.commission_percentage) || PLATFORM_COMMISSION)
+  const commission = Math.max(0, Number(pgForm.value.commission_percentage ?? PLATFORM_COMMISSION))
   const isAdmin = isSuperAdmin.value || isCountryAdmin.value || role.value === 'admin'
   const now = new Date().toISOString()
   const needsAcceptanceRecord = !pgEditing.value || pgForm.value.trial_terms_version !== TRIAL_TERMS_VERSION
@@ -1345,9 +1345,12 @@ async function applyCountryProgramCommission() {
   // the catch below ate the error, and every new programme quietly kept the
   // platform default no matter what the Countries page said.
   try {
-    const cr = (await loadReferenceData()).commissionRates
-      .find(r => cid(r.country_id) === cid(countryId) && r.listing_type === 'program')
-    if (cr?.rate_percent != null) pgForm.value.commission_percentage = Number(cr.rate_percent)
+    const refs = await loadReferenceData()
+    const venue = refs.venues.find(v => cid(v.id) === cid(pgForm.value.location_id))
+    const city = refs.cities.find(c => cid(c.id) === cid(venue?.city_id))
+    const countryRate = refs.commissionRates.find(r => cid(r.country_id) === cid(countryId) && r.listing_type === 'program')?.rate_percent
+    const rate = city?.commission_rates?.program ?? countryRate
+    if (rate != null) pgForm.value.commission_percentage = Number(rate)
   } catch { /* keep the platform default */ }
 }
 watch(() => pgForm.value.location_id, () => { loadFormOwnerWallets(); applyCountryProgramCommission() })
@@ -1465,7 +1468,7 @@ function intervalLabel(v) {
 }
 
 
-const providerPct = computed(() => 100 - (Number(pgForm.value.commission_percentage) || PLATFORM_COMMISSION))
+const providerPct = computed(() => 100 - Number(pgForm.value.commission_percentage ?? PLATFORM_COMMISSION))
 // What the member is actually charged on the FIRST cycle: the discounted amount in
 // discount mode, else the list price. (During a free trial nothing is charged up front —
 // this is what's taken once billing starts.) Keeps the payout preview honest instead of
@@ -2062,7 +2065,7 @@ const canSaveProgram = computed(() =>
 
           <div class="form-group" style="margin-top:16px;max-width:300px;">
             <label class="form-label">Platform Commission (%)</label>
-            <input type="number" v-model="pgForm.commission_percentage" :min="PLATFORM_COMMISSION" :disabled="role !== 'admin'" />
+            <input type="number" v-model="pgForm.commission_percentage" min="0" max="100" :disabled="role !== 'admin'" />
             <div class="field-hint">Minimum {{ PLATFORM_COMMISSION }}%. Applies to every plan.</div>
           </div>
 

@@ -327,6 +327,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
                 Route::post('cities/bulk-status', [GeographyController::class, 'bulkUpdateCityStatus'])->name('cities.bulk-status');
                 Route::patch('cities/{id}/module', [GeographyController::class, 'updateCityModule'])->name('cities.module');
                 Route::put('commission-rates', [GeographyController::class, 'upsertCommission'])->name('commission-rates');
+                Route::match(['get', 'put'], 'settings/{scope}/{id}', [GeographyController::class, 'settings']);
                 Route::get('loyalty-programs', [GeographyController::class, 'loyaltyPrograms'])->name('loyalty-programs.index');
                 Route::put('loyalty-programs', [GeographyController::class, 'upsertLoyaltyProgram'])->name('loyalty-programs');
             });

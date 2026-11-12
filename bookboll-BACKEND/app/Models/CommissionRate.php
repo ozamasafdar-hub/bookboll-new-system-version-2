@@ -16,6 +16,12 @@ class CommissionRate extends Model
         'rate_percent',
     ];
 
+    protected static function booted(): void
+    {
+        static::saved(fn () => app(\App\Support\MarketSettings::class)->clear());
+        static::deleted(fn () => app(\App\Support\MarketSettings::class)->clear());
+    }
+
     protected function casts(): array
     {
         return [

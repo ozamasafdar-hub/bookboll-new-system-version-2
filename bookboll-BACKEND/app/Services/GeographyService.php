@@ -3,6 +3,9 @@
 namespace App\Services;
 
 use App\Models\CommissionRate;
+use App\Models\MarketSetting;
+use App\Support\MarketSettings;
+use App\Support\AccessScope;
 use App\Models\LoyaltyProgram;
 use App\Models\LoyaltyTier;
 use Illuminate\Http\Request;
@@ -33,7 +36,21 @@ class GeographyService
 
         $query = Country::withCount('cities')
             ->with('currency')
-            ->orderBy('name');
+            ->selectSub(DB::table('venues as v')->leftJoin('cities as vc', 'vc.id', '=', 'v.city_id')
+                ->selectRaw('COUNT(*)')->whereRaw('COALESCE(v.country_id, vc.country_id) = countries.id'), 'venues_count')
+            ->selectSub(DB::table('businesses as b')->selectRaw('COUNT(*)')
+                ->where(function ($q) {
+                    $q->whereColumn('b.country_id', 'countries.id')->orWhereExists(function ($v) {
+                        $v->selectRaw('1')->from('venues as bv')->leftJoin('cities as bc', 'bc.id', '=', 'bv.city_id')
+                            ->whereRaw('COALESCE(bv.country_id, bc.country_id) = countries.id')
+                            ->where(fn ($owner) => $owner->whereColumn('bv.business_id', 'b.id')
+                                ->orWhere(fn ($legacy) => $legacy->whereNull('bv.business_id')->whereColumn('bv.owner_user_id', 'b.owner_id')));
+                    });
+                }), 'businesses_count');
+        $sort = $request->query('sort', 'venues');
+        if ($sort === 'businesses') $query->orderByDesc('businesses_count')->orderByDesc('venues_count');
+        elseif ($sort !== 'name') $query->orderByDesc('venues_count')->orderByDesc('businesses_count');
+        $query->orderBy('name');
 
         if ($search) {
             $query->where(function ($q) use ($search) {
@@ -54,11 +71,7 @@ class GeographyService
 
         $actor = $request->user();
         if ($actor && $actor->hasRole('country_admin') && ! $actor->hasRole('super_admin')) {
-            $allowed = collect($actor->assigned_country_ids ?? [])->filter()->map(fn($id) => (int) $id)->all();
-            if ($actor->country_id) {
-                $allowed[] = (int) $actor->country_id;
-            }
-            $allowed = array_values(array_unique($allowed));
+            $allowed = \App\Support\AccessScope::jurisdictionCountryIds($actor) ?? [];
             if ($allowed) {
                 $query->whereIn('id', $allowed);
             } else {
@@ -69,26 +82,11 @@ class GeographyService
         $paginator = $query->paginate($recordsPerPage);
         $countries = collect($paginator->items())->map(fn(Country $c) => $this->mapCountry($c))->values();
 
-        $countryIds = $countries->pluck('id')->all();
-        $rates = $countryIds
-            ? CommissionRate::whereIn('country_id', $countryIds)->get()
-            : collect();
-
-        $commissionRates = [];
-        foreach ($rates as $r) {
-            $cid = (int) $r->country_id;
-            if (! isset($commissionRates[$cid])) {
-                $commissionRates[$cid] = [
-                    'facility' => 15.0,
-                    'program'  => 15.0,
-                    'event'    => 10.0,
-                ];
-            }
-            $commissionRates[$cid][$r->listing_type] = (float) $r->rate_percent;
-        }
+        $commissionRates = $countries->mapWithKeys(fn ($c) => [$c['id'] => array_intersect_key($c['settings']['effective'], array_flip(self::LISTING_TYPES))]);
 
         return sendSuccess('Countries fetched successfully', [
             'countries'        => $countries,
+            'global_settings' => app(MarketSettings::class)->config(),
             'commission_rates' => $commissionRates,
             'pagination'       => [
                 'current_page'     => $paginator->currentPage(),
@@ -108,6 +106,7 @@ class GeographyService
             'search'     => 'nullable|string|max:100',
         ]);
 
+        $this->authorizeCountry($request, $data['country_id'], false);
         $query = City::where('country_id', $data['country_id'])
             ->orderBy('name');
 
@@ -123,6 +122,7 @@ class GeographyService
     public function updateCountryStatus(Request $request, int $id)
     {
         $country = Country::findOrFail($id);
+        $this->authorizeCountry($request, $id);
 
         $data = $request->validate([
             'status' => 'required|in:active,inactive,0,1',
@@ -140,6 +140,7 @@ class GeographyService
     public function updateCityStatus(Request $request, int $id)
     {
         $city = City::findOrFail($id);
+        $this->authorizeCountry($request, $city->country_id);
 
         $data = $request->validate([
             'status' => 'required|in:active,inactive,0,1',
@@ -162,12 +163,13 @@ class GeographyService
         $data = $request->validate([
             'country_id' => 'required|integer|exists:countries,id',
             'status'     => 'required|in:active,inactive,0,1',
-            'city_ids'   => 'nullable|array',
+            'city_ids'   => 'required|array|min:1',
             'city_ids.*' => 'integer',
         ]);
 
         $status = in_array($data['status'], ['active', '1', 1], true) ? 1 : 0;
 
+        $this->authorizeCountry($request, $data['country_id']);
         $query = City::where('country_id', $data['country_id']);
         if (! empty($data['city_ids'])) {
             $query->whereIn('id', $data['city_ids']);
@@ -185,6 +187,7 @@ class GeographyService
             'rate_percent' => 'required|numeric|min:0|max:100',
         ]);
 
+        $this->authorizeCountry($request, $data['country_id']);
         $rate = CommissionRate::updateOrCreate(
             [
                 'country_id'   => $data['country_id'],
@@ -195,18 +198,20 @@ class GeographyService
             ]
         );
 
+        app(MarketSettings::class)->clear();
         return sendSuccess('Commission rate saved', ['commission_rate' => $rate]);
     }
 
     /** Every saved per-country program, for the Countries page summary cards. */
     public function loyaltyPrograms()
     {
-        $programs = LoyaltyProgram::query()->orderBy('country_id')->get();
+        abort_unless(auth()->user()?->hasRole('super_admin'), 403);
+        $programs = LoyaltyProgram::query()->whereNotNull('country_id')->where('inherits_global', false)->orderBy('country_id')->get();
 
         // Each country's tier ladder rides along, in the shape the dashboard
         // renders (threshold / sort_order). Rows with a null program_id are the
         // legacy global defaults and are offered to every country.
-        $tiers = LoyaltyTier::query()
+        $tiers = LoyaltyTier::query()->where('is_active', true)
             ->orderBy('order')
             ->get()
             ->map(fn (LoyaltyTier $t) => $t->toDashboardRow())
@@ -221,8 +226,15 @@ class GeographyService
 
     public function upsertLoyaltyProgram(Request $request)
     {
+        abort_unless($request->user()?->hasRole('super_admin'), 403);
+        if ($request->boolean('use_global')) {
+            $data = $request->validate(['country_id' => 'required|integer|exists:countries,id']);
+            $program = LoyaltyProgram::where('country_id', $data['country_id'])->first();
+            if ($program) $program->update(['inherits_global' => true]);
+            return sendSuccess('Using global rewards', ['defaults' => LoyaltyProgram::defaults()]);
+        }
         $data = $request->validate([
-            'country_id'     => 'required|integer|exists:countries,id',
+            'country_id'     => 'present|nullable|integer|exists:countries,id',
             'name'           => 'required|string|max:100',
             'earn_rate'      => 'required|numeric|min:0',
             'redeem_rate'    => 'required|integer|min:1',
@@ -245,6 +257,9 @@ class GeographyService
 
         // redeem_value is standardised at 1 currency unit per step for every currency —
         // the only tunable knob is redeem_rate ("points for 1 unit off").
+        return DB::transaction(function () use ($data, $request) {
+        // Serialize the nullable global key as MySQL permits multiple NULL unique values.
+        MarketSetting::where('scope', 'global')->where('scope_id', 0)->lockForUpdate()->first();
         $program = LoyaltyProgram::updateOrCreate(
             [
                 'country_id' => $data['country_id'],
@@ -258,6 +273,7 @@ class GeographyService
                 'max_redeem_pct' => $data['max_redeem_pct'],
                 'expiry_months'  => $data['expiry_months'],
                 'is_active'      => $data['is_active'],
+                'inherits_global' => false,
             ]
         );
 
@@ -267,9 +283,10 @@ class GeographyService
 
         return sendSuccess('Loyalty program saved', [
             'loyalty_program' => $program,
-            'loyalty_tiers'   => $program->tiers()->orderBy('order')->get()
+            'loyalty_tiers'   => LoyaltyTier::where('program_id', $program->country_id === null ? null : $program->id)->where('is_active', true)->orderBy('order')->get()
                 ->map(fn (LoyaltyTier $t) => $t->toDashboardRow())->values(),
         ]);
+        });
     }
 
     /**
@@ -281,7 +298,9 @@ class GeographyService
     protected function replaceTiers(LoyaltyProgram $program, array $rows): void
     {
         DB::transaction(function () use ($program, $rows) {
-            LoyaltyTier::where('program_id', $program->id)->delete();
+            $programId = $program->country_id === null ? null : $program->id;
+            // Historical users may reference a tier. Retire it without breaking that link.
+            LoyaltyTier::where('program_id', $programId)->update(['is_active' => false]);
 
             $order = 0;
             foreach ($rows as $row) {
@@ -290,10 +309,10 @@ class GeographyService
                     continue;   // blank rows are the editor's empty placeholders
                 }
 
-                LoyaltyTier::create([
-                    'program_id' => $program->id,
+                $slug = Str::slug($name.'-'.($programId ?? 'global').'-'.$order);
+                LoyaltyTier::updateOrCreate(['program_id' => $programId, 'slug' => $slug], [
+                    'program_id' => $programId,
                     'name'       => $name,
-                    'slug'       => Str::slug($name.'-'.$program->id.'-'.$order) ?: 'tier-'.$program->id.'-'.$order,
                     'color'      => $row['color'] ?? '#92400e',
                     'bg_color'   => $row['bg_color'] ?? '#fef3c7',
                     'min_points' => (int) ($row['threshold'] ?? 0),
@@ -325,6 +344,9 @@ class GeographyService
             'timezone'        => null,
             'status'          => $status,
             'cities_count'    => (int) ($c->cities_count ?? 0),
+            'venues_count' => (int) ($c->venues_count ?? 0),
+            'businesses_count' => (int) ($c->businesses_count ?? 0),
+            'settings' => app(MarketSettings::class)->config($c->id),
         ];
     }
 
@@ -336,14 +358,15 @@ class GeographyService
             'id'         => $c->id,
             'country_id' => $c->country_id,
             'state_id'   => $c->state_id,
+            'settings' => app(MarketSettings::class)->config($c->country_id, $c),
             'name'       => $c->name,
             'timezone'   => null,
             'status'     => $raw === 1 ? 'active' : 'inactive',
             // Per-city service modules. NULL reads as ON, matching the dashboard's
             // `module_* === false` test and the original Supabase default.
-            'module_listings'    => $c->module_listings !== 0 && $c->module_listings !== false,
-            'module_classes'     => $c->module_classes !== 0 && $c->module_classes !== false,
-            'module_matchmaking' => $c->module_matchmaking !== 0 && $c->module_matchmaking !== false,
+            'module_listings'    => app(MarketSettings::class)->config($c->country_id, $c)['effective']['module_listings'],
+            'module_classes'     => app(MarketSettings::class)->config($c->country_id, $c)['effective']['module_classes'],
+            'module_matchmaking' => app(MarketSettings::class)->config($c->country_id, $c)['effective']['module_matchmaking'],
         ];
     }
 
@@ -357,13 +380,59 @@ class GeographyService
     {
         $data = $request->validate([
             'module'  => 'required|in:module_listings,module_classes,module_matchmaking',
-            'enabled' => 'required|boolean',
+            'enabled' => 'present|nullable|boolean',
         ]);
 
         $city = City::findOrFail($id);
-        $city->{$data['module']} = (bool) $data['enabled'];
+        $this->authorizeCountry($request, $city->country_id);
+        $city->{$data['module']} = $data['enabled'] === null ? null : (bool) $data['enabled'];
         $city->save();
 
         return sendSuccess('City module updated', ['city' => $this->mapCity($city->fresh())]);
     }
+    protected function authorizeCountry(Request $request, int $countryId, bool $write = true): void
+    {
+        $user = $request->user();
+        if ($write) abort_unless($user?->hasAnyRole(['super_admin', 'admin', 'country_admin']), 403);
+        $allowed = AccessScope::jurisdictionCountryIds($user);
+        if (is_array($allowed)) abort_unless(in_array($countryId, $allowed, true), 403, 'This country is outside your jurisdiction.');
+    }
+
+    public function settings(Request $request, string $scope, int $id)
+    {
+        abort_unless(in_array($scope, ['global', 'country', 'city'], true), 404);
+        $city = $scope === 'city' ? City::findOrFail($id) : null;
+        if ($scope === 'global') abort_unless($id === 0 && $request->user()?->hasRole('super_admin'), 403);
+        else {
+            $countryId = $city ? (int) $city->country_id : (int) Country::findOrFail($id)->id;
+            $this->authorizeCountry($request, $countryId);
+        }
+        if ($request->isMethod('put')) {
+            $rules = ['values' => 'required|array:facility,program,event,module_listings,module_classes,module_matchmaking'];
+            foreach (MarketSettings::DEFAULTS as $key => $default) {
+                $rules['values.'.$key] = ($scope === 'global' ? 'required|' : 'present|nullable|')
+                    .(is_bool($default) ? 'boolean' : 'numeric|min:0|max:100');
+            }
+            $values = $request->validate($rules)['values'];
+            DB::transaction(function () use ($scope, $id, $city, $values) {
+                $stored = [];
+                foreach ($values as $key => $value) {
+                    if ($scope === 'country' && in_array($key, self::LISTING_TYPES, true)) {
+                        $where = ['country_id' => $id, 'listing_type' => $key];
+                        if ($value === null) CommissionRate::where($where)->get()->each->delete();
+                        else CommissionRate::updateOrCreate($where, ['rate_percent' => $value]);
+                    } elseif ($city && str_starts_with($key, 'module_')) {
+                        $city->$key = $value;
+                    } elseif ($value !== null) {
+                        $stored[$key] = is_bool(MarketSettings::DEFAULTS[$key]) ? (bool) $value : (float) $value;
+                    }
+                }
+                if ($city) $city->save();
+                MarketSetting::updateOrCreate(['scope' => $scope, 'scope_id' => $id], ['values' => $stored]);
+            });
+            app(MarketSettings::class)->clear();
+        }
+        return sendSuccess('Market settings loaded', ['settings' => app(MarketSettings::class)->config($countryId ?? null, $city?->fresh())]);
+    }
+
 }

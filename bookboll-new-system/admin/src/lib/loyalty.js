@@ -69,7 +69,7 @@ export async function loadLoyaltyPrograms() {
     byCountry[row.country_id] = normalizeLoyalty(row)
   }
   // Tier ladders come back alongside, keyed by program_id.
-  return { ok: true, byCountry, tiers: res.data?.loyalty_tiers || [] }
+  return { ok: true, byCountry, tiers: res.data?.loyalty_tiers || [], defaults: normalizeLoyalty(res.data?.defaults) }
 }
 
 /** Create or update the program for one country. Returns { ok, program } | { error }. */
@@ -90,7 +90,7 @@ export async function saveLoyaltyProgram(countryId, form, tiers = null) {
       ...(Array.isArray(tiers) ? { tiers: tiers.filter(t => (t.name || '').trim()).map((t, i) => ({
         name: (t.name || '').trim(),
         threshold: Math.max(0, Number(t.threshold) || 0),
-        multiplier: Math.max(0, Number(t.multiplier) || 1),
+        multiplier: Math.max(0, Number(t.multiplier ?? 1)),
         color: t.color || '#92400e',
         bg_color: t.bg_color || '#fef3c7',
         sort_order: i,
@@ -144,7 +144,7 @@ export function maxRedeemable({ points, platformFee, orderTotal, cfg = DEFAULT_L
 // source of truth, so they are no-ops.
 //
 // Earning is server-side: BookingService stamps bookings.loyalty_points_earned
-// from listings.loyalty_points and credits the ledger once on confirmation.
+// from the country/global rate and tier multiplier and credits the ledger once on confirmation.
 // Redeeming at checkout has no API parameter yet.
 
 /** @deprecated No-op. Laravel awards points server-side on booking confirmation. */

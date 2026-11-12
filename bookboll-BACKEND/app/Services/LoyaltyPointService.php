@@ -85,7 +85,7 @@ class LoyaltyPointService
             ->where('country_id', $countryId)
             ->orderByDesc('id')
             ->limit(40)
-            ->get(['id', 'points', 'type', 'reason', 'booking_id', 'created_at'])
+            ->get(['id', 'points', 'type', 'reason', 'booking_id', 'created_at', 'expires_at'])
             ->map(fn ($row) => [
                 'id'         => $row->id,
                 'country_id' => $countryId,
@@ -94,6 +94,7 @@ class LoyaltyPointService
                 'reason'     => $row->reason ?: '',
                 'booking_id' => $row->booking_id,
                 'created_at' => optional($row->created_at)?->toIso8601String(),
+                'expires_at' => $row->expires_at?->toIso8601String(),
             ])->values()->all();
 
         return sendSuccess('Loyalty fetched successfully', [

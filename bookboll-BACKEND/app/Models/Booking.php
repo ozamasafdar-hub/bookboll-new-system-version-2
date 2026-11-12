@@ -64,6 +64,7 @@ class Booking extends Model
 
     protected $casts = [
         'creation_context'      => 'array',
+        'loyalty_policy'        => 'array',
         'financial_context'     => 'array',
         'payment_breakdown'     => 'array',
         'full_payment_received' => 'boolean',
@@ -344,6 +345,8 @@ class Booking extends Model
                         : \App\Support\BookingPurpose::SALE;
                 }
             }
+
+            \App\Support\BookingRewards::snapshot($booking);
 
             // Stamp the currency once, here, rather than in each of the five places
             // that create a booking. Stored, not derived on read: a venue that later

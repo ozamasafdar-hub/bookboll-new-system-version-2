@@ -668,7 +668,7 @@ async function confirm() {
   stopHoldTimer(); holdActive.value = false; holdExpiresAt.value = 0   // booked → holds released server-side
   clearCheckoutSession()   // checkout complete → dismiss the resume card
   saveCustomerPhone(selectedCountry.value?.id, phone.value)   // remember for this country
-  // Points are credited by Laravel on confirmation (listings.loyalty_points) — nothing
+  // Points are credited by Laravel on confirmation (the country/global rewards policy) — nothing
   // to award from here. Refresh the cached balance so Rewards reflects the booking.
   clearCustomerLoyaltyCache()
   success.value = { ...snap, currency: res.currency }

@@ -37,11 +37,36 @@ class LoyaltyCountry
                 ->sum('points');
         };
 
-        $credit = $sum('credit', true);
-        $debit  = $sum('debit', true);
+        $rows = LoyaltyPoint::where('user_id', $userId)->where('country_id', $countryId)
+            ->orderBy('created_at')->orderBy('id')->get();
+        $credit = 0;
+        $lots = [];
+        $overdrawn = 0;
+        foreach ($rows as $row) {
+            $points = max(0, (int) $row->points);
+            if ($row->type === 'credit') {
+                $credit += $points;
+                $offset = min($overdrawn, $points);
+                $overdrawn -= $offset;
+                $lots[] = ['points' => $points - $offset, 'expires' => $row->expires_at?->getTimestamp()];
+                continue;
+            }
+            // Spend earliest-expiring points first. Expired lots cannot fund a later debit.
+            usort($lots, fn ($a, $b) => ($a['expires'] ?? PHP_INT_MAX) <=> ($b['expires'] ?? PHP_INT_MAX));
+            foreach ($lots as &$lot) {
+                if ($lot['expires'] !== null && $lot['expires'] <= $row->created_at->getTimestamp()) continue;
+                $used = min($lot['points'], $points);
+                $lot['points'] -= $used;
+                $points -= $used;
+                if ($points === 0) break;
+            }
+            unset($lot);
+            $overdrawn += $points;
+        }
+        $balance = array_sum(array_map(fn ($lot) => $lot['expires'] === null || $lot['expires'] > now()->getTimestamp() ? $lot['points'] : 0, $lots));
 
         return [
-            'balance'         => max(0, $credit - $debit),
+            'balance'         => max(0, $balance - $overdrawn),
             'lifetime_earned' => $credit,
             // Visible, never spendable, and never attributed to a country.
             'unscoped'        => max(0, $sum('credit', false) - $sum('debit', false)),
@@ -51,11 +76,9 @@ class LoyaltyCountry
     /** The active programme for a country, or null when none is configured. */
     public static function program(int $countryId): ?LoyaltyProgram
     {
-        return LoyaltyProgram::query()
-            ->where('country_id', $countryId)
-            ->where('is_active', true)
-            ->with(['tiers' => fn ($q) => $q->where('is_active', true)->orderBy('order')])
-            ->first();
+        $program = LoyaltyProgram::effective($countryId);
+        return $program->is_active ? $program : null;
+
     }
 
     /**
@@ -70,11 +93,11 @@ class LoyaltyCountry
             return [];
         }
 
-        return $program->tiers->map(fn ($t) => [
+        return $program->tiers->where('is_active', true)->map(fn ($t) => [
             'name'       => $t->name,
             'slug'       => $t->slug,
             'threshold'  => (int) $t->min_points,
-            'multiplier' => (float) ($t->multiplier ?: 1),
+            'multiplier' => (float) ($t->multiplier ?? 1),
         ])->values()->all();
     }
 
