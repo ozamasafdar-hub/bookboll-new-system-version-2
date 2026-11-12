@@ -106,7 +106,7 @@ class PremiumPlan
     {
         $ownerId = $user ? AccessScope::ownerUserId($user) : null;
 
-        return $ownerId === null ? null : Business::where('owner_id', $ownerId)->first();
+        return $ownerId === null ? null : Business::forOwnerId($ownerId);
     }
 
     /**

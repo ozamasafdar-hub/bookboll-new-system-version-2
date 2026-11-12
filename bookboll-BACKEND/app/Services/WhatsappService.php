@@ -116,7 +116,7 @@ class WhatsappService
 
     public function providerConfig(int $ownerId): array
     {
-        $business = Business::where('owner_id', $ownerId)->first();
+        $business = Business::forOwnerId($ownerId);
         $saved    = is_array($business?->whatsapp_config) ? $business->whatsapp_config : [];
 
         return array_merge(self::blankConfig(), $saved);
@@ -153,7 +153,7 @@ class WhatsappService
         $clean   = array_intersect_key($cfg, self::blankConfig());
 
         if ($ownerId !== null) {
-            $business = Business::where('owner_id', $ownerId)->first();
+            $business = Business::forOwnerId($ownerId);
             if (! $business) {
                 return ['ok' => false, 'error' => 'No business found for this account.'];
             }

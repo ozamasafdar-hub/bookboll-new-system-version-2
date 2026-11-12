@@ -30,7 +30,7 @@ class StorefrontSortService
         $ownerId = AccessScope::ownerUserId($user);
 
         if ($ownerId !== null) {
-            $b = Business::where('owner_id', $ownerId)->first();
+            $b = Business::forOwnerId($ownerId);
 
             return sendSuccess('Storefront sort', ['sort' => [
                 'space' => $b?->sort_space ?: self::DEFAULT,
@@ -57,11 +57,15 @@ class StorefrontSortService
         $ownerId = AccessScope::ownerUserId($user);
 
         if ($ownerId !== null) {
-            $business = Business::where('owner_id', $ownerId)->first();
+            $business = Business::forOwnerId($ownerId);
             if (! $business) {
                 return sendError('No business found for this account.', [], 404);
             }
             $business->update([self::COLUMNS[$data['view']] => $data['value']]);
+        } elseif (! AccessScope::isPlatform($user)) {
+            // A provider account under no business must not reach the
+            // marketplace's own ordering.
+            return sendError('No business found for this account.', [], 404);
         } else {
             Setting::updateOrCreate(
                 ['key' => self::KEYS[$data['view']]],

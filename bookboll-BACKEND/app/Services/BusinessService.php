@@ -283,7 +283,9 @@ class BusinessService
         // The relation PROPERTY (the Business), not the method (a HasOne) — a
         // relation object is always truthy, so the guard below never fired and
         // building the response then blew up on HasOne::fresh().
-        $business = $request->user()?->ownedBusiness;
+        // Owned outright, or run through a managing membership: the owner of a
+        // business created ownerless has no ownedBusiness row to find.
+        $business = \App\Support\AccessScope::managedBusiness($request->user());
 
         if (! $business) {
             return sendError('No business found for this account.', [], 404);

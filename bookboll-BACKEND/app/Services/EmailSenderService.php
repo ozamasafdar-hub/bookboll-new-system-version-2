@@ -222,7 +222,7 @@ class EmailSenderService
     {
         $ownerId = AccessScope::ownerUserId($request->user());
 
-        return $ownerId === null ? null : Business::where('owner_id', $ownerId)->first();
+        return $ownerId === null ? null : Business::forOwnerId($ownerId);
     }
 
     protected function configFor(?Business $business): array

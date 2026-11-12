@@ -88,7 +88,7 @@ class AdminOverviewService
             })
             ->exists();
 
-        $business = Business::where('owner_id', $ownerId)->first();
+        $business = Business::forOwnerId($ownerId);
 
         return [
             'is_provider'   => true,

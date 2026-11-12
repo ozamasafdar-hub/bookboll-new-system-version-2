@@ -65,7 +65,7 @@ class BrandResolutionService
             return null;
         }
 
-        return Business::where('owner_id', (int) $ownerId)->first();
+        return Business::forOwnerId((int) $ownerId);
     }
 
     /**

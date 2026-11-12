@@ -110,15 +110,9 @@ class NotificationTemplateService
             return null;
         }
 
-        $user->loadMissing('ownedBusiness');
-        if ($user->ownedBusiness) {
-            return $user->ownedBusiness;
-        }
-
-        if ($user->owner_user_id) {
-            return Business::where('owner_id', $user->owner_user_id)->first();
-        }
-
-        return null;
+        // Membership first, then the legacy owner link — the same answer the
+        // rest of the dashboard's scoping gives, so an ownerless business's
+        // team reaches its templates.
+        return \App\Support\AccessScope::business($user);
     }
 }

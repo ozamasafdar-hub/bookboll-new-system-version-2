@@ -50,7 +50,11 @@ export function pickPrimaryRole(roles = []) {
 export function mapLaravelUserToAdmin(user, roles = []) {
   if (!user) return null
   const role = pickPrimaryRole(roles)
-  const business = user.owned_business || user.ownedBusiness || null
+  // An owner carries the business on owned_business; a manager or staff member
+  // reaches it through their membership (GET /me and login both load it).
+  // Without the second read, invited staff saw no business name in the shell.
+  const membership = user.active_business_membership || user.activeBusinessMembership || null
+  const business = user.owned_business || user.ownedBusiness || membership?.business || null
   return {
     id: String(user.id),
     source: 'laravel',

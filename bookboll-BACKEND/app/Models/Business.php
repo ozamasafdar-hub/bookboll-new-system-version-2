@@ -99,6 +99,23 @@ class Business extends Model
         return $this->belongsTo(User::class, 'owner_id');
     }
 
+    /**
+     * The business an owner-side user id stands for.
+     *
+     * Replaces `Business::where('owner_id', $ownerId)`: that only finds a
+     * business registered by its owner. One created from the admin "Add
+     * business" form has owner_id null and its owner attached by membership,
+     * so the owner-keyed lookup returned nothing for the owner AND for every
+     * manager invited under them — My Website, storefront sort, WhatsApp and
+     * the plan page all answered "No business found".
+     */
+    public static function forOwnerId(?int $ownerId): ?self
+    {
+        $id = \App\Support\BusinessMembershipSync::businessIdForOwner($ownerId);
+
+        return $id ? static::find($id) : null;
+    }
+
     /** Every Premium subscription this business has ever had, newest first. */
     /**
      * Everyone who belongs to this business. Membership is keyed by the business
