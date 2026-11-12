@@ -76,8 +76,11 @@ class Booking extends Model
 
     public function hasPaidDeposit(): bool
     {
-        $this->loadMissing('payments');
-        $deposits = $this->payments->where('type', PaymentType::DEPOSIT);
+        // Do not attach a payments relation during serialization: endpoints that
+        // did not request receipts must not unexpectedly expose them.
+        $deposits = $this->relationLoaded('payments')
+            ? $this->payments->where('type', PaymentType::DEPOSIT)
+            : $this->payments()->where('type', PaymentType::DEPOSIT)->get();
 
         // Receipt evidence wins over a stale booking flag after a refund.
         if ($deposits->isNotEmpty()) {
