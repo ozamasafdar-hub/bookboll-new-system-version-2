@@ -15,8 +15,8 @@ use App\Services\BookingWalletService;
  * disagreeing is how a merchant gets quoted one fee and charged another.
  *
  *   Marketplace booking  -> the standard rate, on every plan.
- *   Merchant's own site  -> the standard rate, HALVED for a paid Premium
- *                           merchant.
+ *   Merchant's own site  -> its Free / paid Premium rate, city > country >
+ *                           global. Automatic defaults retain standard / half.
  *
  * Two rules that look like details and are not:
  *
@@ -90,6 +90,9 @@ class CommissionPolicy
     /** The business that owns a listing, or null when it cannot be resolved. */
     public static function businessFor(?Listing $listing): ?Business
     {
+        if ($businessId = $listing?->venue?->business_id) {
+            return Business::with('currentSubscription')->find($businessId);
+        }
         $ownerId = $listing?->venue?->owner_user_id;
 
         return $ownerId
@@ -114,9 +117,11 @@ class CommissionPolicy
 
         $business ??= self::businessFor($listing);
 
-        return self::paidPlanEligible($business)
-            ? round($standard * self::PAID_PLAN_MULTIPLIER, 4)
-            : $standard;
+        return app(MarketSettings::class)->websiteRate(
+            $standard, self::paidPlanEligible($business),
+            app(BookingWalletService::class)->countryIdForVenue($listing?->venue),
+            $listing?->venue?->city_id
+        );
     }
 
     /**
@@ -171,9 +176,7 @@ class CommissionPolicy
 
         $standard  = self::standardRatePct($listing);
         $eligible  = $channel === self::CHANNEL_SITE && self::paidPlanEligible($business);
-        $effective = $channel === self::CHANNEL_SITE && $eligible
-            ? round($standard * self::PAID_PLAN_MULTIPLIER, 4)
-            : $standard;
+        $effective = self::effectiveRatePct($listing, $channel, $business);
 
         $split = Money::split(max(0, $totalMinor), $effective);
 

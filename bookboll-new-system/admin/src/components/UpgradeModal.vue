@@ -166,7 +166,7 @@ function close() { clearPromo(); step.value = 'gate'; upgradeModal.value = { ope
             </div>
 
 
-            <p class="ug-fee-note">Free: standard booking commission. Paid Premium: half the standard commission on your website. Marketplace rates stay the same. Connecting payouts does not remove commission.</p>
+            <p class="ug-fee-note">Your website has separate Free and paid Premium rates. Check your listing’s payment settings for the applicable rate. Marketplace rates stay the same. Connecting payouts does not remove commission.</p>
             <div class="ug-co-inc-h"><ShieldCheck :size="15" /> What's included</div>
             <div class="ug-co-grid">
               <div v-for="ft in PREMIUM_FEATURES" :key="ft.key" class="ug-co-inc" :class="{ hot: ft.key === highlight }">

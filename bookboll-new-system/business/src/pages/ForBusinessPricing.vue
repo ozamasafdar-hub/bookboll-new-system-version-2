@@ -19,7 +19,7 @@ import { Check, X as XIcon, ArrowRight, ArrowLeft, Info } from 'lucide-vue-next'
 
 // Booking commission differs by plan; core tools are included on both.
 const CORE_ROWS = [
-  { label: 'Own-website booking commission', free: 'Standard rate', premium: 'Half the standard rate' },
+  { label: 'Own-website booking commission', free: 'Your market’s Free rate', premium: 'Your market’s Premium rate' },
   { label: 'Marketplace booking commission', free: 'Standard rate', premium: 'Standard rate' },
   { label: 'Free branded booking website (yourclub.bookboll.com)' },
   { label: 'Bookboll marketplace listing' },
@@ -31,7 +31,7 @@ const CORE_ROWS = [
 
 const PRICING_FAQS = [
   { q: 'Is the Free plan really free?',
-    a: 'The Free plan has no setup or monthly subscription fee. Booking commissions apply on both your own website and the Bookboll marketplace. Free merchants pay the standard rate; paid Premium merchants pay half that rate for own-website bookings. Your listing form shows the applicable rate.' },
+    a: 'The Free plan has no setup or monthly subscription fee. Booking commissions apply on both your own website and the Bookboll marketplace. Own-website bookings use the Free or paid Premium rate configured for your venue’s market. Your listing form shows both rates. Marketplace rates stay the same across plans.' },
   { q: 'How is Premium billed?',
     a: 'Premium is an annual subscription with no free trial. The annual charge is due when you subscribe. You can cancel renewal from the dashboard and keep access until the end of your paid year.' },
   { q: 'Does connecting payouts remove the commission?',

@@ -8,6 +8,19 @@ import { paymentExample, hasPaidWebsiteDiscount, websiteCommissionRate } from '.
 import { missingPricingSetup, pricingSetupGate } from '../src/lib/pricingSetup.js'
 import { LISTING_STEPS } from '../src/lib/creationFlow.js'
 
+test('website fee previews use resolved Free and Premium rates including zero independently of marketplace', () => {
+  const rates = {site_free: 8, site_premium: 3}
+  const free = paymentExample(200, 20, false, rates)
+  const paid = paymentExample(200, 20, true, rates)
+  assert.equal(free.siteDep, 16)
+  assert.equal(paid.siteDep, 6)
+  assert.equal(free.fee, 40)
+  assert.equal(paid.siteRest, 194)
+  assert.equal(free.premiumSitePct, 3)
+  assert.equal(paymentExample(200, 20, true, {site_premium: 0}).siteDep, 0)
+  assert.equal(websiteCommissionRate(24, true, {site_premium: null}), 12)
+})
+
 test('marketplace and website examples identify the correct fee and balance', () => {
   const example = paymentExample(450,20,false)
   assert.equal(example.fee,90)
@@ -178,7 +191,7 @@ test('opening a new listing checks its sole or preset venue and leaves multiple 
       pattern:ref(''),dynamicPricing:ref(false),pay:ref({}),connectedAddons:ref([]),connectedResources:ref([]),
       locationHours:ref([]),openSection:ref(''),payChannel:ref(''),listingTriedSave:ref(false),listingSaveError:ref(''),view:ref('list'),
       defaultForm:actualFunction('defaultForm'),defaultPay:actualFunction('defaultPay',{userRole:ref('provider')}),
-      defaultHours:()=>[],hoursFromLocation:()=>[],syncFixedFromTimes:()=>{},loadLocationHours:async()=>{},
+      defaultHours:()=>[],hoursFromLocation:()=>[],syncFixedFromTimes:()=>{},syncSlotModeFromForm:()=>{},loadLocationHours:async()=>{},
       checkProviderOnline:async id=>checks.push(id),clearDirty:()=>{},offerListingDraft:async()=>{},registerDraftSaver:()=>{},
     }
     await actualFunction('openNewListingForm',bindings)(preset)

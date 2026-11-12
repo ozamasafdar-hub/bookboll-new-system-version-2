@@ -93,6 +93,16 @@ beforeEach(function () {
     $this->pakistan = geoCountryFor('Pakistan', 'PK', 'PAK');
 });
 
+it('quotes and charges configured city website fees instead of stale listing payment options', function () {
+    $listing = depositListing($this->pakistan, SNAPSHOT_15, ['commission_rate' => 20])->fresh('venue');
+    \App\Models\MarketSetting::updateOrCreate(['scope' => 'city', 'scope_id' => $listing->venue->city_id], ['values' => ['site_free' => 8.25]]);
+    app(\App\Support\MarketSettings::class)->clear();
+    $catalog = new ReflectionMethod(MarketplaceCatalogService::class, 'paymentOptions');
+    expect($catalog->invoke(app(MarketplaceCatalogService::class), $listing)['site_deposit_percentage'])->toBe(8.25)
+        ->and(charged($listing, 200, 'site'))->toBe(16.5)
+        ->and(charged($listing, 200, 'marketplace'))->toBe(40.0);
+});
+
 it('charges the country rate set today, not the one stored when the listing was saved', function () {
     // Exactly the reported case: listing saved at 15%, Pakistan since moved to 50%.
     \App\Models\CommissionRate::create([

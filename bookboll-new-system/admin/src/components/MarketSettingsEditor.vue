@@ -7,6 +7,7 @@ const props = defineProps({ scope: String, scopeId: Number, name: String })
 const emit = defineEmits(['close', 'saved'])
 const config = ref(null), values = ref({}), busy = ref(false), error = ref('')
 const fees = [{ key: 'facility', label: 'Venue bookings' }, { key: 'program', label: 'Memberships' }, { key: 'event', label: 'Event seats' }]
+const websiteFees = [{ key: 'site_free', label: 'Free plan', fallback: 'Match marketplace rate' }, { key: 'site_premium', label: 'Paid Premium plan', fallback: 'Half the marketplace rate' }]
 const modules = [{ key: 'module_listings', label: 'New booking listings' }, { key: 'module_classes', label: 'New membership programs' }, { key: 'module_matchmaking', label: 'New events & tournaments' }]
 const parentName = props.scope === 'city' ? 'country' : 'global'
 onMounted(async () => {
@@ -14,14 +15,22 @@ onMounted(async () => {
     const res = await loadMarketSettings(props.scope, props.scopeId)
     if (!res.success) throw new Error(res.message || 'Could not load settings.')
     config.value = res.data.settings
-    values.value = Object.fromEntries([...fees, ...modules].map(({ key }) => [key, config.value.overrides[key] ?? null]))
+    values.value = Object.fromEntries([...fees, ...websiteFees, ...modules].map(({ key }) => [key, config.value.overrides[key] ?? null]))
   } catch (e) { error.value = e.message }
 })
 function inheritAll() { values.value = Object.fromEntries(Object.keys(values.value).map(k => [k, null])) }
+function websiteDefault(fee) {
+  const rate = config.value.parent[fee.key]
+  return rate == null ? fee.fallback : `${rate}%`
+}
+function websiteExample(fee) {
+  const inherited = props.scope === 'global' ? null : config.value.parent[fee.key]
+  return values.value[fee.key] ?? inherited ?? Number(values.value.facility ?? config.value.parent.facility) * (fee.key === 'site_premium' ? .5 : 1)
+}
 async function save() {
   if (busy.value) return
   error.value = ''
-  for (const { key, label } of fees) {
+  for (const { key, label } of [...fees, ...websiteFees]) {
     const n = values.value[key]
     if (n !== null && (n === '' || !Number.isFinite(Number(n)) || Number(n) < 0 || Number(n) > 100)) {
       error.value = `${label}: enter a percentage from 0 to 100.`; return
@@ -45,13 +54,21 @@ async function save() {
         <form v-if="config" @submit.prevent="save">
           <div class="market-body">
             <div class="inherit-path"><span :class="{ current: scope === 'global' }">Global</span><ArrowRight :size="14"/><span :class="{ current: scope === 'country' }">Country</span><ArrowRight :size="14"/><span :class="{ current: scope === 'city' }">City</span></div>
-            <div class="market-section-title"><h3>Platform fees</h3><button v-if="scope !== 'global'" type="button" class="btn btn-secondary btn-sm" @click="inheritAll">Use {{ parentName }} defaults for all</button></div>
-            <p class="market-help">Standard marketplace rates. Eligible paid plans receive their own-website discount. Listing and existing membership agreements keep their explicit rates.</p>
+            <div class="market-section-title"><h3>Marketplace fees</h3><button v-if="scope !== 'global'" type="button" class="btn btn-secondary btn-sm" @click="inheritAll">Use {{ parentName }} defaults for all</button></div>
+            <p class="market-help">The same marketplace rates apply on Free and Premium. Listing and existing membership agreements keep their explicit rates.</p>
             <div v-for="fee in fees" :key="fee.key" class="market-setting-row">
               <label :for="'fee-' + fee.key">{{ fee.label }}<small v-if="scope !== 'global'">{{ parentName }} default: {{ config.parent[fee.key] }}%</small></label>
               <select v-if="scope !== 'global'" :aria-label="fee.label + ' setting source'" :value="values[fee.key] === null ? 'inherit' : 'custom'" @change="values[fee.key] = $event.target.value === 'inherit' ? null : config.effective[fee.key]"><option value="inherit">Use {{ parentName }} default</option><option value="custom">Custom rate</option></select>
               <div class="market-percent"><input :id="'fee-' + fee.key" type="number" min="0" max="100" step="0.01" :disabled="values[fee.key] === null" :value="values[fee.key] ?? config.parent[fee.key]" @input="values[fee.key] = $event.target.value === '' ? '' : Number($event.target.value)" required /><span>%</span></div>
             </div>
+            <h3 class="services-heading">Provider website fees</h3>
+            <p class="market-help">Venue bookings made on a business’s own website. Set a separate rate for each plan, for deposits and full online payments.</p>
+            <div v-for="fee in websiteFees" :key="fee.key" class="market-setting-row">
+              <label :for="'fee-' + fee.key">{{ fee.label }}<small>{{ scope === 'global' ? 'Automatic: ' + fee.fallback : parentName + ' default: ' + websiteDefault(fee) }}</small></label>
+              <select :aria-label="fee.label + ' setting source'" :value="values[fee.key] === null ? 'inherit' : 'custom'" @change="values[fee.key] = $event.target.value === 'inherit' ? null : websiteExample(fee)"><option value="inherit">{{ scope === 'global' ? 'Automatic rate' : 'Use ' + parentName + ' default' }}</option><option value="custom">Custom rate</option></select>
+              <div class="market-percent"><input :id="'fee-' + fee.key" type="number" min="0" max="100" step="0.01" :disabled="values[fee.key] === null" :value="websiteExample(fee)" @input="values[fee.key] = $event.target.value === '' ? '' : Number($event.target.value)" required /><span>%</span></div>
+            </div>
+            <p class="market-help">Premium applies during an active paid subscription. Automatic rates follow each listing’s marketplace rate; custom website rates replace that calculation.</p>
             <h3 class="services-heading">Services businesses can add</h3>
             <p class="market-help">Turning a service off stops new listings, programs or events. Existing published content stays available.</p>
             <div v-for="mod in modules" :key="mod.key" class="market-setting-row modules">

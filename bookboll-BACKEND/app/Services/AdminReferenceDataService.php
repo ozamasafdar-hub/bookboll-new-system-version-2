@@ -35,7 +35,7 @@ class AdminReferenceDataService
         $ownerId  = AccessScope::ownerUserId($user);
 
         $venueQuery = Venue::query()->select([
-            'id', 'name', 'status', 'owner_user_id', 'city_id', 'country_id',
+            'id', 'name', 'status', 'owner_user_id', 'business_id', 'city_id', 'country_id',
             // The approvals reviewer shows the venue's phone; it was never selected,
             // so that field sat permanently blank in the review modal.
             'address', 'phone', 'currency_override', 'timezone_override', 'sort_order',
@@ -46,6 +46,16 @@ class AdminReferenceDataService
             $venueQuery->whereIn('id', $venueIds ?: [0]);
         }
         $venues = $venueQuery->get();
+        $businesses = Business::with('currentSubscription')->where(function ($q) use ($venues) {
+            $q->whereIn('id', $venues->pluck('business_id')->filter())
+                ->orWhereIn('owner_id', $venues->pluck('owner_user_id')->filter());
+        })->get();
+        $byId = $businesses->keyBy('id');
+        $byOwner = $businesses->keyBy('owner_id');
+        foreach ($venues as $venue) {
+            $business = $venue->business_id ? $byId->get($venue->business_id) : $byOwner->get($venue->owner_user_id);
+            $venue->setAttribute('business_plan', ['own_site_commission_discount_eligible' => \App\Support\CommissionPolicy::paidPlanEligible($business)]);
+        }
 
         $listings = Listing::query()
             ->select(['id', 'name', 'venue_id', 'status', 'sport_category', 'category', 'calendar_color', 'approval_status', 'eligibility_status'])
@@ -166,6 +176,7 @@ class AdminReferenceDataService
             'name'               => $c->name,
             'country_id'         => $c->country_id,
             'commission_rates' => array_intersect_key(app(\App\Support\MarketSettings::class)->config($c->country_id, $c)['effective'], array_flip(['facility', 'program', 'event'])),
+            'website_fees' => array_intersect_key(app(\App\Support\MarketSettings::class)->config($c->country_id, $c)['effective'], array_flip(\App\Support\MarketSettings::SITE_KEYS)),
             'module_listings'    => app(\App\Support\MarketSettings::class)->config($c->country_id, $c)['effective']['module_listings'],
             'module_classes'     => app(\App\Support\MarketSettings::class)->config($c->country_id, $c)['effective']['module_classes'],
             'module_matchmaking' => app(\App\Support\MarketSettings::class)->config($c->country_id, $c)['effective']['module_matchmaking'],
@@ -194,6 +205,7 @@ class AdminReferenceDataService
             'iso_code'      => $c->iso2,
             'status'        => (int) ($c->status ?? 1) === 1 ? 'active' : 'inactive',
             'currency_code' => $c->currency?->code ?: '',
+            'website_fees'  => array_intersect_key(app(\App\Support\MarketSettings::class)->config($c->id)['effective'], array_flip(\App\Support\MarketSettings::SITE_KEYS)),
         ])->values();
     }
 }

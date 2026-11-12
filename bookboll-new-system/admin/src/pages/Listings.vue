@@ -510,7 +510,8 @@ async function loadList() {
 
   cities.value = ref.cities
   countries.value = ref.countries
-  locations.value = venuesRes.data?.locations || []
+  const venuePlans = new Map(ref.venues.map(v => [cid(v.id), v.business_plan]))
+  locations.value = (venuesRes.data?.locations || []).map(v => ({ ...v, business_plan: venuePlans.get(cid(v.id)) }))
 
   venueCards.value = grouped ? (cardsRes?.data?.locations || []) : []
   venueTotal.value = cardsRes?.data?.pagination?.total ?? venueCards.value.length
@@ -1075,7 +1076,13 @@ const ownSitePaidPlan = computed(() => {
   // Platform staff use the selected merchant's plan, never their own exemption.
   return hasPaidWebsiteDiscount(userRole.value === 'provider' ? planState.value : venue?.business_plan)
 })
-const payExample = computed(() => paymentExample(form.value.base_price, effectiveCommissionRate.value, ownSitePaidPlan.value))
+const ownSiteFees = computed(() => {
+  const loc = locations.value.find(l => cid(l.id) === cid(form.value.location_id))
+  const city = cities.value.find(c => cid(c.id) === cid(loc?.city_id))
+  const country = countries.value.find(c => cid(c.id) === cid(countryIdOfLocation(form.value.location_id)))
+  return city?.website_fees || country?.website_fees || {}
+})
+const payExample = computed(() => paymentExample(form.value.base_price, effectiveCommissionRate.value, ownSitePaidPlan.value, ownSiteFees.value))
 const fmtPay = (n) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })
 
 /* ── Provider country lock ──────────────────────────────────── */

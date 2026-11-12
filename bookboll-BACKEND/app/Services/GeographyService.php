@@ -408,15 +408,18 @@ class GeographyService
             $this->authorizeCountry($request, $countryId);
         }
         if ($request->isMethod('put')) {
-            $rules = ['values' => 'required|array:facility,program,event,module_listings,module_classes,module_matchmaking'];
+            $rules = ['values' => 'required|array:'.implode(',', array_keys(MarketSettings::DEFAULTS))];
             foreach (MarketSettings::DEFAULTS as $key => $default) {
-                $rules['values.'.$key] = ($scope === 'global' ? 'required|' : 'present|nullable|')
+                $rules['values.'.$key] = (in_array($key, MarketSettings::SITE_KEYS, true) ? 'sometimes|nullable|' : ($scope === 'global' ? 'required|' : 'present|nullable|'))
                     .(is_bool($default) ? 'boolean' : 'numeric|min:0|max:100');
             }
             $values = $request->validate($rules)['values'];
             DB::transaction(function () use ($scope, $id, $city, $values) {
-                $stored = [];
+                // An older open editor may omit the new own-site fields. Preserve
+                // them unless the caller explicitly sends null to reset them.
+                $stored = MarketSetting::where(['scope' => $scope, 'scope_id' => $id])->first()?->values ?? [];
                 foreach ($values as $key => $value) {
+                    unset($stored[$key]);
                     if ($scope === 'country' && in_array($key, self::LISTING_TYPES, true)) {
                         $where = ['country_id' => $id, 'listing_type' => $key];
                         if ($value === null) CommissionRate::where($where)->get()->each->delete();

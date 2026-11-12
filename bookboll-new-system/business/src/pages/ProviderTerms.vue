@@ -114,7 +114,7 @@ const SECTIONS = [
 
         <section id="fees">
           <h2>5. Fees, payments &amp; deposits</h2>
-          <p class="pt-callout">Bookboll charges commission on <b>marketplace and own-website bookings</b>. Free merchants pay the standard rate. During a paid Premium subscription, own-website bookings use <b>half the standard rate</b>; marketplace rates stay the same.</p>
+          <p class="pt-callout">Bookboll charges commission on <b>marketplace and own-website bookings</b>. Own-website venue bookings use the configured <b>Free or paid Premium rate</b> for the venue’s market. Your listing’s payment settings show the applicable rate; marketplace rates stay the same across plans.</p>
           <ul>
             <li><b>Marketplace bookings are always paid at least partly online.</b> There is no pay-everything-on-arrival option on the marketplace. The customer either pays:
               <ul>

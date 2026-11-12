@@ -10,7 +10,10 @@ use Nnjeim\World\Models\City;
 class MarketSettings
 {
     public const DEFAULTS = ['facility' => 15.0, 'program' => 15.0, 'event' => 10.0,
+        // Null preserves the existing standard / half-standard own-site policy.
+        'site_free' => null, 'site_premium' => null,
         'module_listings' => true, 'module_classes' => true, 'module_matchmaking' => true];
+    public const SITE_KEYS = ['site_free', 'site_premium'];
     private ?array $rows = null;
     private ?array $rates = null;
 
@@ -57,5 +60,12 @@ class MarketSettings
     {
         $city = $cityId ? City::find($cityId) : null;
         return (bool) $this->config($countryId, $city)['effective'][$key];
+    }
+
+    public function websiteRate(float $standard, bool $premium, ?int $countryId = null, ?int $cityId = null): float
+    {
+        $city = $cityId ? City::find($cityId) : null;
+        $rate = $this->config($countryId, $city)['effective'][$premium ? 'site_premium' : 'site_free'];
+        return $rate !== null ? (float) $rate : round($standard * ($premium ? CommissionPolicy::PAID_PLAN_MULTIPLIER : 1), 4);
     }
 }

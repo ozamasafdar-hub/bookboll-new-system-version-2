@@ -40,6 +40,74 @@ beforeEach(function () {
 function marketValues(array $overrides = []): array { return array_replace(array_fill_keys(array_keys(MarketSettings::DEFAULTS), null), $overrides); }
 function saveMarket(string $scope, int $id, array $values) { return test()->putJson("/api/admin/geography/settings/$scope/$id", ['values' => $values]); }
 
+it('applies independent Free and Premium website fees through global country city and reset', function () {
+    $owner = User::factory()->create();
+    $business = Business::create(['name' => 'Website QA', 'username' => 'website-qa', 'owner_id' => $owner->id, 'plan' => 'premium']);
+    $sub = \App\Models\BusinessSubscription::create(['business_id' => $business->id, 'plan' => 'premium', 'billing' => 'yearly',
+        'status' => 'active', 'amount' => 588, 'currency' => 'USD', 'current_period_end' => now()->addMonth()]);
+    // Explicit business ownership works even before an owner is attached to the venue.
+    $this->venue->forceFill(['business_id' => $business->id])->save();
+    $this->listing->update(['commission_rate' => 24]);
+    $rate = fn () => CommissionPolicy::effectiveRatePct($this->listing->fresh('venue'), 'site');
+    saveMarket('global', 0, array_replace(MarketSettings::DEFAULTS, ['site_free' => 12, 'site_premium' => 6]))->assertOk();
+    expect($rate())->toBe(6.0);
+    $this->getJson('/api/admin/reference-data')->assertOk()
+        ->assertJsonPath('data.venues.0.business_plan.own_site_commission_discount_eligible', true);
+    saveMarket('country', $this->country->id, marketValues(['site_free' => 9, 'site_premium' => 3]))->assertOk();
+    expect($rate())->toBe(3.0);
+    saveMarket('city', $this->city->id, marketValues(['site_free' => 7, 'site_premium' => 0]))->assertOk();
+    expect($rate())->toBe(0.0)
+        ->and(CommissionPolicy::effectiveRatePct($this->listing->fresh('venue'), 'marketplace'))->toBe(24.0);
+    $this->getJson('/api/admin/geography/settings/city/'.$this->city->id)->assertOk()
+        ->assertJsonPath('data.settings.effective.site_premium', 0)
+        ->assertJsonPath('data.settings.sources.site_premium', 'city');
+    foreach (['past_due', 'trialing', 'canceled'] as $status) {
+        $sub->update(['status' => $status]);
+        expect($rate())->toBe(7.0);
+    }
+    $sub->update(['status' => 'active']);
+    saveMarket('city', $this->city->id, marketValues())->assertOk();
+    expect($rate())->toBe(3.0);
+    saveMarket('country', $this->country->id, marketValues())->assertOk();
+    expect($rate())->toBe(6.0);
+    saveMarket('global', 0, MarketSettings::DEFAULTS)->assertOk();
+    expect($rate())->toBe(12.0); // Automatic half of the listing's 24%, not the global 15%.
+    $business->update(['plan' => 'free']);
+    expect($rate())->toBe(24.0);
+});
+
+it('charges the configured website deposit and full payment split while preserving recorded bookings', function () {
+    saveMarket('global', 0, array_replace(MarketSettings::DEFAULTS, ['site_free' => 8.5]))->assertOk();
+    $listing = $this->listing->fresh('venue');
+    $deposit = CommissionPolicy::quote($listing, 'site', 20000, 'QAR', 'deposit');
+    $full = CommissionPolicy::quote($listing, 'site', 20000, 'QAR', 'online');
+    expect($deposit['fee_minor'])->toBe(1700)->and($deposit['due_now_minor'])->toBe(1700)
+        ->and($deposit['arrival_balance_minor'])->toBe(18300)
+        ->and($full['due_now_minor'])->toBe(20000)->and($full['merchant_share_minor'])->toBe(18300);
+    $booking = \App\Models\Booking::create(['user_id' => $this->admin->id, 'venue_id' => $this->venue->id, 'listing_id' => $listing->id,
+        'date' => now()->toDateString(), 'start_time' => '10:00', 'end_time' => '11:00', 'subtotal' => 200, 'total_price' => 200,
+        'status' => 'confirmed', 'commission_channel' => 'site', 'commission_effective_pct' => $deposit['effective_rate_pct'],
+        'commission_fee_minor' => $deposit['fee_minor'], 'merchant_share_minor' => $deposit['merchant_share_minor'], 'commission_currency' => 'QAR']);
+    saveMarket('global', 0, array_replace(MarketSettings::DEFAULTS, ['site_free' => 4]))->assertOk();
+    $settleRate = new ReflectionMethod(\App\Services\StripeService::class, 'bookingCommissionPct');
+    expect($settleRate->invoke(app(\App\Services\StripeService::class), $booking->fresh(), $listing))->toBe(8.5)
+        ->and($booking->fresh()->commission_fee_minor)->toBe(1700)
+        ->and(CommissionPolicy::quote($listing, 'site', 20000, 'QAR', 'deposit')['fee_minor'])->toBe(800);
+});
+
+it('preserves website overrides from older editors and rejects invalid fee percentages', function () {
+    saveMarket('global', 0, array_replace(MarketSettings::DEFAULTS, ['site_free' => 8, 'site_premium' => 2]))->assertOk();
+    $oldPayload = array_diff_key(MarketSettings::DEFAULTS, array_flip(MarketSettings::SITE_KEYS));
+    saveMarket('global', 0, $oldPayload)->assertOk()->assertJsonPath('data.settings.effective.site_free', 8)
+        ->assertJsonPath('data.settings.effective.site_premium', 2);
+    foreach ([-1, 101, 'invalid'] as $value) {
+        saveMarket('global', 0, array_replace(MarketSettings::DEFAULTS, ['site_free' => $value]))->assertUnprocessable();
+        saveMarket('city', $this->city->id, marketValues(['site_premium' => $value]))->assertUnprocessable();
+    }
+    $this->getJson('/api/admin/reference-data')->assertOk()
+        ->assertJsonFragment(['website_fees' => ['site_free' => 8, 'site_premium' => 2]]);
+});
+
 it('round trips global country and city settings with explicit zero and false values', function () {
     saveMarket('global', 0, array_replace(MarketSettings::DEFAULTS, ['facility' => 22, 'module_listings' => false]))->assertOk();
     expect(CommissionPolicy::standardRatePct($this->listing->fresh('venue')))->toBe(22.0)

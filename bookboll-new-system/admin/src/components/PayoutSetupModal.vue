@@ -37,7 +37,7 @@ const body = computed(() => props.pending
 const note = computed(() => props.pending
   ? 'Approval usually doesn’t take long — you can check its status in your wallet anytime.'
   : isBookings.value
-    ? 'You can also use deposit + on arrival without connected payouts. Bookboll keeps the online deposit as its fee; you collect the remaining amount. Commission also applies when payouts are connected. Paid Premium halves the standard commission on your own-website bookings.'
+    ? 'You can also use deposit + on arrival without connected payouts. Bookboll keeps the online deposit as its fee; you collect the remaining amount. Commission also applies when payouts are connected. Your own-website fee follows the Free or paid Premium rate for your venue’s market.'
     : 'Choose Stripe Connect for automatic payouts, or the Bookboll Wallet to hold a balance and withdraw.')
 
 async function goSetup() {
