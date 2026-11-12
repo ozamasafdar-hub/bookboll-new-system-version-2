@@ -14,6 +14,7 @@ import { CalendarX, CalendarClock } from 'lucide-vue-next'
 import { createTouchReorder } from '../lib/touchReorder.js'
 import { generateProgramSessions, windDownMap } from '../lib/programSessions.js'
 import { pushToast } from '../lib/toast.js'
+import { bookingMinutes, layoutCalendarColumn } from '../lib/calendarLayout.js'
 import { localCalendarDate as ymd } from '../lib/calendarDate.js'
 
 const { isProviderScoped, currentOwnerUserId, can, scopeLocations, scopePrograms } = useCurrentUser()
@@ -126,8 +127,10 @@ function openSlotBooking(loc, evt) {
   // Preselect the location's first listing as a sensible default (the user can
   // switch it in the form if the venue has several courts/listings).
   presetListingId.value = listingsOf(loc.id)[0]?.id || ''
-  presetDate.value = selectedDate.value
-  presetStartTime.value = toTimeStr(Math.max(dayBounds.value.start, Math.min(mins, dayBounds.value.end - 15)))
+    const slotDate = new Date(selectedDate.value + 'T12:00:00')
+    slotDate.setDate(slotDate.getDate() + Math.floor(mins / 1440))
+    presetDate.value = `${slotDate.getFullYear()}-${String(slotDate.getMonth()+1).padStart(2,'0')}-${String(slotDate.getDate()).padStart(2,'0')}`
+    presetStartTime.value = toTimeStr(mins % 1440)
   showNewBooking.value = true
 }
 function onBookingSaved() {
@@ -179,7 +182,7 @@ const dayBounds = computed(() => {
   for (const b of events.value) {
     if (b.booking_date !== selectedDate.value || !b.start_time) continue
     start = Math.min(start, Math.floor(toMinutes(b.start_time) / 60) * 60)
-    end   = Math.max(end,   Math.ceil(endMinutes(b.end_time)  / 60) * 60)
+    end   = Math.max(end,   Math.ceil(bookingMinutes(b).end / 60) * 60)
   }
   return { start, end }
 })
@@ -317,87 +320,12 @@ const rowHeight      = computed(() => ROW_HEIGHTS[dayGranularity.value] || 64)
 const pxPerMin       = computed(() => rowHeight.value / dayGranularity.value)
 const dayPixelHeight = computed(() => (dayBounds.value.end - dayBounds.value.start) * pxPerMin.value)
 
-// Lay out one location column: position each booking by start/end time and
-// split overlapping bookings (e.g. two courts at the same hour) into side-by-side lanes.
-// Beyond this many side-by-side lanes the blocks turn into unreadable slivers
-// (measured: 10 same-slot bookings = 27px-wide blocks on a phone) — collapse the
-// whole cluster into ONE counted block that opens a booking list instead.
-const isNarrowCal = ref(typeof window !== 'undefined' && window.matchMedia('(max-width: 700px)').matches)
-if (typeof window !== 'undefined') {
-  window.matchMedia('(max-width: 700px)').addEventListener('change', e => { isNarrowCal.value = e.matches })
-}
-const maxLanes = computed(() => (isNarrowCal.value ? 2 : 3))
-
-function columnLayout(locationId) {
-  const ppm = pxPerMin.value
-  const dayStart = dayBounds.value.start
-  const items = events.value
-    .filter(b => resolvedLocationId(b) === locationId && b.booking_date === selectedDate.value && b.start_time)
-    .map(b => {
-      const startM = toMinutes(b.start_time)
-      const endM   = Math.max(endMinutes(b.end_time), startM + 15) // clamp tiny/zero durations
-      return { bk: b, startM, endM, lane: 0 }
-    })
-    .sort((a, b) => a.startM - b.startM || a.endM - b.endM)
-
-  const out = []
-  let i = 0
-  while (i < items.length) {
-    // grow a cluster of transitively-overlapping bookings
-    const cluster = [items[i]]
-    let clusterEnd = items[i].endM
-    let j = i + 1
-    while (j < items.length && items[j].startM < clusterEnd) {
-      cluster.push(items[j])
-      clusterEnd = Math.max(clusterEnd, items[j].endM)
-      j++
-    }
-    // assign each booking to the first free lane
-    const laneEnds = []
-    for (const it of cluster) {
-      let placed = false
-      for (let L = 0; L < laneEnds.length; L++) {
-        if (laneEnds[L] <= it.startM) { it.lane = L; laneEnds[L] = it.endM; placed = true; break }
-      }
-      if (!placed) { it.lane = laneEnds.length; laneEnds.push(it.endM) }
-    }
-    const lanes = laneEnds.length
-    if (lanes > maxLanes.value) {
-      // Too crowded to read side-by-side → one aggregated block for the cluster.
-      const startM = cluster[0].startM
-      out.push({
-        group: true,
-        items: cluster.map(c => c.bk),
-        startM, endM: clusterEnd,
-        top: (startM - dayStart) * ppm,
-        height: Math.max(28, (clusterEnd - startM) * ppm),
-        leftPct: 0, widthPct: 100,
-      })
-    } else {
-      for (const it of cluster) {
-        out.push({
-          bk: it.bk,
-          top: (it.startM - dayStart) * ppm,
-          height: Math.max(20, (it.endM - it.startM) * ppm),
-          leftPct: (it.lane / lanes) * 100,
-          widthPct: 100 / lanes,
-        })
-      }
-    }
-    i = j
-  }
-  return out
-}
-
-// The "N bookings" group block opens this chooser — pick one to see its detail.
-const groupSheet = ref(null)   // { items: [bk...], label }
-function openGroup(ev) {
-  groupSheet.value = {
-    items: ev.items,
-    label: `${ev.items.length} bookings · ${fmtRange12(toTimeStr(ev.startM), toTimeStr(ev.endM))}`,
-  }
-}
-function pickFromGroup(bk) { groupSheet.value = null; onEventClick(bk) }
+// Widen busy venues instead of hiding individual bookings in a group.
+const dayLayouts = computed(() => Object.fromEntries(locations.value.map(loc => [loc.id,
+  layoutCalendarColumn(events.value.filter(b => resolvedLocationId(b) === loc.id && b.booking_date === selectedDate.value), pxPerMin.value, dayBounds.value.start)
+])))
+function customerLabel(b) { return b.customer_name || (b.customer_id ? 'Customer name unavailable' : 'Walk-in customer') }
+function eventTime(b) { return fmtRange12(b.start_time, b.end_time) + (bookingMinutes(b).end > 1440 ? ' (+1 day)' : '') }
 
 // ── Operating hours → closed-slot shading (day view) ──────────────────────────
 // location_hours holds one row per weekday (0=Sun..6=Sat) with open/close times.
@@ -434,7 +362,9 @@ const openIntervalsByLoc = computed(() => {
     if (!map[lid]) map[lid] = { configured: true, open: [] }   // this venue has hours set
     if (Number(r.day_of_week) !== selectedDow.value) continue
     if (r.is_open && r.open_time && r.close_time) {
-      const s = toMinutes(r.open_time), e = endMinutes(r.close_time)
+      const s = toMinutes(r.open_time)
+      let e = endMinutes(r.close_time)
+      if (e <= s) e += 1440
       if (e > s) map[lid].open.push({ startM: s, endM: e })
     }
   }
@@ -680,13 +610,13 @@ function hasPendingPayment(bk) {
                 class="day-gutter-slot"
                 :class="{ 'is-hour': h.endsWith(':00') }"
                 :style="{ top: (idx * rowHeight) + 'px', height: rowHeight + 'px' }"
-              >{{ fmt12(h) }}</div>
+              >{{ fmt12(h) }}<small v-if="toMinutes(h) >= 1440">Next day</small></div>
             </div>
           </div>
 
           <!-- Location columns (drag a header to reorder — saved per user) -->
           <div class="day-cols">
-            <div v-for="loc in orderedLocations" :key="loc.id" class="day-col" :data-tr-col="loc.id" :class="{ 'col-dragover': dragOverColId === loc.id, 'col-dragging': dragColId === loc.id }">
+            <div v-for="loc in orderedLocations" :key="loc.id" class="day-col" :style="{ minWidth: dayLayouts[loc.id].width + 'px' }" :data-tr-col="loc.id" :class="{ 'col-dragover': dragOverColId === loc.id, 'col-dragging': dragColId === loc.id }">
               <div
                 class="day-col-head" draggable="true" title="Drag to reorder columns"
                 @dragstart="onColDragStart(loc, $event)"
@@ -731,38 +661,18 @@ function hasPendingPayment(bk) {
                   class="day-gridline" :class="{ 'is-hour': h.endsWith(':00') }"
                   :style="{ top: (idx * rowHeight) + 'px' }"
                 ></div>
-                <!-- event blocks (crowded clusters collapse into one counted block) -->
-                <template v-for="ev in columnLayout(loc.id)" :key="ev.group ? 'grp-' + ev.startM + '-' + ev.items.length : ev.bk.id">
-                  <button
-                    v-if="ev.group"
-                    type="button"
-                    class="day-event-group"
-                    :style="{ top: ev.top + 'px', height: ev.height + 'px' }"
-                    :title="`${ev.items.length} bookings — tap to list them`"
-                    @click.stop="openGroup(ev)"
-                  >
-                    <span class="deg-count"><Users :size="12" /> {{ ev.items.length }} bookings</span>
-                    <span class="deg-time">{{ fmtRange12(toTimeStr(ev.startM), toTimeStr(ev.endM)) }} · tap to view</span>
-                  </button>
-                  <div
-                    v-else
-                    class="day-event"
-                    :style="{
-                      top: ev.top + 'px', height: ev.height + 'px',
-                      left: `calc(${ev.leftPct}% + 2px)`, width: `calc(${ev.widthPct}% - 4px)`,
-                      '--c': bookingColor(ev.bk),
-                      '--tc': contrastText(bookingColor(ev.bk)),
-                    }"
-                    :title="`${bookingLabel(ev.bk)} · ${fmtRange12(ev.bk.start_time, ev.bk.end_time)} · ${statusLabel(ev.bk.booking_status)}${hasPendingPayment(ev.bk) ? ' · ⚠ Payment pending' : ''}`"
-                    @click.stop="onEventClick(ev.bk)"
-                  >
-                    <span class="day-event-inner">
-                      <span class="day-event-name"><GraduationCap v-if="ev.bk.origin === 'class_program'" :size="11" class="ev-prog-icon" />{{ bookingLabel(ev.bk) }}</span>
-                      <span class="day-event-time">{{ fmtRange12(ev.bk.start_time, ev.bk.end_time) }}</span>
-                    </span>
-                    <span v-if="hasPendingPayment(ev.bk)" class="pay-dot" title="Payment pending"></span>
-                  </div>
-                </template>
+                <button v-for="ev in dayLayouts[loc.id].events" :key="ev.bk.id"
+                  type="button" class="day-event" :class="{ 'short-event': ev.height < 56 }"
+                  :style="{ top: ev.top + 'px', height: ev.height + 'px', left: `calc(${ev.leftPct}% + 2px)`, width: `calc(${ev.widthPct}% - 4px)`, '--c': bookingColor(ev.bk) }"
+                  :title="`${customerLabel(ev.bk)} · ${bookingLabel(ev.bk)} · ${eventTime(ev.bk)} · ${statusLabel(ev.bk.booking_status)}`"
+                  @click.stop="onEventClick(ev.bk)">
+                  <span class="day-event-inner">
+                    <strong class="day-event-customer">{{ ev.bk.origin === 'class_program' ? 'Program session' : customerLabel(ev.bk) }}</strong>
+                    <span class="day-event-name">{{ bookingLabel(ev.bk) }}</span>
+                    <span class="day-event-time">{{ eventTime(ev.bk) }}</span>
+                  </span>
+                  <span v-if="hasPendingPayment(ev.bk)" class="pay-dot" title="Balance to collect"></span>
+                </button>
               </div>
             </div>
           </div>
@@ -799,7 +709,7 @@ function hasPendingPayment(bk) {
                   @click.stop="onEventClick(bk)"
                 >
                   <span class="wk-inner">
-                    <span class="wk-name"><GraduationCap v-if="bk.origin === 'class_program'" :size="10" class="ev-prog-icon" />{{ bookingLabel(bk) }}</span>
+                    <span class="wk-customer">{{ customerLabel(bk) }}</span><span class="wk-name"><GraduationCap v-if="bk.origin === 'class_program'" :size="10" class="ev-prog-icon" />{{ bookingLabel(bk) }}</span>
                     <span class="wk-time">{{ fmt12(bk.start_time) }}</span>
                   </span>
                   <span v-if="hasPendingPayment(bk)" class="pay-dot wk-pay-dot" title="Payment pending"></span>
@@ -847,26 +757,6 @@ function hasPendingPayment(bk) {
                 +{{ bookingsOnDate(cell.date).length - 4 }} more
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- crowded-slot chooser: the "N bookings" block lists its bookings here -->
-      <div v-if="groupSheet" class="cal-group-back" @click.self="groupSheet = null">
-        <div class="cal-group-sheet" v-dialog="() => groupSheet = null" :aria-label="groupSheet.label">
-          <div class="cal-group-head">
-            <b>{{ groupSheet.label }}</b>
-            <button class="cal-group-x" @click="groupSheet = null" aria-label="Close"><X :size="18" /></button>
-          </div>
-          <div class="cal-group-list">
-            <button v-for="bk in groupSheet.items" :key="bk.id" type="button" class="cal-group-row" @click="pickFromGroup(bk)">
-              <span class="cgr-dot" :style="{ background: bookingColor(bk) }"></span>
-              <span class="cgr-main">
-                <span class="cgr-name">{{ bookingLabel(bk) }}</span>
-                <span class="cgr-sub">{{ fmtRange12(bk.start_time, bk.end_time) }} · {{ statusLabel(bk.booking_status) }}</span>
-              </span>
-              <span v-if="hasPendingPayment(bk)" class="cgr-pay">⚠ payment</span>
-            </button>
           </div>
         </div>
       </div>
@@ -1171,134 +1061,33 @@ function hasPendingPayment(bk) {
 .day-col-body { position: relative; }
 .day-col-body.is-bookable { cursor: copy; }
 
-/* Crowded slot: one counted block instead of unreadable slivers */
-.day-event-group {
-  position: absolute; left: 2px; right: 2px; z-index: 2;
-  display: flex; flex-direction: column; justify-content: center; gap: 2px;
-  padding: 4px 10px; border-radius: 8px; cursor: pointer; overflow: hidden;
-  background: repeating-linear-gradient(45deg, var(--info-bg, #eef2ff), var(--info-bg, #eef2ff) 8px, #e0e7ff 8px, #e0e7ff 16px);
-  border: 1.5px solid #a5b4fc; color: var(--purple-ink, #3730a3); text-align: left;
-}
-.day-event-group:hover { border-color: #6366f1; }
-.deg-count { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 800; }
-.deg-time { font-size: 11px; font-weight: 600; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-/* Chooser sheet for a crowded slot's bookings */
-.cal-group-back { position: fixed; inset: 0; background: rgba(15,23,42,.5); display: flex; align-items: center; justify-content: center; z-index: 70; padding: 20px; }
-.cal-group-sheet { background: var(--surface, #ffffff); border-radius: 16px; width: 100%; max-width: 420px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
-.cal-group-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--border); font-size: 15px; }
-.cal-group-x { display: inline-flex; padding: 6px; border-radius: 8px; color: var(--text-muted); }
-.cal-group-x:hover { background: var(--bg); color: var(--text); }
-.cal-group-list { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
-.cal-group-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 11px 12px; border-radius: 10px; background: none; border: none; cursor: pointer; min-height: 48px; }
-.cal-group-row:hover { background: var(--bg); }
-.cgr-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
-.cgr-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.cgr-name { font-size: 14px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cgr-sub { font-size: 12px; color: var(--text-muted); }
-.cgr-pay { font-size: 11px; font-weight: 700; color: var(--warning-ink, #b45309); background: var(--warning-bg, #fef3c7); padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
-@media (max-width: 640px) {
-  /* Phone: chooser becomes a bottom sheet */
-  .cal-group-back { align-items: flex-end; padding: 0; }
-  .cal-group-sheet { max-width: none; border-radius: 18px 18px 0 0; max-height: 75dvh; padding-bottom: env(safe-area-inset-bottom); }
-}
-
-/* Special-day banner under a column head (custom hours = indigo, closed = red).
-   The wrapper is sticky but ZERO-HEIGHT (no layout space), and the chip hangs
-   from it absolutely — the column body below keeps the exact same y-origin as
-   the time gutter and chip-less columns. */
-.day-sd-wrap { position: sticky; top: 40px; height: 0; z-index: 4; }
-.day-sd-chip {
-  position: absolute; top: 0; left: 0; right: 0;
-  display: flex; align-items: center; gap: 5px; padding: 4px 10px;
-  font-size: 11px; font-weight: 700; color: var(--purple-ink, #4338ca); background: var(--info-bg, #eef2ff);
-  border-bottom: 1px solid var(--purple-border, #c7d2fe);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.day-sd-chip.closed { color: var(--danger-ink, #b91c1c); background: var(--danger-bg, #fef2f2); border-bottom-color: var(--danger-border, #fecaca); }
-
-/* Month-view special-day marker */
-.month-sd {
-  display: inline-flex; align-items: center; gap: 3px; max-width: 100%;
-  padding: 1px 5px; margin-top: 2px; border-radius: 5px;
-  font-size: 10px; font-weight: 700; color: var(--purple-ink, #4338ca); background: var(--info-bg, #eef2ff);
-}
-.month-sd.closed { color: var(--danger-ink, #b91c1c); background: var(--danger-bg, #fef2f2); }
-.month-sd-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Only the hovered slot lights up (see .day-hover-band), not the whole column. */
-
-/* Closed-hours shading — outside the venue's operating hours for this weekday */
-.day-closed-band {
-  position: absolute; left: 0; right: 0; z-index: 1; pointer-events: none;
-  background: repeating-linear-gradient(135deg, rgba(148,163,184,.10) 0 8px, rgba(148,163,184,.16) 8px 16px);
-  border-top: 1px dashed rgba(148,163,184,.5);
-}
-.day-closed-tag {
-  position: absolute; top: 3px; left: 6px; display: inline-flex; align-items: center; gap: 3px;
-  font-size: 9.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
-  color: var(--text-light, #94a3b8);
-}
-/* Hovered-slot highlight band (follows the cursor, snapped to the slot) */
-.day-hover-band {
-  position: absolute; left: 0; right: 0; z-index: 1; pointer-events: none;
-  background: rgba(16,185,129,.10); border: 1px solid rgba(16,185,129,.35);
-}
-.day-hover-band.closed { background: rgba(148,163,184,.14); border-color: rgba(148,163,184,.5); }
-
-/* Program session modal */
-.sess-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 1000; display: flex; justify-content: flex-end; backdrop-filter: blur(2px); }
-.sess-panel { width: 100%; max-width: 440px; height: 100%; background: var(--surface, #ffffff); display: flex; flex-direction: column; box-shadow: -8px 0 40px rgba(0,0,0,.18); animation: slideInRight .22s cubic-bezier(.22,1,.36,1); }
-@keyframes slideInRight { from { transform: translateX(40px); opacity: 0 } to { transform: translateX(0); opacity: 1 } }
-.sess-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 18px 20px 14px; border-bottom: 1px solid var(--border); }
-.sess-title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 7px; }
-.sess-sub { font-size: 12.5px; color: var(--text-muted); display: flex; align-items: center; gap: 5px; margin-top: 4px; }
-.sess-close { width: 32px; height: 32px; border-radius: 8px; border: none; background: var(--bg, #f1f5f9); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-muted, #64748b); }
-.sess-close:hover { background: var(--border, #e2e8f0); }
-.sess-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
-.sess-count { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); margin-bottom: 14px; }
-.sess-empty { color: var(--text-muted); font-size: 13px; padding: 20px 0; text-align: center; }
-.sess-list { display: flex; flex-direction: column; gap: 8px; }
-.sess-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg); border-radius: 10px; }
-.sess-avatar { width: 34px; height: 34px; border-radius: 50%; background: #0f172a; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; flex-shrink: 0; }
-.sess-info { flex: 1; min-width: 0; }
-.sess-name { font-size: 13.5px; font-weight: 600; }
-.sess-contact { font-size: 11.5px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
-.sess-contact span { display: inline-flex; align-items: center; gap: 3px; }
-.sess-badge { font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
-.sess-link { display: inline-block; margin-top: 14px; font-size: 13px; font-weight: 600; color: var(--primary-ink); }
-.sess-cancel-btn { display: flex; align-items: center; gap: 6px; margin-top: 12px; padding: 8px 12px; width: 100%; justify-content: center; border: 1px solid var(--danger-border, #fecaca); background: var(--danger-bg, #fef2f2); color: var(--danger-ink, #dc2626); border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .12s; }
-.sess-cancel-btn:hover { background: var(--danger-bg, #fee2e2); }
-
-/* Gridlines */
-.day-gridline {
-  position: absolute; left: 0; right: 0; height: 0;
-  border-top: 1px solid var(--border, #f1f5f9);
-}
-.day-gridline.is-hour { border-top-color: var(--border); }
-
-/* Event block — full booking colour, text auto-contrasted, height ∝ duration */
 .day-event {
   position: absolute; overflow: hidden;
   border-radius: 6px; cursor: pointer;
-  background: var(--c); color: var(--tc);
-  border: 1px solid rgba(0,0,0,.08);
+  background: color-mix(in srgb, var(--c) 12%, var(--surface)); color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--c) 45%, var(--border)); border-left: 4px solid var(--c); text-align: left; font: inherit; padding: 0;
   display: flex; box-shadow: 0 1px 2px rgba(0,0,0,.10);
   transition: box-shadow .12s, filter .12s; z-index: 2;
 }
 .day-event:hover { box-shadow: 0 3px 12px rgba(0,0,0,.22); filter: brightness(.95); z-index: 3; }
 .day-event-inner {
-  flex: 1; min-width: 0; padding: 3px 7px;
+  flex: 1; min-width: 0; padding: 6px 8px;
   display: flex; flex-direction: column; gap: 1px; overflow: hidden;
 }
 .day-event-name {
-  font-size: 11.5px; font-weight: 700; color: var(--tc);
+  font-size: 12px; font-weight: 500; color: var(--text-secondary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.day-event-time { font-size: 10.5px; color: var(--tc); opacity: .82; white-space: nowrap; }
+.day-event-time { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.day-event-customer { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 8px; }
+.day-event.short-event .day-event-inner { padding: 1px 6px; }
+.day-event.short-event .day-event-name { display: none; }
+.day-gutter-slot small { display: block; font-size: 9px; color: var(--primary-ink); }
+.wk-customer { font-weight: 700; font-size: 12px; }
 .day-event .pay-dot {
   position: absolute; top: 4px; right: 4px;
-  width: 8px; height: 8px; border-radius: 50%;
-  background: #f59e0b; box-shadow: 0 0 0 1.5px var(--c);
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #f59e0b;
 }
 .cal-empty-note { padding: 40px; text-align: center; color: var(--text-muted); font-size: 14px; }
 
@@ -1347,7 +1136,7 @@ function hasPendingPayment(bk) {
   transition: box-shadow 0.1s, filter .12s;
 }
 .week-chip:hover { box-shadow: 0 1px 6px rgba(0,0,0,0.2); filter: brightness(.95); }
-.wk-inner { display: flex; justify-content: space-between; align-items: center; gap: 4px; padding: 3px 7px; flex: 1; min-width: 0; }
+.wk-inner { display: flex; justify-content: space-between; align-items: center; gap: 4px; padding: 6px 8px; flex: 1; min-width: 0; }
 .wk-name { font-size: 11px; font-weight: 700; color: var(--tc); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wk-time { font-size: 10px; color: var(--tc); opacity: .82; white-space: nowrap; flex-shrink: 0; }
 

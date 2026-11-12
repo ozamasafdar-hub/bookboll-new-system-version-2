@@ -39,6 +39,8 @@ return [
         'key'            => env('STRIPE_PUBLIC_KEY'),
         'secret'         => env('STRIPE_SECRET_KEY'),
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        'connect_client_id' => env('STRIPE_CONNECT_CLIENT_ID'),
+        'connect_on_behalf_of' => env('STRIPE_CONNECT_ON_BEHALF_OF', false),
     ],
 
     /*

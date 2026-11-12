@@ -63,7 +63,7 @@ const ALL_CARDS = [
   { to: '/bookings', icon: BookOpen, title: 'Bookings', desc: 'Review, edit and manage incoming reservations.' },
   { to: '/customers', icon: Users, title: 'Customers', desc: 'Your customer CRM — profiles, history and loyalty.' },
   { to: '/memberships', icon: Repeat, title: 'Membership listings', desc: 'Showcase your academy and manage marketplace listing subscriptions.' },
-  { to: '/wallet', icon: Wallet, title: 'My Wallets', desc: 'One wallet per country — track earnings and set up how you get paid.' },
+  { to: '/payment-setup', icon: Wallet, title: 'Payment setup', desc: 'Optional Stripe connection for full online booking payments.' },
   { to: '/promocodes', icon: Ticket, title: 'Promotions', desc: 'Create promo codes to bring in more bookings.' },
   { to: '/payments', icon: LayoutDashboard, title: 'Payments', desc: 'Collect and reconcile payments.' },
   { to: '/special-days', icon: CalendarDays, title: 'Special Days', desc: 'Set holidays and one-off hours or closures.' },
@@ -77,7 +77,7 @@ const ALL_CARDS = [
 const cards = computed(() => ALL_CARDS.filter(c => canAccessPage(c.to, role.value, currentOverrides.value)))
 const cardGroups = computed(() => [
   { title: 'Day to day', icon: Calendar, paths: ['/calendar', '/bookings', '/listings', '/customers', '/memberships', '/special-days'] },
-  { title: 'Money & growth', icon: Wallet, paths: ['/payments', '/wallet', '/promocodes'] },
+  { title: 'Money & growth', icon: Wallet, paths: ['/payments', '/payment-setup', '/promocodes'] },
   { title: 'Business & administration', icon: Settings, paths: ['/team', '/approvals', '/moderation', '/countries', '/audit-logs', '/settings'] },
 ].map(group => ({ ...group, cards: group.paths.map(path => cards.value.find(card => card.to === path)).filter(Boolean) }))
   .filter(group => group.cards.length))
@@ -110,9 +110,9 @@ const checklist = computed(() => [
     label: 'Customise & publish your website',
     sub: siteLive.value ? 'Your site is live.' : 'Logo & colours — your web address is already reserved.',
     done: siteLive.value },
-  { key: 'wallet', to: '/wallet', icon: Wallet,
+  { key: 'wallet', to: '/payment-setup', icon: Wallet,
     label: 'Connect a payout method',
-    sub: walletReady.value ? 'You can get paid.' : 'Last step — connect how you get paid to unlock online payments & memberships.',
+    sub: walletReady.value ? 'Stripe connected for full online bookings.' : 'Optional — connect Stripe for full online venue payments.',
     done: walletReady.value },
 ])
 const doneCount = computed(() => checklist.value.filter(s => s.done).length)

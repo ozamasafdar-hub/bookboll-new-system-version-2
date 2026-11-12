@@ -4,8 +4,8 @@ import { canAccessPage, can, CAP, PLATFORM_ROLES } from './permissions.js'
 // destinations retain their own permissions and confirmation/save flows.
 const entry = (id, title, description, group, to, keywords = '', extra = {}) => ({ id, title, description, group, to, keywords, ...extra })
 export const FEATURE_DESTINATIONS = [
-  entry('booking-payout', 'Set up booking payouts', 'Connect how you get paid for online venue bookings.', 'Booking wallet', '/wallet/bookings?setup=payout', 'online payments accept cards credit debit stripe bank account add payout method receive money get paid payment gateway', { providerOnly: true, capability: CAP.MANAGE_PAYOUTS }),
-  entry('booking-wallet', 'Booking wallet', 'View venue earnings, balances and withdrawals.', 'Money', '/wallet/bookings', 'booking online payments payout balance cash out withdraw money bank stripe'),
+  entry('booking-payout', 'Set up online payments', 'Connect Stripe to receive full booking payments.', 'Payment setup', '/payment-setup', 'online payments accept cards credit debit stripe bank account add payout method receive money get paid payment gateway', { providerOnly: true, capability: CAP.MANAGE_PAYOUTS }),
+  entry('booking-wallet', 'Payment setup', 'View your business Stripe connection and payment options.', 'Money', '/payment-setup', 'booking online payments payout bank stripe connection'),
   entry('payments', 'Payments', 'Review payments and reconcile transactions.', 'Money', '/payments', 'paid unpaid receipts invoices payment history cash card refund'),
   entry('branding', 'Website logo & colours', 'Change your website name, logo and brand colours.', 'My website', '/brand?tab=branding', 'design customize customise branding appearance color theme upload photo picture name tagline'),
   entry('sections', 'Show or hide website sections', 'Choose the content visitors see on your site.', 'My website', '/brand?tab=sections', 'design editor homepage layout visibility hide show listings memberships about contact', { providerOnly: true }),

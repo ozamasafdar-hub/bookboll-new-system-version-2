@@ -1,4 +1,7 @@
 <script setup>
+import BusinessSetup from '../components/BusinessSetup.vue'
+import BusinessInvite from '../components/BusinessInvite.vue'
+import { brandPreviewUrl } from '../lib/brand.js'
 import BusinessAssignment from '../components/BusinessAssignment.vue'
 import AccountPicker from '../components/AccountPicker.vue'
 import { financeRequest } from '../lib/financeApi.js'
@@ -201,17 +204,15 @@ async function loadBusinessOwnerCandidates(search = '') {
 }
 const newBusiness = computed(() => !editing.value && adminForm.value.role === 'provider_admin')
 const businessErrors = computed(() => businessFormErrors(adminForm.value))
-function openBusinessNew() {
-  businessRequestKey=newRequestKey()
-  businessApiReady.value=false
-  openAdminNew()
-  adminForm.value.role = 'provider_admin'
-  businessReview.value = false
-  teamView.value = 'businesses'
-  businessOwnerAck.value = false
-  businessOwnerCandidates.value = []
-  loadBusinessOwnerCandidates()
-}
+const showBusinessSetup = ref(false)
+const inviteBusiness = ref(null)
+const inviteRoles = computed(() => {
+  const inBusiness = adminForm.value.owner_user_id || editing.value?.business_id || editing.value?.role === 'provider_admin'
+  return assignableRoles.value.filter(r => inBusiness ? PROVIDER_ROLES.includes(r) : PLATFORM_ROLES.includes(r))
+})
+function openBusinessNew() { showBusinessSetup.value = true }
+function createdBusiness(b) { teamView.value = 'businesses'; search.value = b.username; load() }
+function assignNewBusiness(b) { assignmentBusiness.value = { ...b, business_id: b.id, id: b.owner_user_id } }
 async function reviewBusiness() {
   triedSave.value = true
   if (Object.keys(businessErrors.value).length) { formError.value = 'Complete the highlighted fields.'; return }
@@ -292,7 +293,7 @@ function openAdminNew() {
   businessApiReady.value=false
   businessReview.value = false
   editing.value = null
-  adminForm.value = defaultAdminForm()
+  adminForm.value = { ...defaultAdminForm(), role: assignableRoles.value.find(r => PLATFORM_ROLES.includes(r)) || 'staff' }
   formError.value = ''
   triedSave.value = false
   clearDirty()
@@ -977,6 +978,8 @@ function avatarColor(id) {
               <span v-if="g.provider.country_id" class="biz-country-pill">{{ countryName(g.provider.country_id) }}</span>
             </div>
             <div class="biz-actions" @click.stop>
+              <a class="btn btn-sm btn-secondary" :href="brandPreviewUrl(g.provider.username, { preview: true })" target="_blank" rel="noopener">View website</a>
+              <button v-if="!g.provider.id" class="btn btn-sm btn-secondary" @click="inviteBusiness=g.provider">Invite owner</button>
               <!-- The owner gap is read in the header ("Owner not assigned"), so
                    the fix for it belongs here rather than below a staff table the
                    admin has to expand first. -->
@@ -1017,13 +1020,13 @@ function avatarColor(id) {
                   <td><div class="row-actions"><button class="btn-icon" @click="openAdminEdit(m)"><Edit2 :size="15" /></button><button v-if="!m.isBusinessOwner" class="btn-icon danger" @click="removeAdmin(m)" aria-label="Remove team member"><Trash2 :size="15" /></button></div></td>
                 </tr>
                 <tr v-if="!g.staff.length">
-                  <td colspan="6" class="empty-staff">No team members yet. Assign an existing platform account as owner or staff.</td>
+                  <td colspan="6" class="empty-staff">No team members yet. Invite an owner or staff member, or assign an existing platform account.</td>
                 </tr>
               </tbody>
             </table></div>
             <div class="staff-add-row">
               <button v-if="g.provider.id" class="btn btn-sm btn-secondary" @click="assignmentBusiness=g.provider"><UsersRound :size="13"/>Assign platform account</button>
-              <button v-if="g.provider.id" class="btn btn-sm btn-secondary" @click="openAddStaffFor(g.provider.id)">
+              <button class="btn btn-sm btn-secondary" @click="inviteBusiness=g.provider">
                 <Plus :size="13" />Add staff member
               </button>
             </div>
@@ -1032,6 +1035,8 @@ function avatarColor(id) {
         </div>
       </div>
 
+      <BusinessSetup v-if="showBusinessSetup" :countries="countries.filter(c => !jurisdictionCountryIds || jurisdictionCountryIds.has(c.id) || jurisdictionCountryIds.has(String(c.id)))" @close="showBusinessSetup=false" @created="createdBusiness" @invite="inviteBusiness=$event" @assign="assignNewBusiness" />
+      <BusinessInvite v-if="inviteBusiness" :business="inviteBusiness" @close="inviteBusiness=null" @saved="load" />
       <BusinessAssignment v-if="assignmentBusiness" :business="assignmentBusiness" @close="assignmentBusiness=null" @assigned="assignmentSaved"/>
       <!-- Admin modal -->
       <div v-if="showModal" class="modal-backdrop" @click.self="requestCloseTeamModal">
@@ -1068,7 +1073,7 @@ function avatarColor(id) {
             </div>
             <div v-if="!newBusiness" class="tm-section-title">Role &amp; access</div>
             <div v-if="!newBusiness" class="form-group"><label class="form-label">Role</label>
-              <RoleSelect v-model="adminForm.role" :roles="assignableRoles" />
+              <RoleSelect v-model="adminForm.role" :roles="inviteRoles" />
             </div>
             <div v-if="adminForm.role === 'provider_admin'" class="inline-business">
               <div class="inline-business-header"><Building2 :size="14" />Business details</div>

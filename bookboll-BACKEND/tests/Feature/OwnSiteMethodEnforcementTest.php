@@ -29,11 +29,13 @@ function siteListing(array $paymentOptions, ?array $wallet = null): Listing
     ]);
 
     if ($wallet !== null) {
-        ProviderWallet::create(array_merge([
-            'owner_user_id' => $owner->id, 'purpose' => 'bookings',
-            'setup_method' => 'bank', 'setup_status' => 'active',
-            'payout_paused' => false, 'country_id' => 179, 'currency' => 'QAR',
-        ], $wallet));
+        $business = \App\Models\Business::create(['owner_id'=>$owner->id,'name'=>'QA','username'=>'qa-'.uniqid(),'status'=>'active','plan'=>'free']);
+        $active = empty($wallet['payout_paused']) && ($wallet['setup_status']??'active') === 'active' && (!array_key_exists('setup_method',$wallet) || $wallet['setup_method']);
+        \App\Models\BusinessPaymentConnection::create([
+            'business_id'=>$business->id,'stripe_account_id'=>'acct_'.$business->id,'connected_by'=>$owner->id,
+            'livemode'=>($wallet['country_id']??179) !== 179,'status'=>$active?'active':'restricted',
+            'charges_enabled'=>$active,'payouts_enabled'=>$active,'transfers_enabled'=>$active,
+        ]);
     }
 
     return Listing::create([
@@ -83,14 +85,14 @@ it('refuses full online payment when no payout route exists', function () {
     expect(methodError($listing, 'online_payment'))->not->toBeNull();
 });
 
-it('allows full online payment once an active payout exists for the venue country', function () {
+it('allows full online payment once a verified business connection exists', function () {
     $listing = siteListing(['site_online_enabled' => true], ['country_id' => 179]);
 
     expect(methodError($listing, 'online_payment'))->toBeNull();
 });
 
-it('refuses a payout route established for another country', function () {
-    // Venue is in 179; the only wallet is for 167.
+it('refuses a connection from the wrong Stripe mode', function () {
+    // The fixture maps this legacy alternate country marker to a live-mode connection.
     $listing = siteListing(['site_online_enabled' => true], ['country_id' => 167]);
 
     expect(methodError($listing, 'online_payment'))->not->toBeNull();

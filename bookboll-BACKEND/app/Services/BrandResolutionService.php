@@ -114,7 +114,7 @@ class BrandResolutionService
 
     protected function mapBrand(Business $b, string $requestedSlug): array
     {
-        $ownerId = (int) $b->owner_id;
+        $ownerId = (int) ($b->owner_id ?: $b->activeMemberships()->whereIn('role', \App\Models\BusinessMembership::MANAGING_ROLES)->value('user_id'));
 
         return [
             'ownerUserId'     => (string) $ownerId,
@@ -187,7 +187,10 @@ class BrandResolutionService
      */
     protected function modules(Business $b, int $ownerId): array
     {
-        $venueIds = Venue::where('owner_user_id', $ownerId)->pluck('id');
+        $venueIds = Venue::where(function ($q) use ($b,$ownerId) {
+            $q->where('business_id',$b->id);
+            if ($ownerId) $q->orWhere(fn($legacy) => $legacy->whereNull('business_id')->where('owner_user_id',$ownerId));
+        })->pluck('id');
 
         $venues = $venueIds->isNotEmpty() && Listing::query()
             ->whereIn('venue_id', $venueIds)

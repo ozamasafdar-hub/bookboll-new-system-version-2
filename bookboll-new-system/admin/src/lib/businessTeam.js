@@ -21,7 +21,7 @@ export function businessTeam(owner, users = []) {
 export function businessFormErrors(form) {
   const errors = {}
   if (!form.business_name?.trim()) errors.business_name = 'Enter the business name.'
-  if (!/^[a-z0-9][a-z0-9-]{2,39}$/.test(form.username || '')) errors.username = 'Use 3–40 lowercase letters, numbers or hyphens; start with a letter or number.'
+  if (!/^[a-z0-9][a-z0-9-]{2,29}$/.test(form.username || '')) errors.username = 'Use 3–40 lowercase letters, numbers or hyphens; start with a letter or number.'
   if (!normalizeBusinessTypes(form.business_types).length) errors.business_types = 'Choose at least one business type.'
   return errors
 }

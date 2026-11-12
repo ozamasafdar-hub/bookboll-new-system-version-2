@@ -237,35 +237,7 @@ class BookingWalletService
      */
     public function venueHasActivePayout(?Venue $venue): bool
     {
-        $ownerId = $venue?->owner_user_id;
-        if (! $ownerId) {
-            return false;
-        }
-
-        $wallets = ProviderWallet::where('owner_user_id', $ownerId)->get();
-        if ($wallets->isEmpty()) {
-            return false;
-        }
-
-        // Wallets predating the purpose column serve every purpose.
-        $migrated = $wallets->contains(fn ($w) => $w->purpose !== null);
-        $usable = $migrated
-            ? $wallets->filter(fn ($w) => ($w->purpose ?: 'subscription') === 'bookings')
-            : $wallets;
-
-        $venueCountryId = $this->countryIdForVenue($venue);
-
-        return $usable->contains(function ($w) use ($venueCountryId) {
-            if (! $w->setup_method || $w->setup_status !== 'active' || $w->payout_paused) {
-                return false;
-            }
-
-            // A wallet with no country recorded predates country-scoped payouts
-            // and is accepted, so this check cannot retire working routes.
-            return ! $venueCountryId
-                || ! $w->country_id
-                || (int) $w->country_id === (int) $venueCountryId;
-        });
+        return app(ProviderStripeService::class)->available($venue);
     }
 
     public function countryIdForVenue(?Venue $venue)

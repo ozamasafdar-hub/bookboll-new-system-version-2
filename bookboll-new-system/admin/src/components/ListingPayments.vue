@@ -26,10 +26,10 @@ const depositRows = computed(() => isSite.value ? [
   money('Customer pays on arrival', props.bookbollOwned ? 'Collected by Bookboll' : 'You collect and keep this amount', props.example.share),
 ])
 const onlineRows = computed(() => isSite.value ? [
-  money('Your share', 'To your Bookings wallet', props.example.siteRest),
+  money('Your share', 'To your connected Stripe account', props.example.siteRest),
   money('Bookboll platform fee', 'Deducted from the online payment', props.example.siteDep),
 ] : props.bookbollOwned ? [money('Customer pays online', 'Collected by Bookboll', props.example.total)] : [
-  money('Your share', 'To your Bookings wallet', props.example.share),
+  money('Your share', 'To your connected Stripe account', props.example.share),
   money('Bookboll platform fee', 'Deducted from the online payment', props.example.fee),
 ])
 const depositKey = computed(() => isSite.value ? 'site_deposit_enabled' : 'deposit_enabled')
@@ -101,7 +101,7 @@ function methodClick(kind, e) {
             <label class="lp-method-choice" :title="onlineAllowed ? null : onlineBlockedReason"><input type="checkbox" :checked="onlineOn" :disabled="!onlineAllowed" @change="emit('method', onlineKey, $event.target.checked)" /><span><strong>Full payment online</strong><small>{{ onlineAllowed ? 'Customer pays the whole booking price now. Nothing to collect on arrival.' : 'Connect a payout method to receive your online payments.' }}</small></span><span v-if="!onlineAllowed" class="lp-tag">Needs payouts</span></label>
             <!-- Payout state belongs to this method: it is the only one that needs it. -->
             <div v-if="!bookbollOwned && !statusUncertain" class="lp-status lp-method-payout">
-              <Wallet :size="18" /><span><strong>{{ onlineAllowed ? 'Payouts connected' : 'No active payout method' }}</strong><small>{{ onlineAllowed ? 'You can receive online payments in your Bookings wallet.' : 'Deposit + on arrival works without one. Full online payment needs connected payouts.' }}</small></span>
+              <Wallet :size="18" /><span><strong>{{ onlineAllowed ? 'Payouts connected' : 'No active payout method' }}</strong><small>{{ onlineAllowed ? 'Your booking share goes to your connected Stripe account.' : 'Deposit + on arrival works without one. Full online payment needs connected payouts.' }}</small></span>
               <button v-if="!onlineAllowed && role === 'provider'" type="button" @click="emit('connect', channel)">Connect payouts <ArrowRight :size="14" /></button>
             </div>
             <div v-if="onlineOn && onlineAllowed" class="lp-method-details"><PaymentExample :currency="currency" :total="example.total" :rows="onlineRows" /></div>

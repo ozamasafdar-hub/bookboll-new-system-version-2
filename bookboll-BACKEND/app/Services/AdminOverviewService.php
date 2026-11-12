@@ -80,13 +80,8 @@ class AdminOverviewService
 
         // A paused payout method does not count — the earning gates treat a paused
         // wallet as inactive (walletSetup.js isWalletReady).
-        $walletReady = ProviderWallet::query()
-            ->where('owner_user_id', $ownerId)
-            ->where('setup_status', 'active')
-            ->where(function ($q) {
-                $q->where('payout_paused', false)->orWhereNull('payout_paused');
-            })
-            ->exists();
+        $connection = \App\Models\BusinessPaymentConnection::where('business_id', AccessScope::businessId($user) ?: 0)->first();
+        $walletReady = $connection && $connection->ready() && $connection->livemode === app(ProviderStripeService::class)->live();
 
         $business = Business::forOwnerId($ownerId);
 

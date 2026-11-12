@@ -14,7 +14,7 @@ test('online payments finds booking payouts without retired membership wallets',
     const results = searchFeatures(query, owner)
     assert.equal(results[0]?.id, 'booking-payout')
     assert.ok(!results.some(item => item.to.includes('/wallet/subscription')))
-    assert.equal(results.find(item => item.id === 'booking-payout').to, '/wallet/bookings?setup=payout')
+    assert.equal(results.find(item => item.id === 'booking-payout').to, '/payment-setup')
   }
 })
 test('synonyms, partial words and small typos find the relevant features', () => {

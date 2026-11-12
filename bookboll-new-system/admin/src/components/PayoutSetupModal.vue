@@ -25,27 +25,16 @@ const emit = defineEmits(['close', 'fallback'])
 const router = useRouter()
 
 const isBookings = computed(() => props.purpose === 'bookings')
-const walletLabel = computed(() => WALLET_PURPOSE_LABELS[props.purpose] || 'wallet')
-const title = computed(() => props.pending
-  ? 'Payout method under review'
-  : isBookings.value ? 'Full payment online needs a payout method' : 'Set up your Membership wallet')
-const body = computed(() => props.pending
-  ? `Your ${walletLabel.value} wallet's payout method has been submitted and is awaiting Bookboll approval. ${isBookings.value ? 'Full online payment unlocks' : 'You can create membership programs'} as soon as it's approved.`
-  : isBookings.value
-    ? 'The customer pays the full amount online. Bookboll deducts its commission and credits your share to your Bookings wallet, so a payout method is required.'
-    : 'You must set up a payout method for your Membership wallet to create membership programs.')
-const note = computed(() => props.pending
-  ? 'Approval usually doesn’t take long — you can check its status in your wallet anytime.'
-  : isBookings.value
-    ? 'You can also use deposit + on arrival without connected payouts. Bookboll keeps the online deposit as its fee; you collect the remaining amount. Commission also applies when payouts are connected. Your own-website fee follows the Free or paid Premium rate for your venue’s market.'
-    : 'Choose Stripe Connect for automatic payouts, or the Bookboll Wallet to hold a balance and withdraw.')
+const title = computed(() => 'Connect Stripe for full online payments')
+const body = computed(() => 'The customer pays online. Stripe sends the recorded platform fee to Bookboll and the remaining share to your connected Stripe account.')
+const note = computed(() => 'Stripe is optional. With deposit + payment on arrival, Bookboll keeps the online deposit as its fee and you collect the balance at the venue. Membership enrolment is managed offline.')
 
 async function goSetup() {
   // This gate usually pops over a half-filled listing/program form — going to
   // the wallet abandons it, so ask about unsaved changes before navigating.
   if (!(await confirmDiscardIfDirty())) return
   // Each wallet purpose is its own page: /wallet/subscription · /wallet/bookings
-  const path = '/wallet/' + (props.purpose === 'bookings' ? 'bookings' : 'subscription')
+  const path = '/payment-setup'
   router.push({ path, query: props.countryId ? { country: props.countryId } : {} })
   emit('close')
 }
@@ -60,7 +49,7 @@ async function goSetup() {
       <p class="psm-body">{{ body }}</p>
       <div class="psm-note"><ShieldCheck :size="15" /><span>{{ note }}</span></div>
       <div class="psm-actions">
-        <button class="psm-btn" @click="goSetup">{{ pending ? 'View wallet status' : 'Set up payout method' }} <ArrowRight :size="16" /></button>
+        <button class="psm-btn" @click="goSetup">{{ 'Open payment setup' }} <ArrowRight :size="16" /></button>
         <button v-if="isBookings && !pending" class="psm-btn-ghost" @click="emit('fallback'); emit('close')">Review deposit + on arrival instead</button>
         <button v-else class="psm-btn-ghost" @click="emit('close')">Not now</button>
       </div>

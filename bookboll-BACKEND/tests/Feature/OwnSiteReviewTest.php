@@ -110,13 +110,13 @@ function paidPlan(User $owner): void
     ]);
 }
 
-function payoutsFor(User $owner, Country $country, array $over = []): ProviderWallet
+function payoutsFor(User $owner, $country): void
 {
-    return ProviderWallet::create(array_merge([
-        'owner_user_id' => $owner->id, 'setup_method' => 'stripe',
-        'setup_status' => 'active', 'payout_paused' => false,
-        'country_id' => $country->id, 'purpose' => 'bookings',
-    ], $over));
+    $business = \App\Models\Business::forOwnerId($owner->id) ?: \App\Models\Business::create(['owner_id'=>$owner->id,'name'=>'QA','username'=>'qa-'.uniqid(),'status'=>'active','plan'=>'free']);
+    \App\Models\BusinessPaymentConnection::updateOrCreate(['business_id'=>$business->id],[
+        'stripe_account_id'=>'acct_'.$business->id,'connected_by'=>$owner->id,'livemode'=>false,
+        'status'=>'active','charges_enabled'=>true,'payouts_enabled'=>true,'transfers_enabled'=>true,
+    ]);
 }
 
 function reviewQueue(User $actor, array $query = [])

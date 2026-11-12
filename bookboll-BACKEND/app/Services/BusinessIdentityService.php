@@ -61,11 +61,12 @@ class BusinessIdentityService
 
         $data = $request->validate([
             'business_name'   => 'required|string|max:160',
-            'username'        => 'required|string|max:30',
+            'username'        => 'required|string|regex:/^[a-z0-9][a-z0-9-]{2,29}$/',
             'business_types'  => 'nullable|array',
             'business_types.*' => 'string|max:40',
             'country_id'      => 'nullable|integer|exists:countries,id',
             'status'          => ['nullable', Rule::in(Business::STATUSES)],
+            'publish_website' => 'sometimes|boolean',
             // Accepted for contract symmetry; only null is supported here. An
             // owner is attached through the assignment flow, which audits it.
             'owner_user_id'   => 'nullable|in:',
@@ -108,6 +109,10 @@ class BusinessIdentityService
                 'owner_id'        => null,
                 'name'            => trim($data['business_name']),
                 'username'        => $slug,
+                'brand_subdomain' => $slug,
+                'brand_name'      => trim($data['business_name']),
+                'brand_enabled'   => (bool) ($data['publish_website'] ?? false),
+                'plan'            => 'free',
                 'business_types'  => $data['business_types'] ?? [],
                 'country_id'      => $data['country_id'] ?? null,
                 'status'          => $data['status'] ?? Business::STATUS_PENDING,
@@ -130,6 +135,7 @@ class BusinessIdentityService
             'name'           => $b->name,
             'business_name'  => $b->name,
             'username'       => $b->username,
+            'brand_enabled'  => (bool) $b->brand_enabled,
             'business_types' => $b->business_types ?? [],
             'country_id'     => $b->country_id,
             'status'         => $b->status,

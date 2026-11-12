@@ -1,5 +1,9 @@
 <?php
 
+use App\Http\Controllers\ProviderStripeController;
+
+Route::get('provider-stripe/callback', [ProviderStripeController::class, 'callback']);
+
 use App\Http\Controllers\AddOnController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\BookingController;
@@ -497,6 +501,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
             // capability probe the dashboard checks before offering that form.
             Route::get('businesses/capabilities', [BusinessController::class, 'capabilities'])->name('businesses.capabilities');
             Route::post('businesses', [BusinessController::class, 'adminStore'])->name('businesses.store');
+            Route::post('businesses/{id}/invitations', [BusinessController::class, 'inviteMember'])->name('businesses.invitations');
             // Moving an account into a business is reviewed, not a single click:
             // the move strips the account's platform access, so an admin sees
             // exactly what goes before anything happens.
@@ -519,6 +524,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
         // Reading settings stays open — the brand/theme loader needs it on every
         // page. WRITING them is the Brand page, gated as the dashboard gates it.
         Route::get('settings', [SettingController::class, 'index'])->name('settings.index');
+        Route::get('payment-connections', [ProviderStripeController::class, 'index'])->middleware('capability:view_wallet,manage_payouts,manage_listings');
+        Route::post('payment-connections/{id}/connect', [ProviderStripeController::class, 'connect'])->middleware('capability:manage_payouts');
+        Route::post('payment-connections/{id}/refresh', [ProviderStripeController::class, 'refresh'])->middleware('capability:manage_payouts');
         Route::middleware('capability:platform_admin,manage_platform_website')->group(function () {
             Route::post('settings/{key}', [SettingController::class, 'updateSingle'])->name('settings.updateSingle');
             Route::post('settings', [SettingController::class, 'update'])->name('settings.update');

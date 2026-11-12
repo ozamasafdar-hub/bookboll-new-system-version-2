@@ -166,12 +166,11 @@ class MarketplaceCatalogService
     public function brandLocations(Request $request)
     {
         $scope = $this->resolveScope($request);
-        if ($scope['empty'] || ! $scope['ownerId']) {
+        if ($scope['empty'] || empty($scope['businessId'])) {
             return sendSuccess('Brand locations fetched successfully', ['locations' => []]);
         }
 
-        $venues = Venue::where('status', Venue::ACTIVE)
-            ->where('owner_user_id', $scope['ownerId'])
+        $venues = $this->constrainBusiness(Venue::where('status', Venue::ACTIVE), $scope)
             ->with(['city:id,name', 'schedules'])
             ->orderBy('sort_order')
             ->orderBy('name')
@@ -236,7 +235,7 @@ class MarketplaceCatalogService
             return sendSuccess('Venue fetched successfully', ['facility' => null]);
         }
 
-        if ($scope['ownerId'] && (int) $venue->owner_user_id !== (int) $scope['ownerId']) {
+        if ($scope['whiteLabel'] && !$this->constrainBusiness(Venue::whereKey($venue->id),$scope)->exists()) {
             return sendSuccess('Venue fetched successfully', ['facility' => null]);
         }
 
@@ -300,7 +299,7 @@ class MarketplaceCatalogService
 
         $venue = $listing->venue;
 
-        if ($scope['ownerId'] && (int) $venue->owner_user_id !== (int) $scope['ownerId']) {
+        if ($scope['whiteLabel'] && !$this->constrainBusiness(Venue::whereKey($venue->id),$scope)->exists()) {
             return sendSuccess('Listing fetched successfully', ['detail' => null]);
         }
 
@@ -356,7 +355,7 @@ class MarketplaceCatalogService
                 'pricingTiers'      => $tiers,
                 'addons'            => $addons,
                 'paymentOptions'    => $this->paymentOptions($listing),
-                'providerHasPayout' => $this->providerHasPayout($venue->owner_user_id),
+                'providerHasPayout' => app(ProviderStripeService::class)->available($venue),
                 'startPrice'        => $startPrice,
                 'holdMinutes'       => max(1, $holdMinutes),
             ],
@@ -458,6 +457,7 @@ class MarketplaceCatalogService
     {
         $slug = strtolower(trim((string) $request->input('brand_slug', '')));
         $ownerId = null;
+        $businessId = null;
         $whiteLabel = false;
 
         if ($slug !== '') {
@@ -473,6 +473,7 @@ class MarketplaceCatalogService
             }
 
             $ownerId = $business->owner_id;
+            $businessId = $business->id;
         }
 
         $cityIds = $this->resolveCityIds($request);
@@ -481,6 +482,7 @@ class MarketplaceCatalogService
             'empty'      => false,
             'whiteLabel' => $whiteLabel,
             'ownerId'    => $ownerId,
+            'businessId' => $businessId,
             'cityIds'    => $cityIds,
             'countryId'  => $this->resolveCountryId($request),
         ];
@@ -619,8 +621,8 @@ class MarketplaceCatalogService
             $query->where('country_id', $scope['countryId']);
         }
 
-        if ($scope['ownerId']) {
-            $query->where('owner_user_id', $scope['ownerId']);
+        if ($scope['whiteLabel']) {
+            $this->constrainBusiness($query, $scope);
         } elseif (! $scope['whiteLabel']) {
             $suspended = $this->suspendedOwnerIds();
             if ($suspended) {
@@ -632,6 +634,13 @@ class MarketplaceCatalogService
         }
 
         return $query;
+    }
+
+    protected function constrainBusiness($query, array $scope) {
+        return $query->where(function ($q) use ($scope) {
+            $q->where('business_id', $scope['businessId'] ?? 0);
+            if (!empty($scope['ownerId'])) $q->orWhere(fn($legacy) => $legacy->whereNull('business_id')->where('owner_user_id',$scope['ownerId']));
+        });
     }
 
     protected function listingQuery(array $scope)

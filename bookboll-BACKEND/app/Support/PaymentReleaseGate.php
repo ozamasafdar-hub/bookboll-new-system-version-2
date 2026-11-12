@@ -75,13 +75,14 @@ class PaymentReleaseGate
         try {
             $policy = json_decode(file_get_contents(config('payment_release.policy_file')), true, 512, JSON_THROW_ON_ERROR);
             $rules = array_column($policy['rules'], 'id');
-            $add('policy', 'Approved business rules available', count($rules) >= 26 && in_array('P17_SHARED_ONLINE_PAYMENTS', $rules, true) && in_array('P18_CHECKOUT_BALANCES', $rules, true) && in_array('P19_PAYMENT_REVIEW_ACTIONS',$rules,true) && in_array('P20_SUPERADMIN_BULK_ACTIONS',$rules,true) && in_array('P21_PAYMENT_ANALYTICS_PARITY',$rules,true) && in_array('P22_BOOKING_ACTIVITY_PARITY',$rules,true) && in_array('P23_MEMBERSHIP_CONTACT_LISTINGS',$rules,true) && in_array('P24_MANUAL_PROVIDER_MEMBERS',$rules,true) && in_array('P25_PROMOTION_FUNDING',$rules,true) && in_array('P26_FIRST_VISIT_COMEBACK',$rules,true) && count($rules) === count(array_unique($rules)), 'The release must cover every rule, including payment analytics parity, in the versioned payment policy.');
+            $add('policy', 'Approved business rules available', count($rules) >= 27 && in_array('P17_SHARED_ONLINE_PAYMENTS', $rules, true) && in_array('P18_CHECKOUT_BALANCES', $rules, true) && in_array('P19_PAYMENT_REVIEW_ACTIONS',$rules,true) && in_array('P20_SUPERADMIN_BULK_ACTIONS',$rules,true) && in_array('P21_PAYMENT_ANALYTICS_PARITY',$rules,true) && in_array('P22_BOOKING_ACTIVITY_PARITY',$rules,true) && in_array('P23_MEMBERSHIP_CONTACT_LISTINGS',$rules,true) && in_array('P24_MANUAL_PROVIDER_MEMBERS',$rules,true) && in_array('P25_PROMOTION_FUNDING',$rules,true) && in_array('P26_FIRST_VISIT_COMEBACK',$rules,true) && in_array('P27_VERIFIED_PROVIDER_CONNECT',$rules,true) && count($rules) === count(array_unique($rules)), 'The release must cover every rule, including payment analytics parity, in the versioned payment policy.');
             $missing = array_diff(array_map(fn ($p) => basename($p, '.php'), glob(database_path('migrations/*.php'))),
                 Schema::hasTable('migrations') ? DB::table('migrations')->pluck('migration')->all() : []);
             $schemaReady = !$missing && Schema::hasTable('payment_refunds') && Schema::hasColumn('payments', 'payment_refund_id')
                 && Schema::hasTable('payment_allocations') && Schema::hasTable('payment_release_identity')
                 && Schema::hasColumn('bookings','checkout_reference') && Schema::hasTable('checkout_payment_collections') && Schema::hasTable('payment_review_decisions')
-                && Schema::hasTable('payment_bulk_actions') && Schema::hasTable('payment_bulk_action_items');
+                && Schema::hasTable('payment_bulk_actions') && Schema::hasTable('payment_bulk_action_items') && Schema::hasTable('business_payment_connections')
+                && Schema::hasTable('business_connect_states') && Schema::hasColumn('stripe_sessions','settlement');
             $add('schema', 'Required database migrations installed', $schemaReady, $schemaReady ? 'Required payment tables and migrations are installed.' : 'Apply the missing schema migrations before release.');
             if ($schemaReady) $identity = $this->identity();
             $workspace = $this->workspace();

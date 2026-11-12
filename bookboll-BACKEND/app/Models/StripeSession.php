@@ -11,6 +11,7 @@ class StripeSession extends Model
     use LogsModelActivity;
 
     protected $fillable = [
+        'settlement',
         'session_id',
         'booking_id',
         'booking_ids',
@@ -19,6 +20,7 @@ class StripeSession extends Model
     ];
 
     protected $casts = [
+        'settlement' => 'array',
         'processed'   => 'boolean',
         'booking_ids' => 'array',
     ];

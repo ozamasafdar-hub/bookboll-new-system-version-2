@@ -340,6 +340,7 @@ const COLLECT_METHODS = [
 
 // Pay-by-QR state must be declared before the bookingId watch (it resets these).
 const ownerWallets = ref([])
+const onlinePaymentReady = ref(false)
 const payQrImg = ref('')
 const linkCopied = ref(false)
 let payQrTimer = null
@@ -418,6 +419,7 @@ watch(() => props.bookingId, async (id) => {
     collectFor.value = null
     payQrImg.value = ''
     ownerWallets.value = []
+    onlinePaymentReady.value = false
     clearInterval(payQrTimer)
     showHistory.value = false
     editing.value = false
@@ -434,6 +436,7 @@ watch(() => props.bookingId, async (id) => {
     listing.value = d.listing || null
     location.value = d.location || null
     ownerWallets.value = d.wallets || []
+    onlinePaymentReady.value = d.online_payment_ready === true
     if (d.booking) {
       try { await loadOtherPending(d.booking, d.other_pending || []) } catch { /* optional context */ }
     }
@@ -641,9 +644,7 @@ const paidSoFar = computed(() =>
 // (no owner), or a provider whose BOOKINGS wallet has an active Stripe rail.
 const qrPayAvailable = computed(() => {
   if (!(totalPending.value > 0) || !location.value || !can(CAP.ACCEPT_PAYMENTS)) return false
-  if (!location.value.owner_user_id) return true   // Bookboll-run venue
-  return hasActivePayoutMethodFor(ownerWallets.value, 'bookings')
-    && ownerWallets.value.some(w => isWalletReady(w) && isAutomaticPayout(w))
+  return onlinePaymentReady.value
 })
 // Fallback link when a Stripe link can't be minted. It uses the booking's uuid,
 // not its id — the page is public, so the identifier in it is the credential.

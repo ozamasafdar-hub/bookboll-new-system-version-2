@@ -400,6 +400,18 @@
         "bookboll-BACKEND/tests/Feature/WhatsappImageHeaderTest.php"
       ],
       "production_acceptance": "Verify timezone/session end, scope, consent, expiry, inherited controls, duplicate execution, approved WhatsApp template and email with test recipients; retain per-channel outcomes and review uncertain delivery before retry."
+    },
+    {
+      "id": "P27_VERIFIED_PROVIDER_CONNECT",
+      "rule": "Provider full-online and balance payments require an owner-authorized, mode-matched Stripe connection with current capabilities. Each checkout snapshots the sum of its frozen net platform fees, exact business recipient, amount and currency; settlement verifies these against Stripe. Deposits stay on Bookboll; previously paid deposits are not charged as fees again; staff bookings have zero fee. Destination charges never generate a second withdrawable provider-wallet credit. Legacy wallet flags are not connection evidence.",
+      "implementation": ["bookboll-BACKEND/app/Services/ProviderStripeService.php", "bookboll-BACKEND/app/Services/StripeService.php"],
+      "production_acceptance": "Record Stripe test-mode OAuth, capability restrictions, two-slot fee split, remaining balance after deposit, duplicate callback/webhook, disconnect and destination refund/reversal evidence. Verify business isolation and that no duplicate wallet credit is created.",
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/ProviderStripeConnectionTest.php",
+        "bookboll-BACKEND/tests/Feature/StripeMultiBookingSettlementTest.php",
+        "bookboll-BACKEND/tests/Feature/StripeRefundGatewayTest.php",
+        "bookboll-BACKEND/tests/Feature/BusinessSetupAccessTest.php"
+      ]
     }
   ],
   "analytics_acceptance": {

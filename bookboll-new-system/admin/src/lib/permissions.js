@@ -186,6 +186,7 @@ export const PAGE_CAP = {
   '/email-sender':  CAP.MANAGE_WEBSITE,   // own SMTP sending identity (manager+)
   '/whatsapp':      CAP.MANAGE_WEBSITE,   // provider's own WhatsApp sender (super admin edits Bookboll's) — like Email sender
   '/website-blog':  CAP.MANAGE_WEBSITE_BLOG,
+  '/payment-setup': [CAP.VIEW_WALLET, CAP.MANAGE_PAYOUTS],
   '/wallet':        [CAP.VIEW_WALLET, CAP.MANAGE_PAYOUTS, CAP.WITHDRAW_FUNDS],
   '/team':          CAP.MANAGE_TEAM,
   '/moderation':    CAP.MODERATE_EVENTS,

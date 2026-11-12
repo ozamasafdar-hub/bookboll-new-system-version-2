@@ -4943,6 +4943,7 @@ class BookingService
             'existing_promo' => $existingPromo,
             'other_pending'  => $this->mapDashboardOtherPending($booking),
             'wallets'        => $this->mapDashboardWallets($booking->listing),
+            'online_payment_ready' => app(ProviderStripeService::class)->available($booking->venue),
         ]));
     }
 
@@ -5617,6 +5618,7 @@ class BookingService
             'uuid'           => $b->uuid,
             'booking_id'     => $b->booking_id,
             'customer_id'    => $b->user_id ? (string) $b->user_id : null,
+            'customer_name'  => $b->user?->name,
             'listing_id'     => $b->listing_id ? (string) $b->listing_id : null,
             'location_id'    => $b->venue_id ? (string) $b->venue_id : null,
             'booking_date'   => $date,

@@ -637,7 +637,7 @@ async function changePassword() {
                 <div><dt>Bookboll marketplace</dt><dd>Standard rate<small>The same on Free and Premium</small></dd></div>
               </dl>
               <p>Your listing’s payment settings show its rate. The Premium website rate applies during your active paid subscription.</p>
-              <p>With <b>deposit + on arrival</b>, Bookboll keeps the online deposit fee and you collect the remaining balance. With <b>full payment online</b>, the fee is deducted before your share reaches your Bookings wallet.</p>
+              <p>With <b>deposit + on arrival</b>, Bookboll keeps the online deposit fee and you collect the remaining balance. With <b>full payment online</b>, the fee is deducted before your share reaches your connected Stripe account.</p>
               <p>Commission applies with or without connected payouts. Only full online payment requires a payout connection.</p>
             </section>
 

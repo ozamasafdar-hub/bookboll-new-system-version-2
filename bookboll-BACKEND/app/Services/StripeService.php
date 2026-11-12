@@ -166,6 +166,7 @@ class StripeService
 
     public function handleWebhookEvent(\Stripe\Event $event): void
     {
+        if (app(ProviderStripeService::class)->webhook($event)) return;
         if (app(MembershipListingService::class)->webhook($event)) return;
         $type = $event->type;
 
@@ -479,7 +480,8 @@ class StripeService
                 $userId,
                 $chargeId,
                 $paymentIntentId,
-                $hostedGameUuid
+                $hostedGameUuid,
+                $intent
             ) {
                 $settled   = [];
                 $unsettled = [];
@@ -516,6 +518,20 @@ class StripeService
                     'payment_type' => $paymentType,
                     'source'       => $source,
                 ]);
+
+                app(ProviderStripeService::class)->verifySettlement($stripeSession->settlement, $intent);
+                if ($stripeSession->settlement) {
+                    $storedIds = array_map('intval',$stripeSession->booking_ids ?? []);
+                    $receivedIds = array_map('intval',$bookingIds);
+                    sort($storedIds); sort($receivedIds);
+                    abort_unless($storedIds === $receivedIds,409,'Checkout bookings differ from the recorded allocation.');
+                    foreach (Booking::whereIn('id',$bookingIds)->lockForUpdate()->get() as $connectedBooking) {
+                        $connectedBooking->forceFill(['financial_context'=>array_merge($connectedBooking->financial_context??[],[
+                            'connect_destination'=>$stripeSession->settlement['transfer_data']['destination'],
+                            'connect_payment_intent'=>$paymentIntentId,
+                        ])])->save();
+                    }
+                }
 
                 if ($source === CustomerGameService::CHECKOUT_SOURCE) {
                     // A hosted event pays for its courts and the seats service fee
@@ -1075,6 +1091,9 @@ class StripeService
 
     protected function creditProviderWallet($booking, float $collected, bool $depositAlreadyPaid, float $loyaltyRedeem = 0.0, array $receiptIds = []): void
     {
+        // Destination charges already deliver this share to the provider's
+        // Stripe balance. Never create a second withdrawable wallet credit.
+        if (!empty($booking->financial_context['connect_destination'])) return;
         try {
             $venue = $booking->venue;
             if (($booking->financial_context['operator'] ?? $venue?->operator_type) === 'bookboll') return;

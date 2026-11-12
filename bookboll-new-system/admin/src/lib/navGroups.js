@@ -47,15 +47,15 @@ export const NAV_GROUPS = [
     { path: '/customers', label: 'All customers', icon: Users, desc: 'Profiles, history & contact details' },
     { path: '/subscriptions', label: 'Membership subscribers', icon: UsersRound, desc: 'Offline enrolments, attendance & member records' },
   ]},
-  { key: 'money', label: 'Payments & Wallets', icon: Wallet,
+  { key: 'money', label: 'Payments', icon: Wallet,
     blurb: 'Booking payments and your connected payout account.',
     tips: [
       'Connect Stripe only if you want full online venue booking payments. Membership subscribers are managed offline without a gateway.',
-      'Wallets are per country, so earnings always stay in their own currency.',
+      'Deposit + payment on arrival works without a Stripe account.',
     ],
     items: [
     { path: '/payments', label: 'Payments', icon: ArrowLeftRight, desc: 'Every payment, in and out' },
-    { path: '/wallet/bookings', label: 'Bookings wallet', icon: Banknote, desc: 'Venue earnings & payouts' },
+    { path: '/payment-setup', label: 'Payment setup', icon: Banknote, desc: 'Connect your business Stripe account' },
   ]},
   { key: 'website', label: 'My Website', icon: Globe2,
     blurb: 'Create, edit and publish your own booking website with your own branding — customers book you directly, no coding needed.',

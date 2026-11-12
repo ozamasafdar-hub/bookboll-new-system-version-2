@@ -818,7 +818,7 @@ const onlineAllowed = computed(() => locationIsBookbollOwned.value || ownerWalle
 // the country in the "set up a wallet" prompt and deep-link to it in My Wallet.
 const formCountryId = computed(() => countryIdOfLocation(form.value.location_id))
 const formCountryName = computed(() => countries.value.find(c => cid(c.id) === cid(formCountryId.value))?.name || 'this country')
-const formWalletLink = computed(() => formCountryId.value ? `/wallet/bookings?country=${formCountryId.value}` : '/wallet/bookings')
+const formWalletLink = computed(() => '/payment-setup')
 // "Set up your Bookings wallet" modal — opened when full-online is enabled without a ready bookings wallet.
 const payoutModal = ref(false)
 // Which payment section opened the payout-setup modal — the deposit fallback
@@ -1346,20 +1346,13 @@ async function checkProviderOnline(locationId) {
   const loc = locations.value.find(l => cid(l.id) === cid(locationId))
   if (!loc) { payoutStatus.value = 'error'; return }
   if (isBookbollVenue(loc)) { payoutStatus.value = 'loaded'; return } // Bookboll-owned
-  // An ACTIVE payout method is the prerequisite for full online payment — and it is NOT
-  // per-country: any active wallet (in any country) lets the provider take online payments.
-  // "Active" means Stripe is connected OR a manual (Bookboll Wallet) method has been
-  // APPROVED by Bookboll. A merely-submitted ('pending_review') method does not count.
-  // select('*') so newer columns (purpose, payout_paused) are seen whenever they exist.
-  let wRes
-  try { wRes = await fetchWallets({ owner_user_id: loc.owner_user_id }) }
-  catch { wRes = { success: false } }
+  const result = await apiFetch('/admin/payment-connections')
   if (checkSequence !== payoutCheckSequence) return
-  if (!wRes.success) { payoutStatus.value = 'error'; return }
-  const ws = wRes.data?.wallets || []
-  // Full online payment for venue bookings requires an ACTIVE payout method on a BOOKINGS wallet
-  // (the Bookboll Wallet shortcut is subscription-only, so venue online needs a real rail).
-  ownerWalletActive.value = hasActivePayoutMethodFor(ws, 'bookings')
+  if (!result.success) { payoutStatus.value = 'error'; return }
+  const business = (result.data?.businesses || []).find(b => loc.business_id
+    ? String(b.id) === String(loc.business_id)
+    : String(b.owner_user_id) === String(loc.owner_user_id))
+  ownerWalletActive.value = business?.ready === true
   payoutStatus.value = 'loaded'
   // Enforce the gate in the form: a provider venue without an active wallet
   // can't have full online payment on. Keep at least one method enabled.
@@ -1591,7 +1584,7 @@ const payError = computed(() => {
   if (form.value.show_on_marketplace !== false) {
     if (userRole.value === 'provider') {
       if (!pay.value.deposit_enabled && !pay.value.online_payment_enabled) return 'Keep at least one Bookboll marketplace payment option on.'
-      if (pay.value.online_payment_enabled && !onlineAllowed.value) return 'Set up a payout method first (Stripe for automatic split, or the Bookboll Wallet for manual withdrawal) to accept full online payments. Set it up in My Wallets.'
+      if (pay.value.online_payment_enabled && !onlineAllowed.value) return 'Connect and verify the business Stripe account in Payment setup to accept full online payments. Deposit + on arrival works without it.'
     } else {
       if (!pay.value.cash_on_arrival && !pay.value.deposit_enabled && !pay.value.online_payment_enabled) return 'Enable at least one marketplace payment method.'
       if (pay.value.online_payment_enabled && !onlineAllowed.value) return 'This provider must set up a payout method before full online payments can be enabled.'

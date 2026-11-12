@@ -1,3 +1,9 @@
+## 13 November 2026 — calendar, business onboarding and provider Stripe setup
+
+Read [PROVIDER_SETUP_AND_STRIPE.md](PROVIDER_SETUP_AND_STRIPE.md) before deploying. It supersedes older booking-wallet connection instructions: an active wallet setting does not enable full online payments. Verified business Stripe accounts, per-checkout recipient/fee/amount snapshots and signed settlement checks now drive the connection flow. Deposit + arrival still requires no provider gateway. The existing `provider_connect_settlement` live-use gate remains mandatory and requires real Stripe **test-mode** evidence; mocked tests do not unlock it.
+
+Add business now creates an isolated Free website draft, then offers owner invitation or audited existing-account assignment. Business invitations cannot grant platform roles. Ownerless websites are scoped by business ID. Calendar overlap lanes expand and show customers; overnight bookings keep their full duration. The new MySQL migration and CI tests are listed in the linked guide.
+
 # Promotions and comeback offers — 13 November 2026
 
 **Latest owner-confirmed rules:** [Implementation, examples, deployment and mandatory evidence](docs/payments/PROMOTIONS_AND_COMEBACK.md).

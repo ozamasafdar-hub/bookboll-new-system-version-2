@@ -948,6 +948,10 @@ class PaymentService
             $totalAmount = $validated['amount'] ?? $this->calculateTotalAmount($booking, $validated['selected_due_bookings'] ?? []);
 
             $dueBookings = $this->validateDueBookings($booking, $validated['selected_due_bookings'] ?? []);
+            $connectIds = array_values(array_unique(array_merge([$booking->id], $dueBookings->pluck('id')->all())));
+            $actualDue = (float) Payment::whereIn('booking_id', $connectIds)->where('status', \PaymentStatus::PENDING)->sum('amount');
+            abort_unless(abs($actualDue - (float)$totalAmount) < 0.001,422,'The amount must match the outstanding payment records.');
+            $connectData = app(ProviderStripeService::class)->checkoutData($connectIds, 'full', (float)$totalAmount);
 
             $metadata = [
                 'user_id'        => $user->id,
@@ -972,6 +976,7 @@ class PaymentService
             }
 
             $session = \Stripe\Checkout\Session::create([
+                ...($connectData ? ['payment_intent_data'=>$connectData] : []),
                 'customer' => $user->stripe_id,
                 'payment_method_types' => ['card'],
                 'mode' => 'payment',
@@ -1000,6 +1005,7 @@ class PaymentService
                     $dueBookings->pluck('id')->toArray()
                 )))),
                 'source'      => 'admin',
+                'settlement'  => app(ProviderStripeService::class)->snapshot($connectData, (float)$totalAmount, $linkCurrency),
                 'processed'   => false,
             ]);
 
@@ -2027,6 +2033,8 @@ class PaymentService
             $user->createOrGetStripeCustomer();
             if (!$user->stripe_id) throw new Exception('Failed to create Stripe customer');
             $sessionData['customer'] = $user->stripe_id;
+            $connectData = app(ProviderStripeService::class)->checkoutData($allBookingIds, $paymentType, (float)$paymentAmount);
+            if ($connectData) $sessionData['payment_intent_data'] = $connectData;
             $session = \Stripe\Checkout\Session::create($sessionData);
 
             \App\Models\StripeSession::create([
@@ -2034,6 +2042,7 @@ class PaymentService
                 'booking_id'  => $mainBookingId,
                 'booking_ids' => $allBookingIds,
                 'source'      => 'customer',
+                'settlement'  => app(ProviderStripeService::class)->snapshot($connectData, (float)$paymentAmount, $checkoutCurrency),
                 'processed'   => false,
             ]);
 

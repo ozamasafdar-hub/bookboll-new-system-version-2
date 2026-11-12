@@ -26,6 +26,11 @@ class BusinessController extends Controller
         return $this->identity->store($request);
     }
 
+    public function inviteMember(Request $request, $id)
+    {
+        return app(\App\Services\BusinessTeamInviteService::class)->invite($request, (int) $id);
+    }
+
     /* Moving an account into a business: options, reviewed preview, commit. */
 
     /** Assignable accounts for a business that does not exist yet (Add business form). */

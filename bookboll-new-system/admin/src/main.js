@@ -27,7 +27,7 @@ import Countries from './pages/Countries.vue'
 import Approvals from './pages/Approvals.vue'
 import AuditLogs from './pages/AuditLogs.vue'
 import Settings from './pages/Settings.vue'
-import WalletPage from './pages/Wallet.vue'
+import PaymentSetup from './pages/PaymentSetup.vue'
 import Subscriptions from './pages/ProviderMembers.vue'
 import Moderation from './pages/Moderation.vue'
 import Brand from './pages/Brand.vue'
@@ -85,8 +85,9 @@ const router = createRouter({
     admin('/whatsapp', WhatsAppPage),
     admin('/audit-logs', AuditLogs),
     admin('/settings', Settings),
-    admin('/wallet', WalletPage),
-    admin('/wallet/:purpose', WalletPage),
+    admin('/payment-setup', PaymentSetup),
+    { path: '/wallet', redirect: '/payment-setup' },
+    { path: '/wallet/:purpose', redirect: '/payment-setup' },
     admin('/subscriptions', Subscriptions),
 
     { path: '/', redirect: '/admin' },

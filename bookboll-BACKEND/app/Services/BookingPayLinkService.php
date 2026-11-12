@@ -72,11 +72,12 @@ class BookingPayLinkService
 
         // The deposit model's deposit IS Bookboll's fee, so a balance-after-deposit
         // collection is the provider's money only. Tell fulfilment which it is.
-        $paymentType = $pending->contains(fn (Payment $p) => $p->type === \PaymentType::DEPOSIT)
-            ? 'deposit'
-            : 'full';
+        // This page charges the entire outstanding bill. Calling a deposit +
+        // remaining bill "deposit" collected both but settled only the deposit.
+        $paymentType = $pending->every(fn (Payment $p) => $p->type === \PaymentType::DEPOSIT) ? 'deposit' : 'full';
 
         try {
+            $connectData = app(ProviderStripeService::class)->checkoutData([$booking->id], $paymentType, $due);
             Stripe::setApiKey($secret);
             $user->createOrGetStripeCustomer();
 
@@ -84,6 +85,7 @@ class BookingPayLinkService
             $currency = strtolower($this->currencyFor($booking));
 
             $session = StripeCheckoutSession::create([
+                ...($connectData ? ['payment_intent_data'=>$connectData] : []),
                 'customer'             => $user->stripe_id,
                 'payment_method_types' => ['card'],
                 'mode'                 => 'payment',
@@ -115,6 +117,7 @@ class BookingPayLinkService
                 'booking_id'  => $booking->id,
                 'booking_ids' => [$booking->id],
                 'source'      => 'pay_link',
+                'settlement'  => app(ProviderStripeService::class)->snapshot($connectData, $due, $currency),
                 'processed'   => false,
             ]);
 
