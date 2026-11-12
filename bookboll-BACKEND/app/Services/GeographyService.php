@@ -26,6 +26,7 @@ class GeographyService
     {
         $search = $request->query('search');
         $status = $request->query('status'); // active|inactive|null
+        $view = $request->validate(['view' => 'nullable|in:all,onboarded,overrides'])['view'] ?? 'all';
         $recordsPerPage = (int) ($request->input('records_per_page') ?? $request->query('records_per_page', 25));
         if ($recordsPerPage < 1) {
             $recordsPerPage = 25;
@@ -51,6 +52,13 @@ class GeographyService
         if ($sort === 'businesses') $query->orderByDesc('businesses_count')->orderByDesc('venues_count');
         elseif ($sort !== 'name') $query->orderByDesc('venues_count')->orderByDesc('businesses_count');
         $query->orderBy('name');
+
+        // Apply supervision filters before pagination, not just to the visible page.
+        if ($view === 'onboarded') $query->havingRaw('(venues_count > 0 OR businesses_count > 0)');
+        if ($view === 'overrides') $query->where(function ($q) {
+            $q->whereExists(fn ($r) => $r->selectRaw('1')->from('commission_rates')->whereColumn('commission_rates.country_id', 'countries.id'))
+                ->orWhereExists(fn ($r) => $r->selectRaw('1')->from('market_settings')->where('scope', 'country')->whereColumn('scope_id', 'countries.id')->whereRaw('JSON_LENGTH(`values`) > 0'));
+        });
 
         if ($search) {
             $query->where(function ($q) use ($search) {

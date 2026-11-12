@@ -1,42 +1,40 @@
 <script setup>
-import { ref, onMounted } from 'vue'
-import { X, ArrowRight } from 'lucide-vue-next'
+import { ref, computed, onMounted } from 'vue'
+import { X, ArrowRight, RotateCcw, Check } from 'lucide-vue-next'
 import { loadMarketSettings, saveMarketSettings } from '../lib/geography.js'
-
-const props = defineProps({ scope: String, scopeId: Number, name: String })
+import { MARKET_GROUPS, marketDraft, effectiveDraft, marketValue, marketChanges, validateMarketDraft } from '../lib/marketSettings.js'
+const props = defineProps({ scope: String, scopeId: Number, name: String, initialSection: { type: String, default: 'marketplace' } })
 const emit = defineEmits(['close', 'saved'])
-const config = ref(null), values = ref({}), busy = ref(false), error = ref('')
-const fees = [{ key: 'facility', label: 'Venue bookings' }, { key: 'program', label: 'Memberships' }, { key: 'event', label: 'Event seats' }]
-const websiteFees = [{ key: 'site_free', label: 'Free plan', fallback: 'Match marketplace rate' }, { key: 'site_premium', label: 'Paid Premium plan', fallback: 'Half the marketplace rate' }]
-const modules = [{ key: 'module_listings', label: 'New booking listings' }, { key: 'module_classes', label: 'New membership programs' }, { key: 'module_matchmaking', label: 'New events & tournaments' }]
+const config = ref(null), values = ref({}), initial = ref({}), busy = ref(false), error = ref(''), discard = ref(false)
+const section = ref(props.initialSection), review = ref(false)
+const group = computed(() => MARKET_GROUPS.find(g => g.key === section.value) || MARKET_GROUPS[0])
 const parentName = props.scope === 'city' ? 'country' : 'global'
-onMounted(async () => {
+const effective = computed(() => effectiveDraft(values.value, props.scope === 'global' ? {} : config.value?.parent || {}))
+const changes = computed(() => marketChanges(initial.value, values.value))
+const sectionOverrides = computed(() => group.value.fields.some(f => values.value[f.key] !== null))
+async function load() {
+  error.value = ''
   try {
     const res = await loadMarketSettings(props.scope, props.scopeId)
     if (!res.success) throw new Error(res.message || 'Could not load settings.')
-    config.value = res.data.settings
-    values.value = Object.fromEntries([...fees, ...websiteFees, ...modules].map(({ key }) => [key, config.value.overrides[key] ?? null]))
+    config.value = res.data.settings; values.value = marketDraft(config.value); initial.value = { ...values.value }
   } catch (e) { error.value = e.message }
-})
-function inheritAll() { values.value = Object.fromEntries(Object.keys(values.value).map(k => [k, null])) }
-function websiteDefault(fee) {
-  const rate = config.value.parent[fee.key]
-  return rate == null ? fee.fallback : `${rate}%`
 }
-function websiteExample(fee) {
-  const inherited = props.scope === 'global' ? null : config.value.parent[fee.key]
-  return values.value[fee.key] ?? inherited ?? Number(values.value.facility ?? config.value.parent.facility) * (fee.key === 'site_premium' ? .5 : 1)
+onMounted(load)
+function close() { if (busy.value) return; if (changes.value.length) discard.value = true; else emit('close') }
+function resetSection() { for (const f of group.value.fields) values.value[f.key] = null }
+function setSource(field, source) {
+  values.value[field.key] = source === 'inherit' ? null : field.boolean ? Boolean(effective.value[field.key]) : Number.parseFloat(marketValue(effective.value, field.key))
+}
+function valueLabel(field, draft) {
+  if (draft[field.key] === null) return props.scope === 'global' ? field.automatic : `Use ${parentName} default`
+  return field.boolean ? (draft[field.key] ? 'Enabled' : 'Disabled') : `${draft[field.key]}%`
 }
 async function save() {
-  if (busy.value) return
-  error.value = ''
-  for (const { key, label } of [...fees, ...websiteFees]) {
-    const n = values.value[key]
-    if (n !== null && (n === '' || !Number.isFinite(Number(n)) || Number(n) < 0 || Number(n) > 100)) {
-      error.value = `${label}: enter a percentage from 0 to 100.`; return
-    }
-  }
-  busy.value = true
+  if (busy.value || !changes.value.length) return
+  const invalid = validateMarketDraft(values.value)
+  if (invalid) { section.value = MARKET_GROUPS.find(g => g.fields.some(f => f.key === invalid.key)).key; error.value = invalid.message; return }
+  busy.value = true; error.value = ''
   try {
     const res = await saveMarketSettings(props.scope, props.scopeId, values.value)
     if (!res.success) throw new Error(res.message || 'Could not save settings.')
@@ -45,49 +43,41 @@ async function save() {
   finally { busy.value = false }
 }
 </script>
-
 <template>
   <Teleport to="body">
-    <div class="market-backdrop" @click.self="!busy && emit('close')">
-      <section class="market-dialog" v-dialog role="dialog" aria-modal="true" aria-labelledby="market-settings-title">
-        <header><div><h2 id="market-settings-title">{{ scope === 'global' ? 'Global defaults' : name + ' settings' }}</h2><p>{{ scope === 'global' ? 'Used wherever a country or city has no override.' : 'Choose an override only where this market needs different settings.' }}</p></div><button class="btn btn-secondary btn-icon" :disabled="busy" aria-label="Close settings" @click="emit('close')"><X :size="18" /></button></header>
-        <form v-if="config" @submit.prevent="save">
-          <div class="market-body">
-            <div class="inherit-path"><span :class="{ current: scope === 'global' }">Global</span><ArrowRight :size="14"/><span :class="{ current: scope === 'country' }">Country</span><ArrowRight :size="14"/><span :class="{ current: scope === 'city' }">City</span></div>
-            <div class="market-section-title"><h3>Marketplace fees</h3><button v-if="scope !== 'global'" type="button" class="btn btn-secondary btn-sm" @click="inheritAll">Use {{ parentName }} defaults for all</button></div>
-            <p class="market-help">The same marketplace rates apply on Free and Premium. Listing and existing membership agreements keep their explicit rates.</p>
-            <div v-for="fee in fees" :key="fee.key" class="market-setting-row">
-              <label :for="'fee-' + fee.key">{{ fee.label }}<small v-if="scope !== 'global'">{{ parentName }} default: {{ config.parent[fee.key] }}%</small></label>
-              <select v-if="scope !== 'global'" :aria-label="fee.label + ' setting source'" :value="values[fee.key] === null ? 'inherit' : 'custom'" @change="values[fee.key] = $event.target.value === 'inherit' ? null : config.effective[fee.key]"><option value="inherit">Use {{ parentName }} default</option><option value="custom">Custom rate</option></select>
-              <div class="market-percent"><input :id="'fee-' + fee.key" type="number" min="0" max="100" step="0.01" :disabled="values[fee.key] === null" :value="values[fee.key] ?? config.parent[fee.key]" @input="values[fee.key] = $event.target.value === '' ? '' : Number($event.target.value)" required /><span>%</span></div>
+    <div class="market-backdrop" @click.self="close">
+      <section class="market-dialog" v-dialog="close" role="dialog" aria-modal="true" aria-labelledby="market-settings-title">
+        <header><div><h2 id="market-settings-title">{{ scope === 'global' ? 'Global defaults' : name + ' settings' }}</h2><p>{{ scope === 'global' ? 'Shared settings for countries without an override.' : 'Inherited settings stay connected to ' + parentName + ' defaults.' }}</p></div><button class="btn btn-secondary btn-icon" :disabled="busy" aria-label="Close settings" @click="close"><X :size="18" /></button></header>
+        <template v-if="config">
+          <nav class="market-nav" aria-label="Settings sections"><button v-for="g in MARKET_GROUPS" :key="g.key" type="button" :class="{ active: section === g.key }" :aria-pressed="section === g.key" @click="section = g.key"><span>{{ g.short }}</span><i v-if="changes.some(f => g.fields.some(x => x.key === f.key))" aria-label="Unsaved changes"></i></button></nav>
+          <form @submit.prevent="save" novalidate>
+            <div class="market-body">
+              <div class="market-scope"><span :class="{ current: scope === 'global' }">Global</span><ArrowRight :size="13"/><span :class="{ current: scope === 'country' }">Country</span><ArrowRight :size="13"/><span :class="{ current: scope === 'city' }">City</span></div>
+              <div class="market-section-title"><h3>{{ group.label }}</h3><button v-if="scope !== 'global' && sectionOverrides" type="button" class="market-link" @click="resetSection"><RotateCcw :size="13"/> Use {{ parentName }} defaults</button></div>
+              <p class="market-help">{{ group.help }}</p>
+              <div v-for="field in group.fields" :key="field.key" class="market-row" :class="{ inherited: values[field.key] === null, changed: changes.some(f => f.key === field.key) }">
+                <div class="market-field-label"><label :for="'setting-' + field.key">{{ field.label }}</label><small v-if="scope !== 'global'">{{ parentName }}: {{ marketValue(config.parent, field.key) }}<template v-if="field.automatic && config.parent[field.key] == null"> · {{ field.automatic }}</template></small><small v-else-if="field.automatic">Automatic: {{ field.automatic }}</small></div>
+                <div class="market-controls">
+                  <select v-if="!field.boolean && (scope !== 'global' || field.automatic)" :aria-label="field.label + ' setting source'" :value="values[field.key] === null ? 'inherit' : 'custom'" @change="setSource(field, $event.target.value)"><option value="inherit">{{ scope === 'global' ? 'Automatic' : 'Use ' + parentName }}</option><option value="custom">Custom rate</option></select>
+                  <select v-if="field.boolean" :id="'setting-' + field.key" v-model="values[field.key]"><option v-if="scope !== 'global'" :value="null">Use {{ parentName }} · {{ config.parent[field.key] ? 'Enabled' : 'Disabled' }}</option><option :value="true">Enabled</option><option :value="false">Disabled</option></select>
+                  <div v-else class="market-percent"><input :id="'setting-' + field.key" type="number" min="0" max="100" step="0.01" :disabled="values[field.key] === null" :value="values[field.key] ?? Number.parseFloat(marketValue(effective, field.key))" @input="values[field.key] = $event.target.value === '' ? '' : Number($event.target.value)" /><span>%</span></div>
+                </div>
+              </div>
+              <div v-if="section === 'website'" class="market-example"><strong>On a booking worth 100</strong><div><span>Free: <b>{{ marketValue(effective, 'site_free').replace('%', '') }}</b> platform fee</span><span>Premium: <b>{{ marketValue(effective, 'site_premium').replace('%', '') }}</b> platform fee</span></div><small>Automatic examples use this market’s venue rate. A listing’s explicit marketplace rate can change the automatic website fee. Premium requires an active paid subscription.</small></div>
+              <p v-if="section === 'marketplace'" class="market-note">Listing-specific commissions and existing membership agreements take priority over these defaults.</p>
+              <div v-if="changes.length" class="market-review"><button type="button" :aria-expanded="review" @click="review = !review">{{ review ? 'Hide' : 'Review' }} {{ changes.length }} unsaved change{{ changes.length === 1 ? '' : 's' }}</button><dl v-if="review"><div v-for="field in changes" :key="field.key"><dt>{{ field.label }}</dt><dd><s>{{ valueLabel(field, initial) }}</s><ArrowRight :size="13"/><b>{{ valueLabel(field, values) }}</b></dd></div></dl></div>
+              <p v-if="error" class="market-error" role="alert">{{ error }}</p>
+              <div v-if="discard" class="market-discard" role="alert"><strong>Discard your unsaved changes?</strong><div><button type="button" class="btn btn-secondary btn-sm" @click="discard = false">Keep editing</button><button type="button" class="btn btn-secondary btn-sm" @click="emit('close')">Discard changes</button></div></div>
             </div>
-            <h3 class="services-heading">Provider website fees</h3>
-            <p class="market-help">Venue bookings made on a business’s own website. Set a separate rate for each plan, for deposits and full online payments.</p>
-            <div v-for="fee in websiteFees" :key="fee.key" class="market-setting-row">
-              <label :for="'fee-' + fee.key">{{ fee.label }}<small>{{ scope === 'global' ? 'Automatic: ' + fee.fallback : parentName + ' default: ' + websiteDefault(fee) }}</small></label>
-              <select :aria-label="fee.label + ' setting source'" :value="values[fee.key] === null ? 'inherit' : 'custom'" @change="values[fee.key] = $event.target.value === 'inherit' ? null : websiteExample(fee)"><option value="inherit">{{ scope === 'global' ? 'Automatic rate' : 'Use ' + parentName + ' default' }}</option><option value="custom">Custom rate</option></select>
-              <div class="market-percent"><input :id="'fee-' + fee.key" type="number" min="0" max="100" step="0.01" :disabled="values[fee.key] === null" :value="websiteExample(fee)" @input="values[fee.key] = $event.target.value === '' ? '' : Number($event.target.value)" required /><span>%</span></div>
-            </div>
-            <p class="market-help">Premium applies during an active paid subscription. Automatic rates follow each listing’s marketplace rate; custom website rates replace that calculation.</p>
-            <h3 class="services-heading">Services businesses can add</h3>
-            <p class="market-help">Turning a service off stops new listings, programs or events. Existing published content stays available.</p>
-            <div v-for="mod in modules" :key="mod.key" class="market-setting-row modules">
-              <label :for="'module-' + mod.key">{{ mod.label }}<small v-if="scope !== 'global'">{{ parentName }} default: {{ config.parent[mod.key] ? 'Enabled' : 'Disabled' }}</small></label>
-              <select :id="'module-' + mod.key" v-model="values[mod.key]"><option v-if="scope !== 'global'" :value="null">Use {{ parentName }} default</option><option :value="true">Enabled</option><option :value="false">Disabled</option></select>
-            </div>
-            <p class="market-footnote">Saved rates apply to new quotes. Existing booking and payment records keep their recorded fees. Country and city availability is managed separately.</p>
-          </div>
-          <footer><p v-if="error" class="market-error" role="alert">{{ error }}</p><span v-else>Changes take effect after saving.</span><div><button type="button" class="btn btn-secondary" :disabled="busy" @click="emit('close')">Cancel</button><button class="btn btn-primary" :disabled="busy">{{ busy ? 'Saving…' : 'Save settings' }}</button></div></footer>
-        </form>
-        <div v-else class="market-body"><p :role="error ? 'alert' : 'status'">{{ error || 'Loading settings…' }}</p></div>
+            <footer><span>{{ changes.length ? 'Applies to new quotes. Recorded fees stay unchanged.' : 'No unsaved changes' }}</span><div><button type="button" class="btn btn-secondary" :disabled="busy" @click="close">Cancel</button><button class="btn btn-primary" :disabled="busy || !changes.length"><Check :size="15"/>{{ busy ? 'Saving…' : 'Save changes' }}</button></div></footer>
+          </form>
+        </template>
+        <div v-else class="market-body"><p :role="error ? 'alert' : 'status'">{{ error || 'Loading settings…' }}</p><button v-if="error" class="btn btn-secondary" @click="load">Try again</button></div>
       </section>
     </div>
   </Teleport>
 </template>
-
 <style scoped>
-.market-backdrop{position:fixed;inset:0;background:#08111bb3;z-index:1100;display:flex;align-items:center;justify-content:center;padding:24px}
-.market-dialog{width:760px;max-width:100%;max-height:calc(100dvh - 48px);overflow:auto;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:16px;box-shadow:0 24px 80px #0004}
-header,footer{display:flex;justify-content:space-between;gap:20px;padding:22px 26px;align-items:center}header{border-bottom:1px solid var(--border)}h2{font-size:21px;margin:0}h3{font-size:15px;margin:0}p{margin:5px 0 0;color:var(--text-muted);font-size:13px;line-height:1.6}.market-body{padding:24px 26px}.inherit-path{display:flex;align-items:center;gap:12px;font-size:12px;color:var(--text-muted);margin-bottom:24px}.inherit-path .current{font-weight:700;color:var(--primary-ink)}.market-section-title{display:flex;align-items:center;justify-content:space-between;gap:10px}.market-help{margin-bottom:12px}.market-setting-row{display:grid;grid-template-columns:1fr 190px 100px;gap:12px;align-items:center;padding:14px 0;border-bottom:1px solid var(--border)}.market-setting-row label{font-weight:600;font-size:13px}.market-setting-row small{display:block;font-weight:400;color:var(--text-muted);font-size:12px;margin-top:4px}.market-setting-row.modules{grid-template-columns:1fr 240px}.market-percent{position:relative}.market-percent input{width:100%;padding-right:25px}.market-percent span{position:absolute;right:12px;top:10px;color:var(--text-muted)}.market-percent input:disabled{opacity:.65}.services-heading{margin-top:26px}.market-footnote{margin-top:20px}footer{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--border);font-size:12px;color:var(--text-muted)}footer>div{display:flex;gap:8px;flex-shrink:0}.market-error{color:var(--danger-ink)}
-@media(max-width:600px){.market-backdrop{padding:0}.market-dialog{border-radius:0;max-height:100dvh;height:100dvh}header,footer,.market-body{padding:18px}.market-setting-row{grid-template-columns:1fr 90px}.market-setting-row label{grid-column:1/-1}.market-setting-row.modules{grid-template-columns:1fr}.market-setting-row input,.market-setting-row select{font-size:16px}.market-section-title{align-items:flex-start;flex-direction:column}footer{flex-direction:column;align-items:stretch}footer>div>.btn{flex:1}}
+.market-backdrop{position:fixed;inset:0;background:#08111bb3;z-index:1100;display:flex;align-items:center;justify-content:center;padding:24px}.market-dialog{width:760px;max-width:100%;max-height:calc(100dvh - 48px);display:flex;flex-direction:column;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:14px;box-shadow:0 24px 80px #0004;overflow:hidden}.market-dialog form{display:flex;flex-direction:column;min-height:0}header,footer{display:flex;justify-content:space-between;gap:20px;padding:22px 26px;align-items:center;flex-shrink:0}header{border-bottom:1px solid var(--border)}h2{font-size:21px;margin:0}h3{font-size:16px;margin:0}p{margin:5px 0 0;color:var(--text-muted);font-size:13px;line-height:1.6}.market-nav{display:flex;gap:6px;padding:12px 26px;border-bottom:1px solid var(--border);flex-shrink:0}.market-nav button{border:0;background:transparent;color:var(--text-muted);padding:10px 14px;border-radius:6px;font-size:13px;display:flex;align-items:center;gap:8px;cursor:pointer}.market-nav button.active{color:var(--primary-ink);background:var(--primary-soft,var(--bg));font-weight:700}.market-nav i{width:6px;height:6px;border-radius:50%;background:var(--primary)}.market-body{padding:22px 26px;overflow-y:auto;min-height:0}.market-scope{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--text-muted);margin-bottom:18px}.market-scope .current{font-weight:700;color:var(--primary-ink)}.market-section-title{display:flex;align-items:center;justify-content:space-between;gap:10px}.market-link{display:flex;align-items:center;gap:5px;color:var(--primary-ink);background:none;border:0;font-size:12px;cursor:pointer}.market-help{margin-bottom:18px;max-width:65ch}.market-row{display:flex;gap:18px;justify-content:space-between;align-items:center;padding:18px 0;border-bottom:1px solid var(--border)}.market-field-label{min-width:0}.market-field-label label{font-weight:600;font-size:13px}.market-field-label small{display:block;color:var(--text-muted);font-size:11px;margin-top:5px;max-width:32ch;line-height:1.5}.market-controls{display:flex;align-items:center;gap:10px;flex-shrink:0}.market-controls select{width:160px;font-size:12px}.market-percent{position:relative;width:100px}.market-percent input{width:100%;padding-right:25px;font-size:14px;font-variant-numeric:tabular-nums}.market-percent span{position:absolute;right:12px;top:10px;color:var(--text-muted)}.market-percent input:disabled{opacity:.7;background:var(--bg)}.market-row.changed label:after{content:'Edited';font-size:10px;font-weight:500;margin-left:8px;color:var(--primary-ink)}.market-note{font-size:12px;margin-top:16px}.market-example{padding:16px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-top:20px;font-size:12px}.market-example strong{font-size:13px}.market-example>div{display:flex;gap:20px;margin:10px 0}.market-example small{font-size:11px;color:var(--text-muted);line-height:1.6;display:block}.market-review{margin-top:20px}.market-review>button{color:var(--primary-ink);font-size:12px;border:0;background:none;padding:0;cursor:pointer;text-decoration:underline}.market-review dl{margin:12px 0 0}.market-review dl>div{padding:8px 0;display:flex;justify-content:space-between;gap:10px;font-size:12px}.market-review dd{margin:0;display:flex;gap:10px;align-items:center}.market-review s{color:var(--text-muted)}footer{border-top:1px solid var(--border);font-size:11px;color:var(--text-muted);padding-top:16px;padding-bottom:16px}footer>div{display:flex;gap:8px;flex-shrink:0}.market-error{color:var(--danger-ink);margin-top:16px}.market-discard{padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-top:16px;font-size:13px}.market-discard>div{display:flex;gap:8px;margin-top:10px}
+@media(max-width:600px){.market-backdrop{padding:0}.market-dialog{border-radius:0;max-height:100dvh;height:100dvh}.market-dialog form{flex:1}header,footer,.market-body{padding:18px}.market-body{flex:1}.market-nav{padding:10px 12px;gap:2px}.market-nav button{padding:10px;font-size:12px}.market-row{align-items:stretch;flex-direction:column;gap:10px}.market-controls select{flex:1}.market-controls input,.market-controls select{font-size:16px}.market-section-title{align-items:flex-start;flex-direction:column}.market-review dl>div{flex-direction:column}footer{flex-direction:column;align-items:stretch;gap:10px}footer>div>.btn{flex:1}.market-example>div{flex-direction:column;gap:6px}}
 </style>

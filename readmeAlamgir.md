@@ -1,3 +1,11 @@
+## Country supervision and editing flow — 12 November 2026
+
+- Global overview separates marketplace fees, website fees, creation services and rewards, each with a direct edit entry. Country rows compare venue/business counts, booking rates, Free/Premium website rates and explicit override counts. Automatic website values are illustrated with the market booking rate and labelled; the actual listing override still applies.
+- Default directory view is **Onboarded markets** (countries with a venue OR registered/operating business). All countries remains available. `GET /admin/geography/countries?view=onboarded|all|overrides` filters before pagination in MySQL. The overrides view covers country fee/service overrides, including 0% and disabled values; it does not imply a rewards or city audit. Existing country jurisdiction restrictions apply to every filter.
+- Country management separates Fees & services, Cities, and Rewards. City filters expose fee/service overrides and disabled cities. Availability is separate from service creation permissions. Bulk availability is in a dedicated menu with its existing explicit scope confirmation.
+- Fee/service editing opens the selected section. Changes across sections remain in one draft; before/after review lists all edits. Reset affects the current section only. Save is disabled when unchanged. Close/Escape/backdrop protect dirty edits. Failed city loads show retry rather than an empty-success view. Rewards split earning/redemption from customer tiers and protect unsaved edits.
+- Required checks: `GeographySettingsTest` covers server-side directory filters and inheritance; `marketSettings.test.js` covers zero/false, section resets, formula previews, changed-source detection and validation across sections. Existing fee/checkout tests remain mandatory. This redesign does not modify saved rates or historical payments.
+
 ## Provider website fees — 12 November 2026
 
 Implemented and enforced in MySQL/MariaDB. **Countries & cities → Global defaults / Edit country settings / City Settings → Provider website fees** controls the Free and paid Premium rates for **own-website venue bookings**. Membership commissions and event-seat fees retain their separate settings.

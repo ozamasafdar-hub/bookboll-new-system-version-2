@@ -40,6 +40,23 @@ beforeEach(function () {
 function marketValues(array $overrides = []): array { return array_replace(array_fill_keys(array_keys(MarketSettings::DEFAULTS), null), $overrides); }
 function saveMarket(string $scope, int $id, array $values) { return test()->putJson("/api/admin/geography/settings/$scope/$id", ['values' => $values]); }
 
+it('filters onboarded countries and fee overrides across the full directory before pagination', function () {
+    $owner = User::factory()->create();
+    Business::create(['name' => 'Business only country', 'username' => 'business-only-qa', 'owner_id' => $owner->id, 'country_id' => $this->other->id]);
+    $this->getJson('/api/admin/geography/countries?view=onboarded&records_per_page=1')->assertOk()
+        ->assertJsonPath('data.pagination.total', 2)->assertJsonPath('data.countries.0.id', $this->country->id);
+    $this->getJson('/api/admin/geography/countries?view=onboarded&records_per_page=1&page=2')->assertOk()
+        ->assertJsonPath('data.countries.0.id', $this->other->id);
+    saveMarket('country', $this->other->id, marketValues(['site_free' => 0]))->assertOk();
+    $this->getJson('/api/admin/geography/countries?view=overrides')->assertOk()
+        ->assertJsonPath('data.pagination.total', 1)->assertJsonPath('data.countries.0.id', $this->other->id);
+    saveMarket('country', $this->other->id, marketValues())->assertOk();
+    $this->getJson('/api/admin/geography/countries?view=overrides')->assertOk()->assertJsonPath('data.pagination.total', 0);
+    saveMarket('country', $this->country->id, marketValues(['facility' => 12]))->assertOk();
+    $this->getJson('/api/admin/geography/countries?view=overrides')->assertOk()
+        ->assertJsonPath('data.pagination.total', 1)->assertJsonPath('data.countries.0.id', $this->country->id);
+});
+
 it('applies independent Free and Premium website fees through global country city and reset', function () {
     $owner = User::factory()->create();
     $business = Business::create(['name' => 'Website QA', 'username' => 'website-qa', 'owner_id' => $owner->id, 'plan' => 'premium']);
