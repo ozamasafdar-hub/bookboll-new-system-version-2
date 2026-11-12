@@ -8,7 +8,7 @@ export const MARKET_GROUPS = [
     { key: 'site_premium', label: 'Paid Premium plan', automatic: 'Half the marketplace rate' },
   ] },
   { key: 'services', label: 'Services businesses can add', short: 'Services', help: 'Control which new services can be created. Existing listings, programs and events stay available.', fields: [
-    { key: 'module_listings', label: 'Booking listings', boolean: true }, { key: 'module_classes', label: 'Membership programs', boolean: true }, { key: 'module_matchmaking', label: 'Events & tournaments', boolean: true },
+    { key: 'module_listings', label: 'Booking listings', boolean: true }, { key: 'module_classes', label: 'Membership listings', boolean: true }, { key: 'module_matchmaking', label: 'Events & tournaments', boolean: true },
   ] },
 ]
 export const MARKET_FIELDS = MARKET_GROUPS.flatMap(g => g.fields)

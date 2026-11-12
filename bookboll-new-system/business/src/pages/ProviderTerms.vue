@@ -122,7 +122,7 @@ const SECTIONS = [
                 <li>the <b>full amount online</b> — from which Bookboll deducts its commission and credits your share to your wallet.</li>
               </ul>
             </li>
-            <li><b>The standard marketplace commission is 15%.</b> Rates can vary by country, listing type or individual agreement — the rate that applies to you is always shown in your dashboard before you list.</li>
+            <li><b>Marketplace booking commissions follow your applicable rate.</b> Rates can vary by country, city, listing type or individual agreement — the rate that applies to you is always shown in your dashboard before you list.</li>
             <li><b>Deposits are part of the customer's price.</b> An online deposit always counts toward the customer's total — it is never an extra charge on top of the price you set.</li>
             <li><b>Your own website offers two payment methods:</b> deposit + on arrival, or full payment online. Full payment online requires a connected payout method. Full payment on arrival is not offered on your own website.</li>
             <li><b>Payout connections do not waive commission.</b> On both channels, Bookboll retains the online deposit fee and you collect the remaining balance on arrival. With full online payment, Bookboll deducts its commission and credits your share to your <b>Bookings wallet</b>. The own-website discount applies during your active paid subscription; standard commissions apply when you return to Free.</li>

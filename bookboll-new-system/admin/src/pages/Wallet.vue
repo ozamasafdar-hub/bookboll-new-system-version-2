@@ -1133,7 +1133,7 @@ function startBookbollSetup() {
   // The Bookboll Wallet is beta and only powers the Subscription wallet — venue bookings need a
   // real payout rail (Stripe). Block it for the bookings purpose.
   if (isBookingsPurpose.value) {
-    pushToast('The Bookboll Wallet is in beta and only available for the Membership wallet. Connect Stripe for your Bookings wallet.', 'error')
+    pushToast('Connect Stripe to accept full online booking payments. Deposit + on arrival does not need connected payouts.', 'error')
     return
   }
   payoutError.value = ''

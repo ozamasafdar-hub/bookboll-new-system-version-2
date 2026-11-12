@@ -80,7 +80,7 @@ const open = ref(-1)
     <section class="fbp-hero">
       <router-link to="/" class="fbp-back"><ArrowLeft :size="15" /> Bookboll for Business</router-link>
       <h1>Simple pricing.<br /><span class="fbp-hl">Free forever</span>, or grow with Premium.</h1>
-      <p class="fbp-hero-sub">No monthly subscription on Free. Booking commissions apply on both channels. Paid Premium halves your own-website booking commission and adds tools to grow your business.</p>
+      <p class="fbp-hero-sub">No monthly subscription on Free. Booking commissions apply on both channels. Premium includes own-website membership listings, your market’s Premium website booking rate and more business tools.</p>
     </section>
 
     <!-- ── Plans ──────────────────────────────────────────────────────────── -->
@@ -123,7 +123,7 @@ const open = ref(-1)
 
       <div class="fbp-note">
         <Info :size="14" />
-        <span><b>How the commission works:</b> if your standard rate is 15%, Free website bookings use 15% and paid Premium website bookings use 7.5%. Rates vary by country and listing; your dashboard shows yours. Connecting payouts does not remove the fee. The discount applies during your paid subscription. Marketplace commission stays at the standard rate.</span>
+        <span><b>How the commission works:</b> your website uses the Free or paid Premium rate configured for your venue’s market. Your dashboard shows the applicable rate. Connecting payouts does not remove the fee. Marketplace booking fees stay the same on both plans.</span>
       </div>
       <div class="fbp-note">
         <Info :size="14" />

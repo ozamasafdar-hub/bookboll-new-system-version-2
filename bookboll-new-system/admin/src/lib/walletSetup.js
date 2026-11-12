@@ -33,7 +33,7 @@ export const WALLET_METHOD_LABELS = {
 }
 
 // A provider has a separate wallet per PURPOSE in each country.
-export const WALLET_PURPOSES = ['bookings', 'subscription']
+export const WALLET_PURPOSES = ['bookings']
 export const WALLET_PURPOSE_LABELS = { bookings: 'Bookings', subscription: 'Membership' }
 export function normWalletPurpose(p) { return p === 'bookings' ? 'bookings' : 'subscription' }
 
@@ -41,7 +41,7 @@ export function normWalletPurpose(p) { return p === 'bookings' ? 'bookings' : 's
 // Stripe Connect, Bookboll Wallet. Stripe is always shown (disabled when unsupported in the
 // country). For a BOOKINGS wallet the Bookboll Wallet is shown but DISABLED (beta) — venue
 // full-online must use a real rail; the easy Bookboll route is subscription-only for now.
-export function methodsForCountry(isoCode, purpose = 'subscription') {
+export function methodsForCountry(isoCode, purpose = 'bookings') {
   const code = (isoCode || '').toUpperCase()
   const stripeOk = STRIPE_CONNECT_COUNTRIES.has(code)
   const isBookings = normWalletPurpose(purpose) === 'bookings'
@@ -72,7 +72,7 @@ export function methodsForCountry(isoCode, purpose = 'subscription') {
     },
   ]
 
-  return { stripeOk, methods }
+  return { stripeOk, methods: methods.filter(method => method.key === 'stripe_connect') }
 }
 
 // Super admin can PAUSE an approved payout method (payout_paused flag): the wallet keeps
@@ -104,7 +104,7 @@ export function isWalletUsable(wallet) {
 // The CURRENT wallet row for a country + purpose (the one new earnings bind to), or null.
 // `purpose` defaults to 'subscription' (existing rows backfill to that); a row with no
 // purpose column yet is treated as 'subscription'.
-export function walletForCountry(wallets, countryId, purpose = 'subscription') {
+export function walletForCountry(wallets, countryId, purpose = 'bookings') {
   if (!Array.isArray(wallets) || !countryId) return null
   const want = normWalletPurpose(purpose)
   // provider_wallets.country_id is a CHAR column, so it arrives as "1" while a
@@ -220,7 +220,7 @@ export async function recordAutoPayout({ ownerUserId, wallet, amount, currency, 
 // for that (country, purpose) if the provider doesn't have one yet — inheriting their chosen payout
 // method + bank details from an existing SAME-PURPOSE wallet, in the country's own currency.
 // Returns the wallet row (null if no owner). `purpose`: 'bookings' | 'subscription'.
-export async function ensureCountryWallet(ownerUserId, countryId, fallbackCurrency, purpose = 'subscription') {
+export async function ensureCountryWallet(ownerUserId, countryId, fallbackCurrency, purpose = 'bookings') {
   if (!ownerUserId) return null
   const want = normWalletPurpose(purpose)
   const listRes = await fetchWallets({ owner_user_id: ownerUserId })

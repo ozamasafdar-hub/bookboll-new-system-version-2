@@ -115,13 +115,18 @@ class MembershipListingService
             $row = $invoiceId ? MembershipListingInvoice::where('stripe_invoice_id', $invoiceId)->first() : null;
             if (!$row && ($o->payment_intent ?? null)) $row = MembershipListingInvoice::where('stripe_payment_intent_id', is_object($o->payment_intent) ? $o->payment_intent->id : $o->payment_intent)->first();
             if (!$row) return false;
-            $refunded = min((float) $row->amount_paid, $o->amount_refunded / 100);
-            // Signed charge events carry the cumulative refund total; never move backwards.
-            $row->update(['amount_refunded' => max((float) $row->amount_refunded, $refunded)]);
-            if ($refunded >= (float) $row->amount_paid && $row->period_end) {
-                $remaining = MembershipListingInvoice::where('listing_subscription_id', $row->listing_subscription_id)->where('status', 'paid')->whereColumn('amount_refunded', '<', 'amount_paid')->max('period_end');
-                $row->subscription->update(['paid_until' => $remaining]);
-            }
+            DB::transaction(function () use ($row, $o) {
+                // Use the same lock order as invoice processing to serialize refunds
+                // and avoid an older concurrent event reducing the cumulative refund.
+                $sub = MembershipListingSubscription::whereKey($row->listing_subscription_id)->lockForUpdate()->firstOrFail();
+                $row = MembershipListingInvoice::whereKey($row->id)->lockForUpdate()->firstOrFail();
+                $refunded = max((float) $row->amount_refunded, min((float) $row->amount_paid, $o->amount_refunded / 100));
+                $row->update(['amount_refunded' => $refunded]);
+                if ($refunded >= (float) $row->amount_paid && $row->period_end) {
+                    $remaining = MembershipListingInvoice::where('listing_subscription_id', $sub->id)->where('status', 'paid')->whereColumn('amount_refunded', '<', 'amount_paid')->max('period_end');
+                    $sub->update(['paid_until' => $remaining]);
+                }
+            });
             return true;
         }
         if ($event->type === 'invoice_payment.paid') {
