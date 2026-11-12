@@ -2107,7 +2107,7 @@ function avatarColor(id) {
               <button class="btn btn-primary btn-sm" @click="goToWhatsappSetup">Set up <ChevronRight :size="14" /></button>
             </div>
 
-            <template>
+            <div class="wa-editor">
               <div class="mkt-sender">Messages use a <strong>Meta-approved template</strong> — WhatsApp doesn't allow free-form marketing texts.</div>
 
               <!-- Template: pick an existing one, OR author a new one and submit to Meta -->
@@ -2214,7 +2214,7 @@ function avatarColor(id) {
               <div v-else-if="waResult" class="mkt-sent">
                 <CheckCircle :size="14" /> Sent to {{ waResult.sent }} customer{{ waResult.sent !== 1 ? 's' : '' }}<template v-if="waResult.failed"> · {{ waResult.failed }} failed (see the WhatsApp page log)</template><template v-if="waResult.dropped"> · {{ waResult.dropped }} not sent — 200-per-run limit, run another campaign for the rest</template>.
               </div>
-            </template>
+            </div>
           </div>
 
           <!-- WhatsApp-style preview -->
