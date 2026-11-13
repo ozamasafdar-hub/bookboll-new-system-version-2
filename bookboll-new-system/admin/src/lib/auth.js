@@ -50,7 +50,10 @@ function applySession(data) {
     clearSession()
     return false
   }
-  applyLaravelUser(user, roles)
+  // `scope` is the server's own answer for whose business this account acts
+  // under; the user row's owner_user_id is null for a member assigned into an
+  // ownerless business, and the pages filter their catalogue by it.
+  applyLaravelUser(user, roles, data?.scope || null)
   authUser.value = {
     id: String(user.id),
     email: user.email || '',

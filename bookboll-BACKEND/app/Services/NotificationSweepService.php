@@ -58,7 +58,7 @@ class NotificationSweepService
     /** @return array<int, array<string, mixed>> */
     protected function dueBookings(int $ownerId, string $today, string $yesterday, int $remindDays): array
     {
-        $venues = Venue::where('owner_user_id', $ownerId)->get(['id', 'name', 'currency_override'])->keyBy('id');
+        $venues = Venue::ownedBy((int) $ownerId)->get(['id', 'name', 'currency_override'])->keyBy('id');
         if ($venues->isEmpty()) {
             return [];
         }

@@ -47,9 +47,14 @@ export function pickPrimaryRole(roles = []) {
  * Map a Laravel User + Spatie roles into the shape App.vue / permissions expect
  * (previously an admin_users row from Supabase).
  */
-export function mapLaravelUserToAdmin(user, roles = []) {
+export function mapLaravelUserToAdmin(user, roles = [], scope = null) {
   if (!user) return null
   const role = pickPrimaryRole(roles)
+  // The server resolves the owner a member stands under (through their business
+  // membership when the user row carries none); the row alone is null for an
+  // account assigned into an ownerless business, and every catalogue page
+  // filters by this id.
+  const ownerUserId = scope?.owner_user_id ?? user.owner_user_id
   // An owner carries the business on owned_business; a manager or staff member
   // reaches it through their membership (GET /me and login both load it).
   // Without the second read, invited staff saw no business name in the shell.
@@ -80,7 +85,7 @@ export function mapLaravelUserToAdmin(user, roles = []) {
     // string country ids never matches the numeric country_id on a city or venue,
     // so a country_admin / platform_staff saw nothing at all.
     country_id: user.country_id ?? null,
-    owner_user_id: user.owner_user_id != null ? String(user.owner_user_id) : null,
+    owner_user_id: ownerUserId != null ? String(ownerUserId) : null,
     custom_permissions: null,
     assigned_country_ids: Array.isArray(user.assigned_country_ids)
       ? user.assigned_country_ids.map(Number).filter(Number.isFinite)
@@ -92,8 +97,8 @@ export function mapLaravelUserToAdmin(user, roles = []) {
 }
 
 /** Apply a Laravel session user into currentUser / allUsers for the shell. */
-export function applyLaravelUser(user, roles = []) {
-  const mapped = mapLaravelUserToAdmin(user, roles)
+export function applyLaravelUser(user, roles = [], scope = null) {
+  const mapped = mapLaravelUserToAdmin(user, roles, scope)
   if (!mapped) {
     clearLaravelUser()
     return null

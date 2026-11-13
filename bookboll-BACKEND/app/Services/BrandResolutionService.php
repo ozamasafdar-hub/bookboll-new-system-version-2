@@ -187,10 +187,17 @@ class BrandResolutionService
      */
     protected function modules(Business $b, int $ownerId): array
     {
-        $venueIds = Venue::where(function ($q) use ($b,$ownerId) {
-            $q->where('business_id',$b->id);
-            if ($ownerId) $q->orWhere(fn($legacy) => $legacy->whereNull('business_id')->where('owner_user_id',$ownerId));
-        })->pluck('id');
+        // The business is already in hand, so key on it directly and only fall
+        // back to the legacy owner key for venues that predate business_id —
+        // a venue re-homed to another business must not keep showing here.
+        $venueIds = Venue::query()
+            ->where(function ($q) use ($b, $ownerId) {
+                $q->where('business_id', $b->id);
+                if ($ownerId) {
+                    $q->orWhere(fn ($legacy) => $legacy->whereNull('business_id')->where('owner_user_id', $ownerId));
+                }
+            })
+            ->pluck('id');
 
         $venues = $venueIds->isNotEmpty() && Listing::query()
             ->whereIn('venue_id', $venueIds)
