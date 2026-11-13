@@ -7,6 +7,15 @@ export function bookingMinutes(booking) {
   return { start, end }
 }
 
+// Focus real activity before opening hours: a 24-hour venue should not force an
+// otherwise empty midnight viewport. Callers pass only the currently shown venues.
+export function calendarFocusMinute(bookings, openingMinutes = []) {
+  const starts = bookings.filter(b => b.start_time && b.end_time).map(b => bookingMinutes(b).start)
+  if (starts.length) return Math.max(0, Math.min(...starts) - 30)
+  const daytimeOpenings = openingMinutes.filter(m => Number.isFinite(m) && m > 0)
+  return daytimeOpenings.length ? Math.min(...daytimeOpenings) : 7 * 60
+}
+
 // Every booking keeps a readable lane, even on a busy venue's schedule.
 export function layoutCalendarColumn(bookings, pixelsPerMinute, dayStart = 0) {
   const items = bookings.filter(b => b.start_time && b.end_time).map(bk => {

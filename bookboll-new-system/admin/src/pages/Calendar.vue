@@ -14,7 +14,7 @@ import { CalendarX, CalendarClock } from 'lucide-vue-next'
 import { createTouchReorder } from '../lib/touchReorder.js'
 import { generateProgramSessions, windDownMap } from '../lib/programSessions.js'
 import { pushToast } from '../lib/toast.js'
-import { bookingMinutes, layoutCalendarColumn } from '../lib/calendarLayout.js'
+import { bookingMinutes, layoutCalendarColumn, calendarFocusMinute } from '../lib/calendarLayout.js'
 import { localCalendarDate as ymd } from '../lib/calendarDate.js'
 
 const { isProviderScoped, currentOwnerUserId, can, scopeLocations, scopePrograms } = useCurrentUser()
@@ -31,17 +31,21 @@ const viewingBookingId = ref(null)
 const selectedDate = ref(ymd(new Date()))
 const view = ref('day')
 const loading = ref(false)
+let loadVersion = 0
 
 async function load() {
+  const version = ++loadVersion
   loading.value = true
   const range = visibleRangeForFetch()
   const res = await fetchCalendarDashboard({
     from: range.from,
     to: range.to,
   })
-  loading.value = false
+  // A slow response for a previous day must not replace the current schedule.
+  if (version !== loadVersion) return
 
   if (!res.success) {
+    loading.value = false
     pushToast(res.message || 'Could not load calendar.', 'error')
     bookings.value = []
     return
@@ -70,6 +74,9 @@ async function load() {
     programs.value = scopePrograms(programs.value.filter(p =>
       p.owner_user_id === currentOwnerUserId.value && ownedLocIds.has(p.location_id)))
   }
+  loading.value = false
+  await nextTick()
+  scrollDayToActivity()
 }
 
 /** Visible date window for the current view (day / week / month). */
@@ -127,10 +134,10 @@ function openSlotBooking(loc, evt) {
   // Preselect the location's first listing as a sensible default (the user can
   // switch it in the form if the venue has several courts/listings).
   presetListingId.value = listingsOf(loc.id)[0]?.id || ''
-    const slotDate = new Date(selectedDate.value + 'T12:00:00')
-    slotDate.setDate(slotDate.getDate() + Math.floor(mins / 1440))
-    presetDate.value = `${slotDate.getFullYear()}-${String(slotDate.getMonth()+1).padStart(2,'0')}-${String(slotDate.getDate()).padStart(2,'0')}`
-    presetStartTime.value = toTimeStr(mins % 1440)
+  const slotDate = new Date(selectedDate.value + 'T12:00:00')
+  slotDate.setDate(slotDate.getDate() + Math.floor(mins / 1440))
+  presetDate.value = `${slotDate.getFullYear()}-${String(slotDate.getMonth()+1).padStart(2,'0')}-${String(slotDate.getDate()).padStart(2,'0')}`
+  presetStartTime.value = toTimeStr(mins % 1440)
   showNewBooking.value = true
 }
 function onBookingSaved() {
@@ -403,30 +410,7 @@ function isOpenAt(locationId, mins) {
   return info.open.some(iv => mins >= iv.startM && mins < iv.endM)
 }
 
-// ── Auto-scroll the day grid to the first open hour ──────────────────────────
-// The grid spans the full 24h so every slot is reachable, but that means it
-// opens at 00:00 — a wall of shaded CLOSED night hours you must scroll past
-// (painful on a phone). On load / date / view / granularity change, jump the
-// scroll to the earliest configured opening time across the shown venues
-// (fallback 7:00am when no hours are set) — the working day is what you land on.
 const dayScrollEl = ref(null)
-const firstOpenMinute = computed(() => {
-  let earliest = null
-  for (const loc of locations.value) {
-    const info = openIntervalsByLoc.value[loc.id]
-    if (!info || !info.configured || !info.open.length) continue
-    const m = Math.min(...info.open.map(iv => iv.startM))
-    earliest = earliest === null ? m : Math.min(earliest, m)
-  }
-  return earliest === null ? 7 * 60 : earliest
-})
-function scrollDayToOpen() {
-  const el = dayScrollEl.value
-  if (!el || view.value !== 'day') return
-  el.scrollTop = Math.max(0, (firstOpenMinute.value - dayBounds.value.start) * pxPerMin.value - 8)
-}
-watch([view, selectedDate, dayGranularity, locations, firstOpenMinute], () => nextTick(scrollDayToOpen))
-onMounted(() => nextTick(scrollDayToOpen))
 
 // ── Slot hover indicator (day view) — highlight only the slot under the cursor ──
 const hoverCol = ref(null)      // location id currently hovered
@@ -475,6 +459,26 @@ const orderedLocations = computed(() => {
   for (const l of base) if (byId.has(l.id)) out.push(l)   // new venues fall to the end
   return out
 })
+const visibleDayBookings = computed(() => {
+  const ids = new Set(orderedLocations.value.map(loc => loc.id))
+  return events.value.filter(b => b.booking_date === selectedDate.value && ids.has(resolvedLocationId(b)))
+})
+const dayFocusMinute = computed(() => calendarFocusMinute(visibleDayBookings.value,
+  orderedLocations.value.flatMap(loc => (openIntervalsByLoc.value[loc.id]?.open || []).map(iv => iv.startM))))
+const jumpHours = computed(() => daySlots.value.filter(h => h.endsWith(':00')))
+function scrollDayToMinute(minute) {
+  if (dayScrollEl.value && view.value === 'day') {
+    dayScrollEl.value.scrollTop = Math.max(0, (minute - dayBounds.value.start) * pxPerMin.value)
+  }
+}
+function scrollDayToActivity() { scrollDayToMinute(dayFocusMinute.value) }
+function jumpToTime(event) {
+  scrollDayToMinute(toMinutes(event.target.value))
+  event.target.value = ''
+}
+watch([dayGranularity, venueFilter], () => {
+  if (!loading.value) nextTick(scrollDayToActivity)
+}, { deep: true })
 const dragColId = ref(null)
 const dragOverColId = ref(null)
 function onColDragStart(loc, evt) {
@@ -558,7 +562,7 @@ function hasPendingPayment(bk) {
             <button class="btn-icon" aria-label="Previous day" @click="shift(-1)"><ChevronLeft :size="18" /></button>
             <label class="date-label date-picker" title="Jump to a date">
               <CalendarDays :size="15" />{{ formattedDate }}
-              <input type="date" v-model="selectedDate" class="date-picker-input" />
+              <input type="date" v-model="selectedDate" class="date-picker-input" aria-label="Calendar date" />
             </label>
             <button class="btn-icon" aria-label="Next day" @click="shift(1)"><ChevronRight :size="18" /></button>
           </template>
@@ -598,8 +602,15 @@ function hasPendingPayment(bk) {
         </div>
       </div>
 
+      <div v-if="view === 'day'" class="day-navigation">
+        <span aria-live="polite">{{ loading ? 'Loading schedule…' : `${visibleDayBookings.length} bookings across ${orderedLocations.length} venues` }}<span class="day-scroll-hint"> · Scroll sideways for more venues</span></span>
+        <div class="day-jump-controls">
+          <button type="button" :disabled="loading || !visibleDayBookings.length" @click="scrollDayToActivity">First booking</button>
+          <select aria-label="Go to time" @change="jumpToTime"><option value="" disabled selected>Go to time</option><option v-for="h in jumpHours" :key="h" :value="h">{{ fmt12(h) }}{{ toMinutes(h) >= 1440 ? ' (next day)' : '' }}</option></select>
+        </div>
+      </div>
       <!-- ── DAY VIEW (positioned event blocks) ────────────────────────── -->
-      <div v-if="view === 'day'" ref="dayScrollEl" class="cal-scroll">
+      <div v-if="view === 'day'" ref="dayScrollEl" class="cal-scroll" :aria-busy="loading" aria-label="Day schedule" tabindex="0">
         <div v-if="locations.length" class="day-grid" :class="`gran-${dayGranularity}`">
           <!-- Time gutter -->
           <div class="day-gutter">
@@ -618,7 +629,7 @@ function hasPendingPayment(bk) {
           <div class="day-cols">
             <div v-for="loc in orderedLocations" :key="loc.id" class="day-col" :style="{ minWidth: dayLayouts[loc.id].width + 'px' }" :data-tr-col="loc.id" :class="{ 'col-dragover': dragOverColId === loc.id, 'col-dragging': dragColId === loc.id }">
               <div
-                class="day-col-head" draggable="true" title="Drag to reorder columns"
+                class="day-col-head" draggable="true" :title="`${loc.name} · Drag to reorder columns`"
                 @dragstart="onColDragStart(loc, $event)"
                 @dragover="onColDragOver(loc, $event)"
                 @drop="onColDrop(loc)"
@@ -627,7 +638,7 @@ function hasPendingPayment(bk) {
                 <span class="col-grip-tap"
                   @touchstart.stop="colTR.onTouchstart($event, loc.id)" @touchmove="colTR.onTouchmove($event)"
                   @touchend="colTR.onTouchend($event)" @touchcancel="colTR.onTouchend($event)"><GripVertical :size="13" class="col-grip" /></span>
-                <MapPin :size="12" class="th-pin" />{{ loc.name }}
+                <MapPin :size="12" class="th-pin" /><span class="day-venue-name">{{ loc.name }}</span>
               </div>
               <!-- Special-day banner: venue closed / custom hours / listing-level overrides.
                    Zero-height sticky wrapper + absolute chip = the banner overlays the top
@@ -901,7 +912,14 @@ function hasPendingPayment(bk) {
 }
 
 /* ── Day view — table grid ────────────────────────────────────────────────── */
-.cal-scroll { overflow-x: auto; overflow-y: auto; max-height: 78vh; }
+.cal-scroll { overflow: auto; max-height: 70vh; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.cal-scroll:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.day-navigation { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 9px 18px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-muted); }
+.day-jump-controls { display: flex; gap: 12px; align-items: center; }
+.day-jump-controls button { color: var(--primary-ink); font-weight: 600; }
+.day-jump-controls button:disabled { opacity: .45; cursor: default; }
+.day-jump-controls select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font: inherit; }
+@media (max-width: 700px) { .day-scroll-hint { display: none; } }
 .cal-table { border-collapse: collapse; width: 100%; min-width: max-content; }
 
 /* Sticky header row */
@@ -1017,7 +1035,7 @@ function hasPendingPayment(bk) {
 }
 
 /* ── Day view: positioned event grid ──────────────────────────────────────── */
-.day-grid { display: flex; min-width: max-content; }
+.day-grid { --day-head-height: 56px; display: flex; min-width: max-content; }
 
 /* Time gutter */
 .day-gutter {
@@ -1026,7 +1044,7 @@ function hasPendingPayment(bk) {
   border-right: 1px solid var(--border);
 }
 .day-corner {
-  height: 40px; background: var(--bg);
+  height: var(--day-head-height); background: var(--bg);
   border-bottom: 2px solid var(--border);
   position: sticky; top: 0; z-index: 7;
 }
@@ -1042,17 +1060,18 @@ function hasPendingPayment(bk) {
 /* Columns */
 .day-cols { display: flex; flex: 1; }
 .day-col {
-  flex: 1; min-width: 200px;
+  flex: 1 0 0; width: 0; min-width: 240px;
   border-left: 1px solid var(--border);
 }
 .day-col-head {
-  height: 40px; display: flex; align-items: center; gap: 5px;
-  padding: 0 12px; font-weight: 700; font-size: 13px;
+  height: var(--day-head-height); display: flex; align-items: center; gap: 5px;
+  padding: 0 10px; font-weight: 700; font-size: 12px;
   background: var(--bg); border-bottom: 2px solid var(--border);
   position: sticky; top: 0; z-index: 5; white-space: nowrap;
   cursor: grab; user-select: none;
 }
 .day-col-head:active { cursor: grabbing; }
+.day-venue-name { min-width: 0; white-space: normal; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .col-grip { color: var(--text-light, #cbd5e1); flex-shrink: 0; }
 .col-grip-tap { display: inline-flex; align-items: center; padding: 6px 4px; margin: -6px -2px; touch-action: none; }
 .day-col-head:hover .col-grip { color: var(--text-light, #94a3b8); }
@@ -1060,6 +1079,80 @@ function hasPendingPayment(bk) {
 .day-col.col-dragover .day-col-head { box-shadow: inset 3px 0 0 var(--primary); background: var(--info-bg, #eef2ff); }
 .day-col-body { position: relative; }
 .day-col-body.is-bookable { cursor: copy; }
+
+/* Special-day banner under a column head (custom hours = indigo, closed = red).
+   The wrapper is sticky but ZERO-HEIGHT (no layout space), and the chip hangs
+   from it absolutely — the column body below keeps the exact same y-origin as
+   the time gutter and chip-less columns. */
+.day-sd-wrap { position: sticky; top: var(--day-head-height); height: 0; z-index: 4; }
+.day-sd-chip {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; align-items: center; gap: 5px; padding: 4px 10px;
+  font-size: 11px; font-weight: 700; color: var(--purple-ink, #4338ca); background: var(--info-bg, #eef2ff);
+  border-bottom: 1px solid var(--purple-border, #c7d2fe);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.day-sd-chip.closed { color: var(--danger-ink, #b91c1c); background: var(--danger-bg, #fef2f2); border-bottom-color: var(--danger-border, #fecaca); }
+
+/* Month-view special-day marker */
+.month-sd {
+  display: inline-flex; align-items: center; gap: 3px; max-width: 100%;
+  padding: 1px 5px; margin-top: 2px; border-radius: 5px;
+  font-size: 10px; font-weight: 700; color: var(--purple-ink, #4338ca); background: var(--info-bg, #eef2ff);
+}
+.month-sd.closed { color: var(--danger-ink, #b91c1c); background: var(--danger-bg, #fef2f2); }
+.month-sd-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Only the hovered slot lights up (see .day-hover-band), not the whole column. */
+
+/* Closed-hours shading — outside the venue's operating hours for this weekday */
+.day-closed-band {
+  position: absolute; left: 0; right: 0; pointer-events: none;
+  background: repeating-linear-gradient(135deg, rgba(148,163,184,.04) 0 8px, rgba(148,163,184,.09) 8px 16px);
+  border-top: 1px dashed rgba(148,163,184,.5);
+}
+.day-closed-tag {
+  position: absolute; top: 3px; left: 6px; display: inline-flex; align-items: center; gap: 3px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--text-light, #94a3b8);
+}
+/* Hovered-slot highlight band (follows the cursor, snapped to the slot) */
+.day-hover-band {
+  position: absolute; left: 0; right: 0; z-index: 1; pointer-events: none;
+  background: rgba(16,185,129,.10); border: 1px solid rgba(16,185,129,.35);
+}
+.day-hover-band.closed { background: rgba(148,163,184,.14); border-color: rgba(148,163,184,.5); }
+
+/* Program session modal */
+.sess-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 1000; display: flex; justify-content: flex-end; backdrop-filter: blur(2px); }
+.sess-panel { width: 100%; max-width: 440px; height: 100%; background: var(--surface, #ffffff); display: flex; flex-direction: column; box-shadow: -8px 0 40px rgba(0,0,0,.18); animation: slideInRight .22s cubic-bezier(.22,1,.36,1); }
+@keyframes slideInRight { from { transform: translateX(40px); opacity: 0 } to { transform: translateX(0); opacity: 1 } }
+.sess-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 18px 20px 14px; border-bottom: 1px solid var(--border); }
+.sess-title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 7px; }
+.sess-sub { font-size: 12.5px; color: var(--text-muted); display: flex; align-items: center; gap: 5px; margin-top: 4px; }
+.sess-close { width: 32px; height: 32px; border-radius: 8px; border: none; background: var(--bg, #f1f5f9); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-muted, #64748b); }
+.sess-close:hover { background: var(--border, #e2e8f0); }
+.sess-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+.sess-count { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); margin-bottom: 14px; }
+.sess-empty { color: var(--text-muted); font-size: 13px; padding: 20px 0; text-align: center; }
+.sess-list { display: flex; flex-direction: column; gap: 8px; }
+.sess-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg); border-radius: 10px; }
+.sess-avatar { width: 34px; height: 34px; border-radius: 50%; background: #0f172a; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; flex-shrink: 0; }
+.sess-info { flex: 1; min-width: 0; }
+.sess-name { font-size: 13.5px; font-weight: 600; }
+.sess-contact { font-size: 11.5px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
+.sess-contact span { display: inline-flex; align-items: center; gap: 3px; }
+.sess-badge { font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
+.sess-link { display: inline-block; margin-top: 14px; font-size: 13px; font-weight: 600; color: var(--primary-ink); }
+.sess-cancel-btn { display: flex; align-items: center; gap: 6px; margin-top: 12px; padding: 8px 12px; width: 100%; justify-content: center; border: 1px solid var(--danger-border, #fecaca); background: var(--danger-bg, #fef2f2); color: var(--danger-ink, #dc2626); border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .12s; }
+.sess-cancel-btn:hover { background: var(--danger-bg, #fee2e2); }
+
+/* Gridlines */
+.day-gridline {
+  position: absolute; left: 0; right: 0; height: 0; pointer-events: none;
+  border-top: 1px solid var(--border, #f1f5f9);
+}
+.day-gridline.is-hour { border-top-color: var(--border); }
+
 
 .day-event {
   position: absolute; overflow: hidden;
