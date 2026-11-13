@@ -4,6 +4,28 @@ use App\Support\AccessScope;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
 uses(RefreshDatabase::class);
+
+it('persists restricted venue access and permission overrides and refuses foreign grants',function () {
+    $admin=setupActor(); $owner=setupActor('provider_admin'); $b=setupBusiness(); $b->update(['owner_id'=>$owner->id]);
+    $mine=Venue::forceCreate(['name'=>'My venue','status'=>'active','business_id'=>$b->id,'owner_user_id'=>$owner->id]);
+    $other=Venue::forceCreate(['name'=>'Foreign venue','status'=>'active','business_id'=>setupBusiness()->id]);
+    $url="/api/admin/businesses/{$b->id}/invitations";
+    $base=['name'=>'QA scoped','email'=>'scoped@example.test','role'=>'staff'];
+    $this->actingAs($admin)->postJson($url,$base+['location_ids'=>[$other->id]])->assertUnprocessable();
+    $this->postJson($url,$base+['permissions'=>['grant'=>['manage_geography']]])->assertUnprocessable();
+    $id=$this->postJson($url,$base+['location_ids'=>[$mine->id],'permissions'=>['grant'=>['manage_promocodes'],'revoke'=>['accept_payments']]])->assertOk()->json('data.user_id');
+    $member=User::findOrFail($id);
+    expect(AccessScope::allowedVenueIds($member))->toBe([$mine->id])
+        ->and($member->capabilityOverrides())->toBe(['grant'=>['manage_promocodes'],'revoke'=>['accept_payments']])
+        ->and($member->hasCapability('accept_payments'))->toBeFalse()
+        ->and(BusinessMembership::where('user_id',$id)->value('scope'))->toBe('selected');
+    $second=Venue::forceCreate(['name'=>'Second venue','status'=>'active','business_id'=>$b->id,'owner_user_id'=>$owner->id]);
+    $this->putJson("/api/admin/users/$id",['role'=>'staff','assigned_location_ids'=>[$second->id],
+        'custom_permissions'=>['grant'=>[],'revoke'=>['manage_bookings']]])->assertOk();
+    expect(AccessScope::allowedVenueIds($member->fresh()))->toBe([$second->id])
+        ->and($member->fresh()->capabilityOverrides())->toBe(['grant'=>[],'revoke'=>['manage_bookings']]);
+    $this->putJson("/api/admin/users/$id",['custom_permissions'=>['grant'=>['manage_geography']]])->assertUnprocessable();
+});
 beforeEach(function () {
     config(['preview.workspace'=>true]);
     foreach (array_merge(['super_admin'],BusinessMembership::ASSIGNABLE_ROLES) as $role) Role::findOrCreate($role,'web');

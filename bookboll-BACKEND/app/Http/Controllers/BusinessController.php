@@ -31,6 +31,11 @@ class BusinessController extends Controller
         return app(\App\Services\BusinessTeamInviteService::class)->invite($request, (int) $id);
     }
 
+    public function invitationOptions(Request $request, $id)
+    {
+        return app(\App\Services\BusinessTeamInviteService::class)->options($request, (int) $id);
+    }
+
     /* Moving an account into a business: options, reviewed preview, commit. */
 
     /** Assignable accounts for a business that does not exist yet (Add business form). */

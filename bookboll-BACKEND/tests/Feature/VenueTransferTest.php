@@ -24,7 +24,42 @@ use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
 
+it('reassigns customer balances without inventing collection and matches the reviewed report',function () {
+    $a=transferAdmin(); $v=legacyVenue(); $d=destinationBusiness(); $b=legacyBooking($v,['origin'=>'bookboll_web']);
+    $review=previewTransfer($a,$v,$d,['arrival_policy'=>'keep_pending'])->assertOk();
+    expect($review->json('data.pending_arrival_count'))->toBe(0)
+        ->and((float)$review->json('data.totals.0.provider_pending'))->toBe(80.0);
+    $this->postJson("/api/admin/venues/{$v->id}/transfers",['preview_token'=>$review->json('data.preview_token'),'idempotency_key'=>'keep-customer-pending'])->assertOk();
+    $p=Payment::where('booking_id',$b->id)->where('type','remaining')->first();
+    expect($p->status)->toBe('pending')->and($p->paid_at)->toBeNull()->and($p->collected_by_business_id)->toBeNull();
+    $actual=$this->getJson('/api/admin/payments/dashboard?report_version=2')->assertOk()->json('data.summary.0');
+    foreach(['bookboll_received','platform_fees','provider_received','provider_pending'] as $key) expect((float)$actual[$key])->toBe((float)$review->json('data.report_impact.0.after.'.$key));
+    expect((float)$actual['platform_fees'])->toBe(20.0)->and((float)$actual['provider_pending'])->toBe(80.0);
+});
+
+it('freezes partial snapshots on excluded online receipts and preserves recorded fee evidence',function () {
+    $a=transferAdmin(); $v=legacyVenue(); $d=destinationBusiness(); $b=legacyBooking($v,['origin'=>'bookboll_web']);
+    $b->forceFill(['financial_context'=>['operator'=>'bookboll','channel'=>'marketplace']])->saveQuietly();
+    $deposit=Payment::where('booking_id',$b->id)->where('type','deposit')->first();
+    $deposit->forceFill(['financial_context'=>['fee_rate'=>17,'fee_source'=>'recorded_listing','discount_funder'=>'platform']])->saveQuietly();
+    $full=Payment::withoutEvents(fn()=>Payment::create(['booking_id'=>$b->id,'user_id'=>$b->user_id,'payment_id'=>'partial-snapshot','type'=>'full','method'=>'online','status'=>'paid','amount'=>100,'currency'=>'QAR','financial_context'=>['receipt_ids'=>[999]]]));
+    $review=previewTransfer($a,$v,$d,['arrival_policy'=>'keep_pending'])->assertOk();
+    $this->postJson("/api/admin/venues/{$v->id}/transfers",['preview_token'=>$review->json('data.preview_token'),'idempotency_key'=>'partial-snapshot'])->assertOk();
+    expect($full->fresh()->financial_context['operator'])->toBe('bookboll')
+        ->and($full->fresh()->financial_context['receipt_ids'])->toBe([999])
+        ->and($deposit->fresh()->financial_context['fee_rate'])->toBe(17)
+        ->and($deposit->fresh()->financial_context['discount_funder'])->toBe('platform');
+});
+
 beforeEach(fn () => Role::findOrCreate('super_admin', 'web'));
+
+it('requires a fresh review when the destination owner changes',function () {
+    $a=transferAdmin(); $v=legacyVenue(); $d=destinationBusiness(); legacyBooking($v);
+    $review=previewTransfer($a,$v,$d)->assertOk();
+    $d->update(['owner_id'=>User::factory()->create()->id]);
+    $this->postJson("/api/admin/venues/{$v->id}/transfers",['preview_token'=>$review->json('data.preview_token'),'idempotency_key'=>'changed-owner','acknowledge_legacy_cash'=>true])->assertStatus(409);
+    expect($v->fresh()->business_id)->toBeNull();
+});
 
 function transferAdmin(): User
 {
@@ -82,7 +117,7 @@ function previewTransfer(User $a, Venue $v, Business $d, array $over = [])
 {
     return test()->actingAs($a)->postJson("/api/admin/venues/{$v->id}/transfer-preview", array_merge([
         'business_id' => $d->id, 'effective_from' => '2026-06-01',
-        'history_mode' => 'legacy_deposit_fee',
+        'history_mode' => 'legacy_deposit_fee', 'arrival_policy' => 'confirm_cash',
         'from_date' => '2026-01-01', 'to_date' => '2026-05-31',
     ], $over));
 }
@@ -112,7 +147,7 @@ it('never turns an unpaid online payment into provider cash', function () {
     $v=legacyVenue(); $b=legacyBooking($v);
     Payment::where('booking_id',$b->id)->where('type','remaining')->update(['type'=>'full','method'=>'online']);
     $res=previewTransfer(transferAdmin(),$v,destinationBusiness())->assertOk();
-    expect($res->json('data.reconciliation_version'))->toBe(3)
+    expect($res->json('data.reconciliation_version'))->toBe(4)
         ->and($res->json('data.pending_arrival_count'))->toBe(0)
         ->and((float)$res->json('data.totals.0.provider_cash'))->toBe(0.0);
 });

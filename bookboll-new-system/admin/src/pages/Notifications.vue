@@ -187,9 +187,13 @@ async function save() {
       <span class="nt-sender-cta">{{ smtpAutomated ? 'Manage' : 'Set up' }} <ChevronRight :size="14" /></span>
     </div>
 
+    <div class="nt-models">
+      <section class="nt-model-card"><span class="nt-model-tag">Marketplace retention</span><h2>Comeback offer</h2><p>A personal code after the customer's first completed marketplace booking at each venue. Valid for 7 days at the same venue.</p><p>Email and WhatsApp follow customer consent. The discount is capped at Bookboll's fee, protecting the provider's share.</p><router-link v-if="isSuperAdmin || isCountryAdmin" class="btn btn-primary" to="/countries?section=comeback">Manage comeback offer</router-link><p v-else class="nt-help">Managed by Bookboll under Countries &amp; cities → Comeback offer.</p><small>Global default → country override → city override</small></section>
+      <section class="nt-model-card"><span class="nt-model-tag">Manual membership management</span><h2>Members contact the provider</h2><p>Providers add members, record offline payments, manage attendance and cancellations in Members. Customer memberships have no automatic charges, trial conversions or payment retries.</p><p>Automated member messages are not sent by the manual member register. Contact members directly using their saved details.</p><router-link class="btn btn-secondary" to="/subscriptions">Manage members</router-link><small>The monthly marketplace listing fee is paid by the business, separately from its members.</small></section>
+    </div>
     <div class="nt-tools">
       <label class="nt-search">Find a notification<input v-model="search" type="search" placeholder="Search confirmations, reminders, payments…" /></label>
-      <label>Show<select v-model="eventGroup"><option value="all">All notifications</option><option value="bookings">Bookings &amp; payments</option><option value="memberships">Memberships</option></select></label>
+      <label>Show<select v-model="eventGroup"><option value="all">All notifications</option><option value="bookings">Bookings &amp; payments</option></select></label>
     </div>
     <p class="nt-help">Choose a notification to edit its message. Use the switches to choose who receives it.</p>
     <!-- ── Event × audience × channel matrix ── -->
@@ -378,6 +382,15 @@ async function save() {
 </template>
 
 <style scoped>
+.nt-models { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin:24px 0; }
+.nt-model-card { padding:22px; border:1px solid var(--border); border-radius:14px; background:var(--surface); }
+.nt-model-tag { color:var(--primary-ink); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; }
+.nt-model-card h2 { font-size:18px; margin:10px 0; }
+.nt-model-card p { font-size:13px; line-height:1.65; color:var(--text-muted); margin:10px 0; }
+.nt-model-card .btn { margin-top:6px; }
+.nt-model-card small { display:block; margin-top:12px; color:var(--text-muted); line-height:1.5; }
+@media(max-width:760px) { .nt-models { grid-template-columns:1fr; } }
+
 .page-sub { color: var(--text-muted); font-size: 13.5px; margin-top: 4px; max-width: 640px; }
 .nt-spin { animation: ntspin 1s linear infinite; }
 @keyframes ntspin { to { transform: rotate(360deg); } }

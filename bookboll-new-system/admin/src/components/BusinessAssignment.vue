@@ -6,6 +6,8 @@ import { previewReady, newRequestKey } from '../lib/finance.js'
 import { roleLabel, PROVIDER_ROLES } from '../lib/permissions.js'
 import AccountPicker from './AccountPicker.vue'
 import './finance.css'
+import './teamDialogs.css'
+import RoleSelect from './RoleSelect.vue'
 const props=defineProps({ business:{type:Object,required:true} })
 const emit=defineEmits(['close','assigned'])
 const options=ref(null), notice=ref(''), error=ref(''), busy=ref(false), preview=ref(null), agreed=ref(false)
@@ -44,7 +46,7 @@ async function assign(){
 load()
 </script>
 <template>
-  <div class="modal-backdrop" @click.self="!busy && emit('close')"><div class="modal fin-dialog" v-dialog="() => !busy && emit('close')" role="dialog" aria-modal="true" aria-labelledby="assign-title">
+  <div class="modal-backdrop" @click.self="!busy && emit('close')"><div class="modal fin-dialog team-dialog" v-dialog="() => !busy && emit('close')" role="dialog" aria-modal="true" aria-labelledby="assign-title">
     <div class="modal-header"><div><div class="fin-eyebrow">{{ business.business_name }}</div><h2 id="assign-title" class="modal-title">Assign an existing platform account</h2></div><button class="btn-icon" :disabled="busy" aria-label="Close assignment" @click="emit('close')"><X :size="18"/></button></div>
     <div class="modal-body"><p class="fin-help" style="margin-bottom:18px">Move an existing account into this business. Its login stays the same; platform access is removed.</p><p v-if="notice" class="fin-notice">{{ notice }}</p>
       <fieldset v-show="!preview" :disabled="busy" style="border:0;padding:0;margin:0"><div class="fin-form-grid">
@@ -54,11 +56,11 @@ load()
                          empty-text="No eligible accounts — everyone on the platform team is already in a business."
                          @search="load" />
         </div>
-        <label class="fin-field">Business role *<select v-model="form.role"><option v-for="role in roles" :key="role" :value="role">{{ roleLabel(role) }}</option></select></label>
+        <div class="fin-field fin-wide"><span>Business role *</span><p v-if="options?.has_owner" class="team-help">An owner is already assigned. This move adds a team member and keeps the current owner.</p><RoleSelect v-model="form.role" :roles="roles" inline /></div>
         <label v-if="form.role!=='provider_admin'" class="fin-field">Venue access<select v-model="form.scope"><option value="all">All venues in this business</option><option value="selected">Selected business venues</option></select></label>
       </div><div v-if="scopeRequired" style="margin-top:16px"><label v-for="venue in options?.venues || []" :key="venue.id" class="fin-checkbox"><input v-model="form.location_ids" type="checkbox" :value="venue.id"/>{{ venue.name }}</label><p v-if="!options?.venues?.length" class="fin-help">This business has no venues yet. Choose all business venues or add a venue first.</p></div></fieldset>
-      <section v-if="preview" class="fin-section"><div class="fin-eyebrow">Review account move</div><dl class="fin-review-list"><dt>Account</dt><dd>{{ preview.user_name }}<br/>{{ preview.user_email }}</dd><dt>Business</dt><dd>{{ business.business_name }}</dd><dt>New role</dt><dd>{{ roleLabel(preview.role) }}</dd><dt>Access</dt><dd>{{ preview.scope_label }}</dd><dt>Platform access</dt><dd>Removed · existing sessions refreshed</dd></dl><p v-for="warning in preview.warnings || []" :key="warning" class="fin-notice">{{ warning }}</p><p v-for="blocker in preview.blockers || []" :key="blocker" class="fin-error">{{ blocker }}</p><label class="fin-checkbox"><input v-model="agreed" type="checkbox" :disabled="busy"/><span>I confirm this account should leave the platform team and receive the reviewed business role.</span></label></section>
+      <section v-if="preview" class="fin-section"><div class="fin-eyebrow">Review account move</div><div class="team-review"><dl><dt>Account</dt><dd>{{ preview.user_name }}<br/>{{ preview.user_email }}</dd><dt>Business</dt><dd>{{ business.business_name }}</dd><dt>New role</dt><dd>{{ roleLabel(preview.role) }}</dd><dt>Access</dt><dd>{{ preview.scope_label }}</dd><dt>Platform access</dt><dd>Removed · signed out of current sessions</dd></dl></div><ul v-if="preview.warnings?.length" class="team-changes"><li v-for="warning in preview.warnings" :key="warning">{{ warning }}</li></ul><p v-for="blocker in preview.blockers || []" :key="blocker" class="fin-error">{{ blocker }}</p><label class="fin-checkbox"><input v-model="agreed" type="checkbox" :disabled="busy"/><span>I confirm this account should leave the platform team and receive the reviewed business role.</span></label></section>
       <p v-if="error" class="fin-error" role="alert">{{ error }}</p>
-    </div><div class="modal-footer"><button class="btn btn-secondary" :disabled="busy" @click="emit('close')">Cancel</button><button v-if="preview" class="btn btn-secondary" :disabled="busy" @click="preview=null;agreed=false">Back to details</button><button class="btn btn-secondary" :disabled="busy || !options?.can_assign" @click="review">{{ busy ? 'Working…' : preview ? 'Refresh review' : 'Review assignment' }}</button><button v-if="preview" class="btn btn-primary" :disabled="busy || !agreed || !previewReady(preview)" @click="assign">Move account<ArrowRight :size="14"/></button></div>
+    </div><div class="modal-footer"><button class="btn btn-secondary" :disabled="busy" @click="emit('close')">Cancel</button><button v-if="preview" class="btn btn-secondary" :disabled="busy" @click="preview=null;agreed=false">Back to details</button><button :class="['btn', preview ? 'btn-secondary' : 'btn-primary']" :disabled="busy || !options?.can_assign" @click="review">{{ busy ? 'Working…' : preview ? 'Refresh review' : 'Review assignment' }}</button><button v-if="preview" class="btn btn-primary" :disabled="busy || !agreed || !previewReady(preview)" @click="assign">Move account<ArrowRight :size="14"/></button></div>
   </div></div>
 </template>

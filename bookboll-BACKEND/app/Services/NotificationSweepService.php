@@ -124,46 +124,8 @@ class NotificationSweepService
     /** @return array<int, array<string, mixed>> */
     protected function dueSubscriptions(int $ownerId, string $today, int $trialDays, int $renewalDays): array
     {
-        return []; // Contact listings do not manage academy customers.
-        $programs = ClassProgram::query()
-            ->where(fn ($q) => $q->where('mapped_owner_user_id', $ownerId)->orWhere('owner_user_id', (string) $ownerId))
-            ->get()
-            ->keyBy('id');
-        if ($programs->isEmpty()) {
-            return [];
-        }
-
-        $trialUntil   = Carbon::parse($today)->addDays($trialDays)->toDateString();
-        $renewalUntil = Carbon::parse($today)->addDays($renewalDays)->toDateString();
-
-        $subs = ClassSubscription::whereIn('program_id', $programs->keys())->get();
-
-        $out = [];
-        foreach ($subs as $s) {
-            $program = $programs->get($s->program_id);
-            if (! $program) {
-                continue;
-            }
-
-            $trialEnds = $s->trial_ends_at ? Carbon::parse($s->trial_ends_at)->toDateString() : null;
-            if ($s->trial_status === 'in_trial' && $trialEnds && $trialEnds >= $today && $trialEnds <= $trialUntil) {
-                $out[] = [
-                    'event_key' => 'trial_ending', 'subject_id' => (string) $s->id, 'cycle_key' => $trialEnds,
-                    'subscription' => $this->mapSub($s), 'program' => $this->mapProgram($program),
-                ];
-            }
-
-            $nextBilling = $s->next_billing_at ? Carbon::parse($s->next_billing_at)->toDateString() : null;
-            if ($s->status === 'active' && $s->trial_status === 'converted'
-                && $nextBilling && $nextBilling >= $today && $nextBilling <= $renewalUntil) {
-                $out[] = [
-                    'event_key' => 'membership_renewal_reminder', 'subject_id' => (string) $s->id, 'cycle_key' => $nextBilling,
-                    'subscription' => $this->mapSub($s), 'program' => $this->mapProgram($program),
-                ];
-            }
-        }
-
-        return $this->unsent($out, 'subscription');
+        // Providers manage academy members offline; no recurring customer billing reminders.
+        return [];
     }
 
     /**

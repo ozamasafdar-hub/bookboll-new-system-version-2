@@ -59,7 +59,7 @@ export function previewReady(preview, now = Date.now()) {
   return !!preview?.preview_token && !!preview?.expires_at && Number.isFinite(Date.parse(preview.expires_at)) && Date.parse(preview.expires_at) > now && Array.isArray(preview.blockers) && preview.blockers.length === 0
 }
 export function transferPreviewValid(data, form) {
-  return !!data?.preview_token && Array.isArray(data.blockers) && Array.isArray(data.warnings) &&
+  return (!form.arrival_policy || data?.arrival_policy === form.arrival_policy) && !!data?.preview_token && Array.isArray(data.blockers) && Array.isArray(data.warnings) &&
     ['eligible_count','pending_arrival_count','excluded_count','landlord_obligation_count'].every(k => Number.isInteger(data[k]) && data[k] >= 0) &&
     ['business_id','effective_from','history_mode'].every(k => String(data[k]) === String(form[k])) &&
     Array.isArray(data.totals) && data.totals.every(row => /^[A-Z]{3}$/.test(row.currency) && ['deposit_to_fee','provider_cash','earnings_delta'].every(k => row[k] != null && row[k] !== '' && Number.isFinite(Number(row[k]))))

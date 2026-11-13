@@ -53,7 +53,7 @@ class VenueTransferService
 
         return sendSuccess('Transfer options', [
             'contract_version' => self::CONTRACT_VERSION,
-            'reconciliation_version' => 3,
+            'reconciliation_version' => 4,
             'can_transfer'     => $this->canTransfer($actor),
             // Ownerless businesses are eligible destinations: an unclaimed
             // business is a valid operator, just one nobody has logged into.
@@ -85,10 +85,12 @@ class VenueTransferService
             'business_id'    => 'required|integer|exists:businesses,id',
             'effective_from' => 'required|date_format:Y-m-d',
             'history_mode'   => ['required', Rule::in(['preserve', 'legacy_deposit_fee'])],
+            'arrival_policy' => ['sometimes', Rule::in(['keep_pending', 'confirm_cash'])],
             'from_date'      => 'nullable|date_format:Y-m-d',
             'to_date'        => 'nullable|date_format:Y-m-d',
         ]);
 
+        $data['arrival_policy'] = $data['arrival_policy'] ?? 'keep_pending';
         $destination = Business::find($data['business_id']);
         $assessment = $this->assess($venue, $destination, $data);
 
@@ -99,6 +101,7 @@ class VenueTransferService
             'business_id'    => $destination->id,
             'effective_from' => $data['effective_from'],
             'history_mode'   => $data['history_mode'],
+            'arrival_policy' => $data['arrival_policy'],
             'from_date'      => $data['from_date'] ?? null,
             'to_date'        => $data['to_date'] ?? null,
             'eligible_count' => $assessment['eligible_count'],
@@ -119,12 +122,13 @@ class VenueTransferService
 
         return sendSuccess('Transfer preview', [
             'contract_version' => self::CONTRACT_VERSION,
-            'reconciliation_version' => 3,
+            'reconciliation_version' => 4,
             'preview_token'    => $row->token,
             'expires_at'       => \Carbon\Carbon::parse($row->expires_at)->utc()->toIso8601String(),
             'business_id'      => (string) $destination->id,
             'effective_from'   => $data['effective_from'],
             'history_mode'     => $data['history_mode'],
+            'arrival_policy'   => $data['arrival_policy'],
             'destination_name' => $destination->name ?: '',
             'eligible_count'          => $assessment['eligible_count'],
             'pending_arrival_count'   => $assessment['pending_arrival_count'],
@@ -185,7 +189,7 @@ class VenueTransferService
                 $blockers[] = 'The historical range is inverted.';
             } elseif ($destination) {
                 [$eligible, $pendingArrival, $excluded, $totals, $paymentIds, $exclusionReasons, $paymentChanges, $reportImpact]
-                    = $this->scanHistory($venue, $data['from_date'], $data['to_date'], $destination);
+                    = $this->scanHistory($venue, $data['from_date'], $data['to_date'], $destination, $data['arrival_policy'] ?? 'keep_pending');
 
                 foreach ($exclusionReasons as $reason => $n) {
                     $warnings[] = "{$n} excluded — {$reason}";
@@ -213,7 +217,7 @@ class VenueTransferService
             'payment_ids' => $paymentIds,
             'payment_changes' => $paymentChanges,
             'report_impact' => $reportImpact,
-            'state_hash'  => $this->stateHash($venue, $paymentIds),
+            'state_hash'  => $this->stateHash($venue, $paymentIds, $destination),
         ];
     }
 
@@ -225,7 +229,7 @@ class VenueTransferService
      *
      * @return array{0:int,1:int,2:int,3:array,4:array,5:array}
      */
-    protected function scanHistory(Venue $venue, string $from, string $to, Business $destination): array
+    protected function scanHistory(Venue $venue, string $from, string $to, Business $destination, string $arrivalPolicy): array
     {
         $bookings = Booking::query()
             ->where('venue_id', $venue->id)
@@ -260,7 +264,7 @@ class VenueTransferService
                 continue;
             }
 
-            $kind = Legacy::kindFor($p, $booking);
+            $kind = $this->reconciliationKind($p, $booking, $arrivalPolicy);
             if (! $kind) {
                 $excluded++;
                 $reason = $p->method === 'online' ? 'Online payment needs its own settlement evidence; never assumed cash.' : 'Not an eligible deposit or arrival receipt.';
@@ -321,7 +325,7 @@ class VenueTransferService
                     'owned_allocations'=>$payment->ownedAllocations->toArray()]);
                 $before[] = $raw;
                 if (in_array($payment->id, $ids, true)) {
-                    $raw = array_merge($raw, $this->correction($payment, $booking, $destination, 'preview', Legacy::kindFor($payment, $booking)), ['owned_allocations'=>[]]);
+                    $raw = array_merge($raw, $this->correction($payment, $booking, $destination, 'preview', $this->reconciliationKind($payment, $booking, $arrivalPolicy)), ['owned_allocations'=>[]]);
                 }
                 $after[] = $raw;
             }
@@ -391,6 +395,7 @@ class VenueTransferService
             $recheck = $this->assess($venue, $destination, [
                 'effective_from' => $preview->effective_from,
                 'history_mode'   => $preview->history_mode,
+                'arrival_policy' => $preview->arrival_policy,
                 'from_date'      => $preview->from_date,
                 'to_date'        => $preview->to_date,
             ]);
@@ -427,6 +432,7 @@ class VenueTransferService
                 'to_business_id'     => $destination->id,
                 'effective_from'     => $preview->effective_from,
                 'history_mode'       => $preview->history_mode,
+                'arrival_policy'     => $preview->arrival_policy,
                 'from_date'          => $preview->from_date,
                 'to_date'            => $preview->to_date,
                 'batch_id'           => 'vtb_'.Str::random(24),
@@ -443,7 +449,7 @@ class VenueTransferService
 
             if ($legacy) {
                 $this->reconcile((array) json_decode($preview->payment_ids ?: '[]', true),
-                    $transferId, $batch, $destination);
+                    $transferId, $batch, $destination, $preview->arrival_policy);
             }
 
             // The move itself.
@@ -474,7 +480,7 @@ class VenueTransferService
      *
      * @param  array<int,int>  $paymentIds
      */
-    protected function reconcile(array $paymentIds, int $transferId, string $batch, Business $destination): void
+    protected function reconcile(array $paymentIds, int $transferId, string $batch, Business $destination, string $arrivalPolicy): void
     {
         if (! $paymentIds) {
             return;
@@ -485,13 +491,19 @@ class VenueTransferService
         // Freeze every excluded sibling BEFORE changing the booking fallback.
         // Otherwise an untouched full-online/refunded record could silently move.
         foreach ($payments->pluck('booking')->unique('id') as $booking) {
-            Payment::where('booking_id', $booking->id)->whereNotIn('id', $paymentIds)
-                ->whereNull('financial_context')->update(['financial_context'=>json_encode($booking->financial_context ?? [])]);
+            foreach (Payment::where('booking_id', $booking->id)->whereNotIn('id', $paymentIds)->lockForUpdate()->get() as $excluded) {
+                // Empty/partial snapshots still inherit from the booking. Freeze
+                // that inherited ownership before changing the booking fallback.
+                $excluded->forceFill(['financial_context' => array_merge(
+                    ['operator'=>'unknown', 'channel'=>PaymentReportRules::channel($booking->getAttributes())],
+                    $booking->financial_context ?? [], $excluded->financial_context ?? []
+                )])->saveQuietly();
+            }
         }
 
         foreach ($payments as $p) {
             $booking = $p->booking;
-            $kind = Legacy::kindFor($p, $booking);
+            $kind = $this->reconciliationKind($p, $booking, $arrivalPolicy);
             if (! $kind) {
                 continue;
             }
@@ -505,7 +517,7 @@ class VenueTransferService
             // The old internal split survives in the audit, not as an active
             // allocation on a provider receipt.
             $p->ownedAllocations()->delete();
-            $bookingContexts[$booking->id] = array_merge($context,['reconciliation_kind'=>null]);
+            $bookingContexts[$booking->id] = array_merge(TransferPaymentContext::make($booking, $destination, $batch, $kind), ['reconciliation_kind'=>null]);
 
             DB::table('venue_transfer_allocations')->insert([
                 'transfer_id' => $transferId,
@@ -525,10 +537,17 @@ class VenueTransferService
         }
     }
 
+    private function reconciliationKind(Payment $payment, Booking $booking, string $arrivalPolicy): ?string
+    {
+        $kind = Legacy::kindFor($payment, $booking);
+        return $kind === Legacy::KIND_PROVIDER_CASH && $arrivalPolicy === 'keep_pending'
+            ? Legacy::KIND_PROVIDER_PENDING : $kind;
+    }
+
     /** Shared by the read-only preview and the audited commit. */
     private function correction(Payment $p, Booking $booking, Business $destination, string $batch, string $kind): array
     {
-        $values = ['financial_context'=>TransferPaymentContext::make($booking, $destination, $batch, $kind),
+        $values = ['financial_context'=>TransferPaymentContext::make($booking, $destination, $batch, $kind, $p->financial_context ?? []),
             'reconciliation_batch_id'=>$batch];
         if ($kind === Legacy::KIND_DEPOSIT_TO_FEE) return $values + ['type'=>\PaymentType::BOOKING_COMMISSION, 'recipient'=>'@bookboll'];
         if ($kind === Legacy::KIND_PROVIDER_PENDING) return $values + ['recipient'=>PaymentRecipient::forBusiness($destination)];
@@ -550,6 +569,7 @@ class VenueTransferService
                 'batch_id'       => $t->batch_id,
                 'effective_from' => $t->effective_from,
                 'history_mode'   => $t->history_mode,
+                'arrival_policy' => $t->arrival_policy,
                 'acknowledged_legacy_cash' => (bool) $t->acknowledged_legacy_cash,
             ],
             'venue' => [
@@ -564,7 +584,7 @@ class VenueTransferService
     /* ─────────────────────────────── shared ──────────────────────────────── */
 
     /** Binds the review to the exact rows and sums it was built from. */
-    protected function stateHash(Venue $venue, array $paymentIds): string
+    protected function stateHash(Venue $venue, array $paymentIds, ?Business $destination): string
     {
         sort($paymentIds);
 
@@ -581,6 +601,7 @@ class VenueTransferService
             'owner'   => $venue->owner_user_id,
             'business' => $venue->business_id,
             'operator' => $venue->operator_type,
+            'destination' => $destination ? [$destination->id, $destination->owner_id, $destination->name, $destination->status] : null,
             'rows'    => $fingerprint,
         ]));
     }

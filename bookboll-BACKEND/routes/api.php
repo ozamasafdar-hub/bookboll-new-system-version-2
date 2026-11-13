@@ -502,6 +502,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::get('businesses/capabilities', [BusinessController::class, 'capabilities'])->name('businesses.capabilities');
             Route::post('businesses', [BusinessController::class, 'adminStore'])->name('businesses.store');
             Route::post('businesses/{id}/invitations', [BusinessController::class, 'inviteMember'])->name('businesses.invitations');
+            Route::get('businesses/{id}/invitation-options', [BusinessController::class, 'invitationOptions']);
             // Moving an account into a business is reviewed, not a single click:
             // the move strips the account's platform access, so an admin sees
             // exactly what goes before anything happens.

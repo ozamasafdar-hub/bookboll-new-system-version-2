@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue'
+import { useRoute } from 'vue-router'
 import { Globe2, MapPin, ChevronRight, Pencil, ChevronDown, Search, Award, X, ToggleLeft, ToggleRight, Plus, Trash2, RefreshCw } from 'lucide-vue-next'
 import PaginationBar from '../components/PaginationBar.vue'
 import MarketSettingsEditor from '../components/MarketSettingsEditor.vue'
@@ -10,6 +11,8 @@ import { logAudit, AUDIT } from '../lib/audit.js'
 import { fetchGeographyCountries, fetchGeographyCities, updateCountryStatus, updateCityStatus, bulkUpdateCityStatus, resetCountryRewards } from '../lib/geography.js'
 import { DEFAULT_LOYALTY, loadLoyaltyPrograms, saveLoyaltyProgram } from '../lib/loyalty.js'
 const { isSuperAdmin, isCountryAdmin } = useCurrentUser()
+const route = useRoute()
+let openedFromLink = false
 const canManageGeo = computed(() => isSuperAdmin.value || isCountryAdmin.value)
 const countries = ref([]), globalSettings = ref(null), globalRewards = ref(DEFAULT_LOYALTY)
 const marketView = ref('onboarded'), countryPanels = ref({}), cityViews = ref({}), cityErrors = ref({})
@@ -30,6 +33,7 @@ async function load(page = countryPage.value) {
     if (!res.success) throw new Error(res.message || 'Could not load countries.')
     countries.value = res.data.countries || []
     globalSettings.value = res.data.global_settings
+    if (!openedFromLink && route.query.section === 'comeback' && isSuperAdmin.value) { openedFromLink = true; openSettings('global', {}, 'comeback') }
     countryTotal.value = Number(res.data.pagination?.total || 0)
     countryPage.value = Number(res.data.pagination?.current_page || page)
   } catch (e) { if (seq === loadSeq) loadError.value = e.message }

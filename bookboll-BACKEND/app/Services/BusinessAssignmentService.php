@@ -46,14 +46,15 @@ class BusinessAssignmentService
 
         // The owner seat is not assignable while it is taken. Offering it would
         // promise something the one-active-owner constraint will refuse.
-        if ($business->ownerMembership()->exists() || $business->owner_id) {
-            $roles = array_values(array_diff($roles, [BusinessMembership::ROLE_OWNER]));
+        if ($this->hasOwner($business)) {
+            $roles = array_values(array_diff($roles, ['provider_admin']));
         }
 
         return sendSuccess('Assignment options', [
             'contract_version' => self::CONTRACT_VERSION,
             'can_assign'       => true,
             'roles'            => array_values($roles),
+            'has_owner'        => $this->hasOwner($business),
             'candidates'       => $this->candidates($actor, trim((string) $request->input('search', ''))),
             'venues'           => $this->assignableVenues($business),
         ]);
@@ -142,7 +143,7 @@ class BusinessAssignmentService
         return Venue::query()
             ->where(function ($q) use ($business, $ownerId) {
                 if ($ownerId) {
-                    $q->orWhere('owner_user_id', $ownerId);
+                    $q->orWhere(fn ($legacy) => $legacy->whereNull('business_id')->where('owner_user_id', $ownerId));
                 }
                 $q->orWhere('business_id', $business->id);
             })
@@ -214,6 +215,11 @@ class BusinessAssignmentService
     {
         $warnings = [];
         $blockers = [];
+
+        if ($data['role'] === 'provider_admin') {
+            if ($this->hasOwner($business)) $blockers[] = 'This business already has an owner. Choose a staff role; this move cannot replace the owner.';
+            if ($data['scope'] !== 'all') $blockers[] = 'The business owner must have access to the whole business.';
+        }
 
         if (! $target) {
             return ['warnings' => [], 'blockers' => ['That account no longer exists.']];
@@ -291,6 +297,11 @@ class BusinessAssignmentService
         return User::role('super_admin')->where('status', User::ACTIVE)->count();
     }
 
+    protected function hasOwner(Business $business): bool
+    {
+        return (bool) $business->owner_id || $business->activeMemberships()->whereIn('role', BusinessMembership::MANAGING_ROLES)->exists();
+    }
+
     protected function scopeLabel(array $data, Business $business): string
     {
         if ($data['scope'] !== 'selected') {
@@ -312,6 +323,7 @@ class BusinessAssignmentService
         return hash('sha256', json_encode([
             'business'   => $business->id,
             'owner'      => $business->owner_id,
+            'owner_memberships' => $business->activeMemberships()->whereIn('role', BusinessMembership::MANAGING_ROLES)->orderBy('id')->pluck('user_id')->all(),
             'target'     => $target->id,
             'status'     => $target->status,
             'roles'      => $target->getRoleNames()->sort()->values()->all(),
@@ -338,6 +350,9 @@ class BusinessAssignmentService
         $done = BusinessAssignmentPreview::where('idempotency_key', $data['idempotency_key'])
             ->whereNotNull('membership_id')->first();
         if ($done) {
+            if ((int) $done->business_id !== $businessId || (int) $done->actor_user_id !== (int) $actor->id || $done->token !== $data['preview_token']) {
+                return sendError('That request key belongs to a different assignment.', [], 409);
+            }
             return sendSuccess('Account assigned', [
                 'contract_version' => self::CONTRACT_VERSION,
                 'membership'       => $this->mapMembership(BusinessMembership::find($done->membership_id)),
@@ -345,6 +360,7 @@ class BusinessAssignmentService
         }
 
         return DB::transaction(function () use ($data, $business, $actor) {
+            $business = Business::whereKey($business->id)->lockForUpdate()->firstOrFail();
             // Lock the review row so two commits cannot consume it at once.
             $preview = BusinessAssignmentPreview::where('token', $data['preview_token'])
                 ->lockForUpdate()->first();
@@ -399,7 +415,7 @@ class BusinessAssignmentService
             // role gate then turned away after the password had verified.
             $target->syncRoles([$preview->role]);
             $target->forceFill([
-                'owner_user_id'         => $business->owner_id,
+                'owner_user_id'         => $preview->role === 'provider_admin' ? null : $business->owner_id,
                 'assigned_country_ids'  => null,
                 'assigned_location_ids' => null,
                 'assigned_listing_ids'  => null,
@@ -411,13 +427,14 @@ class BusinessAssignmentService
             $membership = BusinessMembership::create([
                 'business_id'  => $business->id,
                 'user_id'      => $target->id,
-                'role'         => $preview->role,
+                'role'         => $preview->role === 'provider_admin' ? BusinessMembership::ROLE_OWNER : $preview->role,
                 'scope'        => $preview->scope,
                 'location_ids' => $preview->location_ids,
                 'status'       => BusinessMembership::STATUS_ACTIVE,
                 'version'      => 1,
                 'created_by'   => $actor->id,
             ]);
+            if ($preview->role === 'provider_admin') $business->update(['owner_id' => $target->id]);
 
             // Stale tokens would otherwise keep the old platform privileges
             // alive until they expired.

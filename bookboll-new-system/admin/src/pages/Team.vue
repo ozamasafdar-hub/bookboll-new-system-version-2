@@ -333,6 +333,7 @@ async function persistAdminUser(payload) {
     country_id: payload.country_id || null,
     assigned_country_ids: payload.assigned_country_ids || null,
     owner_user_id: payload.owner_user_id || null,
+    custom_permissions: payload.custom_permissions || { grant:[], revoke:[] },
     // Which venues this person may manage. Scoped roles only: for an owner or a
     // platform role the picker is hidden, and sending [] would strip their access.
     ...(isScopedRole(payload.role)
@@ -444,6 +445,7 @@ async function saveAdmin() {
     // field by field, so anything not named here never reaches the request — which
     // is why a selection of two venues still submitted an empty list.
     assigned_location_ids: [...(adminForm.value.assigned_location_ids || [])],
+    custom_permissions: adminForm.value.custom_permissions || { grant:[], revoke:[] },
   }
   if (resolvedUsername !== undefined) payload.username = resolvedUsername
   if (adminForm.value.role === 'platform_staff' && !editing.value) {
@@ -582,6 +584,7 @@ async function saveTeam() {
     email: teamForm.value.email.trim().toLowerCase(),
     role: teamForm.value.role,
     phone: teamForm.value.phone || null,
+    custom_permissions: teamForm.value.custom_permissions || { grant:[], revoke:[] },
     status: teamForm.value.status,
     // Venue pins, for the roles that are meant to be scoped. Omitted for the rest
     // so an unscoped role is never silently narrowed to nothing.
@@ -995,11 +998,11 @@ function avatarColor(id) {
           </div>
 
           <!-- Staff list (expanded) -->
-          <div v-if="expandedBusinesses.has(g.provider.business_id)" class="staff-section">
+          <div v-if="expandedBusinesses.has(g.provider.business_id)" class="staff-section"><div class="staff-section-heading"><strong>Business team</strong><span>{{ g.staff.length }} members · access limited to this business</span></div>
             <div class="table-wrap"><table class="staff-table">
               <thead>
                 <tr>
-                  <th>Staff Member</th><th>Role</th><th>Location</th><th>Status</th><th>Last Login</th><th></th>
+                  <th>Team member</th><th>Business role</th><th>Venue access</th><th>Status</th><th>Last sign-in</th><th></th>
                 </tr>
               </thead>
               <tbody>
@@ -1017,7 +1020,7 @@ function avatarColor(id) {
                   <td style="font-size:13px;color:var(--text-muted);">{{ scopeSummary(m) }}</td>
                   <td><span class="badge" :class="m.status==='active'?'badge-success':'badge-neutral'">{{ m.status }}</span></td>
                   <td style="font-size:12px;color:var(--text-muted);">{{ timeAgo(m.last_login) }}</td>
-                  <td><div class="row-actions"><button class="btn-icon" @click="openAdminEdit(m)"><Edit2 :size="15" /></button><button v-if="!m.isBusinessOwner" class="btn-icon danger" @click="removeAdmin(m)" aria-label="Remove team member"><Trash2 :size="15" /></button></div></td>
+                  <td><div class="row-actions"><button class="btn btn-sm btn-secondary" :aria-label="'Edit access for ' + m.full_name" @click="openAdminEdit(m)"><Edit2 :size="14" />Edit access</button><button v-if="!m.isBusinessOwner" class="btn-icon danger" @click="removeAdmin(m)" aria-label="Remove team member"><Trash2 :size="15" /></button></div></td>
                 </tr>
                 <tr v-if="!g.staff.length">
                   <td colspan="6" class="empty-staff">No team members yet. Invite an owner or staff member, or assign an existing platform account.</td>
@@ -1040,7 +1043,7 @@ function avatarColor(id) {
       <BusinessAssignment v-if="assignmentBusiness" :business="assignmentBusiness" @close="assignmentBusiness=null" @assigned="assignmentSaved"/>
       <!-- Admin modal -->
       <div v-if="showModal" class="modal-backdrop" @click.self="requestCloseTeamModal">
-        <div class="modal" v-dialog="requestCloseTeamModal" @input="markDirty" @change="markDirty">
+        <div class="modal team-dialog" v-dialog="requestCloseTeamModal" @input="markDirty" @change="markDirty">
           <div class="modal-header">
             <div class="modal-title">{{ newBusiness ? (businessReview ? 'Review new business' : 'Add business') : editing ? 'Edit user' : 'Invite user' }}</div>
             <button class="btn-icon" @click="requestCloseTeamModal" aria-label="Close"><X :size="18" /></button>
@@ -1073,7 +1076,7 @@ function avatarColor(id) {
             </div>
             <div v-if="!newBusiness" class="tm-section-title">Role &amp; access</div>
             <div v-if="!newBusiness" class="form-group"><label class="form-label">Role</label>
-              <RoleSelect v-model="adminForm.role" :roles="inviteRoles" />
+              <RoleSelect v-model="adminForm.role" :roles="inviteRoles" inline />
             </div>
             <div v-if="adminForm.role === 'provider_admin'" class="inline-business">
               <div class="inline-business-header"><Building2 :size="14" />Business details</div>
@@ -1277,7 +1280,7 @@ function avatarColor(id) {
 
       <!-- Provider modal -->
       <div v-if="showModal" class="modal-backdrop" @click.self="requestCloseTeamModal">
-        <div class="modal" v-dialog="requestCloseTeamModal" style="max-width:520px;" @input="markDirty" @change="markDirty">
+        <div class="modal team-dialog" v-dialog="requestCloseTeamModal" @input="markDirty" @change="markDirty">
           <div class="modal-header">
             <div class="modal-title">{{ editing ? 'Edit Member' : 'Invite Team Member' }}</div>
             <button class="btn-icon" @click="requestCloseTeamModal" aria-label="Close"><X :size="18" /></button>
@@ -1285,7 +1288,7 @@ function avatarColor(id) {
           <div class="modal-body">
             <div class="form-group" style="margin-bottom:20px;">
               <label class="form-label">Role</label>
-              <RoleSelect v-model="teamForm.role" :roles="ASSIGNABLE_TEAM_ROLES" />
+              <RoleSelect v-model="teamForm.role" :roles="ASSIGNABLE_TEAM_ROLES" inline />
             </div>
             <div class="form-row">
               <div class="form-group"><label class="form-label">Full name <span class="required">*</span></label><input aria-label="Full name" v-model="teamForm.full_name" :class="{ 'input-invalid': triedSave && !teamForm.full_name }" placeholder="Jane Smith" /></div>
@@ -1465,21 +1468,24 @@ function avatarColor(id) {
 
 /* Staff sub-table */
 .staff-section { border-top: 1px solid var(--border); background: var(--surface-hover, #fafafa); }
+.staff-section-heading { display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding:16px 20px; border-bottom:1px solid var(--border); }
+.staff-section-heading strong { font-size:14px; }
+.staff-section-heading span { font-size:12px; color:var(--text-muted); }
 .staff-table { width: 100%; border-collapse: collapse; }
 .staff-table th {
   padding: 9px 16px 9px 20px; font-size: 11px; font-weight: 600;
   text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted);
   background: var(--bg, #f1f5f9); border-bottom: 1px solid var(--border); text-align: left;
 }
-.staff-table td { padding: 11px 16px 11px 20px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.staff-table td { padding: 16px 16px 16px 20px; border-bottom: 1px solid var(--border); font-size: 13px; }
 .staff-table tbody tr:last-child td { border-bottom: none; }
 .staff-table tbody tr:hover td { background: var(--surface-hover, #f8fafc); }
 .avatar-sm.sm { width: 28px; height: 28px; font-size: 10px; }
 .empty-staff { text-align: center; color: var(--text-muted); font-size: 13px; padding: 20px; }
 
 .staff-add-row {
-  padding: 10px 20px 14px;
-  border-top: 1px dashed var(--border);
+  display:flex; gap:12px; flex-wrap:wrap; justify-content:flex-end; padding:16px 20px;
+  border-top: 1px solid var(--border);
   background: var(--surface-hover, #f8fafc);
 }
 .btn-sm { padding: 6px 12px; font-size: 13px; border-radius: 7px; display: inline-flex; align-items: center; gap: 5px; }

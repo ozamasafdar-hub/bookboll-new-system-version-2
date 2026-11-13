@@ -22,6 +22,27 @@ use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
 
+it('refuses a second owner even when the request bypasses the role picker', function () {
+    $actor=admin(); $b=ownedBusiness(); $owner=admin('provider_admin'); $target=admin('platform_staff');
+    $b->update(['owner_id'=>$owner->id]);
+    $this->actingAs($actor)->getJson("/api/admin/businesses/{$b->id}/assignment-options")->assertOk()
+        ->assertJsonPath('data.has_owner',true);
+    $options=$this->getJson("/api/admin/businesses/{$b->id}/assignment-options")->json('data.roles');
+    expect($options)->not->toContain('provider_admin');
+    $review=previewMove($actor,$b,$target,['role'=>'provider_admin']);
+    expect($review['blockers'])->not->toBeEmpty();
+    $this->postJson("/api/admin/businesses/{$b->id}/assignments",['preview_token'=>$review['preview_token'],'idempotency_key'=>'second-owner'])->assertStatus(409);
+    expect($b->fresh()->owner_id)->toBe($owner->id)->and($target->fresh()->hasRole('platform_staff'))->toBeTrue();
+});
+
+it('invalidates an owner review when another owner is assigned before commit', function () {
+    $actor=admin(); $b=ownedBusiness(); $target=admin('platform_staff');
+    $review=previewMove($actor,$b,$target,['role'=>'provider_admin']);
+    $owner=admin('provider_admin'); $b->update(['owner_id'=>$owner->id]);
+    $this->actingAs($actor)->postJson("/api/admin/businesses/{$b->id}/assignments",['preview_token'=>$review['preview_token'],'idempotency_key'=>'stale-owner'])->assertStatus(409);
+    expect($b->fresh()->owner_id)->toBe($owner->id);
+});
+
 beforeEach(function () {
     // Every assignable role has to exist: the move now syncs the account to the
     // role it grants, so a missing Spatie row would throw rather than silently
@@ -343,8 +364,8 @@ it('shows an assigned manager as the owner of the business', function () {
         'preview_token' => $preview['preview_token'], 'idempotency_key' => 'vis-'.uniqid(),
     ])->assertOk();
 
-    // owner_id is still null — the membership is what makes them the owner.
-    expect(Business::find($b->id)->owner_id)->toBeNull();
+    // The canonical owner link and active owner membership must agree.
+    expect(Business::find($b->id)->owner_id)->toBe($target->id);
 
     $row = collect($this->actingAs($actor)->getJson('/api/admin/businesses')->assertOk()
         ->json('data.businesses.data'))->firstWhere('id', $b->id);

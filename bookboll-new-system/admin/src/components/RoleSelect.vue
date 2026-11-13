@@ -11,6 +11,7 @@ import { Check, ChevronDown } from 'lucide-vue-next'
 const props = defineProps({
   modelValue: { type: String, default: '' },
   roles:      { type: Array,  default: () => [] },   // ordered role keys to offer
+  inline:     { type: Boolean, default: false },
 })
 const emit = defineEmits(['update:modelValue'])
 
@@ -29,7 +30,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick))
 </script>
 
 <template>
-  <div class="rs" ref="root" @keydown.esc.stop="open = false">
+  <div class="rs" :class="{ 'rs-inline': inline }" ref="root" @keydown.esc.stop="open = false">
     <button type="button" class="rs-trigger" :aria-expanded="open" :class="{ open }" @click="toggle">
       <span class="rs-dot" :style="{ background: current.color || '#94a3b8' }"></span>
       <span class="rs-trigger-text">
@@ -63,6 +64,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick))
 
 <style scoped>
 .rs { position: relative; }
+.rs-inline .rs-menu { position: static; margin-top: 8px; max-height: none; box-shadow: none; }
 .rs-trigger { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 10px; background: var(--surface, #ffffff); cursor: pointer; font: inherit; text-align: left; }
 .rs-trigger:hover { border-color: var(--primary); }
 .rs-trigger.open { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent); }

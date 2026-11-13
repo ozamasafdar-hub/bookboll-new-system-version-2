@@ -23,6 +23,8 @@ const props = defineProps({
   availableLocations: { type: Array, default: () => [] },  // [{id,name}]
   availableListings:  { type: Array, default: () => [] },  // [{id,name,location_id}]
   availablePrograms:  { type: Array, default: () => [] },  // [{id,name,location_id}]
+  editableCapabilities: { type: Array, default: null },
+  allowWholeBusiness: { type: Boolean, default: true },
 })
 const emit = defineEmits([
   'update:permissions', 'update:locationIds', 'update:listingIds', 'update:programIds',
@@ -38,7 +40,7 @@ const hasCustom = computed(() => grant.value.length > 0 || revoke.value.length >
 // for this role's side (e.g. provider Staff never see platform-only powers).
 const groups = computed(() => {
   const m = {}
-  for (const key of editableCapsForRole(props.role)) {
+  for (const key of editableCapsForRole(props.role).filter(c => !props.editableCapabilities || props.editableCapabilities.includes(c) || baseCaps.value.includes(c))) {
     const info = CAP_INFO[key]
     if (!info) continue
     ;(m[info.group] ||= []).push({ key, label: info.label })
@@ -105,9 +107,9 @@ const programOptions = computed(() => asOptions(scopedPrograms.value))
       <div class="pse-scope-top">
         <div>
           <div id="pse-scope-title" class="pse-section-title">Access scope</div>
-          <p class="pse-hint">Leave locations empty to give access to the whole business.</p>
+          <p class="pse-hint">{{ allowWholeBusiness ? 'Leave locations empty to give access to the whole business.' : 'Select at least one venue within your own access.' }}</p>
         </div>
-        <span class="pse-scope-pill" :class="{ all: !locationIds.length }"><MapPin :size="13" />{{ !locationIds.length ? 'Whole business' : `${locationIds.length} of ${availableLocations.length} locations` }}</span>
+        <span class="pse-scope-pill" :class="{ all: !locationIds.length }"><MapPin :size="13" />{{ !locationIds.length ? (allowWholeBusiness ? 'Whole business' : 'Select venues') : `${locationIds.length} of ${availableLocations.length} locations` }}</span>
       </div>
 
       <div class="pse-field">
@@ -119,7 +121,7 @@ const programOptions = computed(() => asOptions(scopedPrograms.value))
             <button type="button" :disabled="!locationIds.length" @click="unselectAllLocations">Unselect all</button>
           </div>
         </div>
-        <MultiSelect v-if="availableLocations.length" :model-value="locationIds" :options="locationOptions" placeholder="All locations" :max-display="2" @update:model-value="emit('update:locationIds', $event)" />
+        <MultiSelect v-if="availableLocations.length" :model-value="locationIds" :options="locationOptions" :placeholder="allowWholeBusiness ? 'All locations' : 'Select venues'" :max-display="2" @update:model-value="emit('update:locationIds', $event)" />
         <div v-else class="pse-empty">No locations yet.</div>
         <div v-if="selectedLocations.length" class="pse-selected" aria-label="Selected locations">
           <span v-for="l in selectedLocations" :key="l.id" class="pse-tagchip">{{ l.name }}<button type="button" :aria-label="`Remove ${l.name}`" @click="removeLocation(l.id)"><X :size="12" /></button></span>

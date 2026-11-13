@@ -46,7 +46,7 @@ function setup(t, props = {}) {
 const shown = iso => new Date(`${iso}T00:00:00Z`)
   .toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 
-const legacy = { business_id: 20, effective_from: '2026-10-22', history_mode: 'legacy_deposit_fee', from_date: '2026-10-01', to_date: '2026-10-21' }
+const legacy = { business_id: 20, effective_from: '2026-10-22', history_mode: 'legacy_deposit_fee', arrival_policy: 'confirm_cash', from_date: '2026-10-01', to_date: '2026-10-21' }
 
 // ── the cut-off ────────────────────────────────────────────────────────────
 

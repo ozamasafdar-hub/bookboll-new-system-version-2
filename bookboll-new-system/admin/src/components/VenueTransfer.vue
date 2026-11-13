@@ -32,7 +32,7 @@ const emit = defineEmits(['close', 'transferred'])
 const options = ref(null)
 const today = new Date()
 const todayKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
-const form = ref({ business_id: '', effective_from: todayKey, history_mode: 'preserve', from_date: '', to_date: '' })
+const form = ref({ business_id: '', effective_from: todayKey, history_mode: 'preserve', arrival_policy: 'keep_pending', from_date: '', to_date: '' })
 const businessSearch = ref('')
 const businessOptions = computed(() => (options.value?.businesses || []).filter(b =>
   String(b.id) === String(form.value.business_id) || b.name.toLowerCase().includes(businessSearch.value.trim().toLowerCase())))
@@ -110,7 +110,7 @@ const effects = computed(() => {
     const span = `${fmtDate(form.value.from_date)} – ${fmtDate(form.value.to_date)}`
     rows.push(
       { tone: 'go', text: `Paid online deposits on customer bookings played ${span} become Bookboll's fee.` },
-      { tone: 'go', text: `Eligible customer arrival balances become cash ${to} already collected. Unpaid staff bookings stay pending with no platform fee.` },
+      { tone: 'go', text: form.value.arrival_policy === 'confirm_cash' ? `Confirmed customer arrival balances become cash ${to} already collected. Unpaid staff bookings stay pending.` : 'Unpaid balances stay pending for the provider. Staff bookings have no platform fee.' },
     )
   } else {
     rows.push({ tone: 'go', text: 'Every existing fee, receipt and payment stays exactly as recorded.' })
@@ -166,7 +166,7 @@ async function review() {
     error.value = dateRangeError(form.value.from_date, form.value.to_date)
     if (!error.value && form.value.to_date >= form.value.effective_from) error.value = 'Legacy history must end before the transfer date.'
   }
-  if (isLegacy.value && options.value?.reconciliation_version !== 3) error.value = 'This server needs the updated payment reconciliation before legacy history can be changed.'
+  if (isLegacy.value && options.value?.reconciliation_version !== 4) error.value = 'This server needs the updated payment reconciliation before legacy history can be changed.'
   if (error.value || busy.value || !options.value?.can_transfer) return
 
   busy.value = true
@@ -294,6 +294,10 @@ load()
           </label>
 
           <div v-if="isLegacy" class="vt-history">
+            <h3 class="vt-h3">Unpaid customer arrival balances</h3>
+            <label class="fin-choice"><input v-model="form.arrival_policy" type="radio" value="keep_pending"/><span><strong>Keep pending</strong><small>Correct the recipient only. The provider still needs to collect these balances.</small></span></label>
+            <label class="fin-choice"><input v-model="form.arrival_policy" type="radio" value="confirm_cash"/><span><strong>Provider already collected the cash</strong><small>Use only when you can confirm collection. The review shows exactly which balances will become paid.</small></span></label>
+
             <p class="fin-notice">Staff-added bookings have no platform fee. Their unpaid balances stay pending for the provider to collect.</p>
             <div class="fin-form-grid">
               <label class="fin-field">History from *<input v-model="form.from_date" type="date" /></label>
@@ -343,7 +347,7 @@ load()
 
           <p v-if="isLegacy" class="fin-notice vt-legal">
             <Info :size="15" aria-hidden="true" />
-            <span>This confirms historical cash collection. It does not send money to the provider.
+            <span>This corrects historical ownership. Marking cash as collected is a separate choice above; no money is sent to the provider.
               Skipped-payment slot blocks are excluded. Cancelled, refunded, disputed or ambiguous
               records must be excluded or resolved during review.</span>
           </p>
@@ -361,7 +365,7 @@ load()
 
           <dl class="fin-review-list vt-terms">
             <dt>Handover date</dt><dd>{{ fmtDate(form.effective_from) }}</dd>
-            <dt>Historical payments</dt>
+            <dt v-if="isLegacy">Unpaid customer balances</dt><dd v-if="isLegacy">{{ form.arrival_policy === 'keep_pending' ? 'Remain pending' : 'Confirm cash already collected' }}</dd><dt>Historical payments</dt>
             <dd>{{ isLegacy ? `${fmtDate(form.from_date)} – ${fmtDate(form.to_date)} · reconciled` : 'Kept unchanged' }}</dd>
           </dl>
 
@@ -376,8 +380,8 @@ load()
             <div class="vt-money-head"><strong>{{ total.currency }}</strong></div>
             <div class="fin-row"><span>Paid deposits → Bookboll fee</span><strong>{{ money(total.deposit_to_fee, total.currency) }}</strong></div>
             <div class="fin-row"><span>Arrival cash → collected directly by provider</span><strong>{{ money(total.provider_cash, total.currency) }}</strong></div>
-            <div v-if="total.provider_pending" class="fin-row"><span>Staff booking balances → stay pending</span><strong>{{ money(total.provider_pending, total.currency) }}</strong></div>
-            <div v-if="total.provider_already_paid" class="fin-row"><span>Already collected → provider revenue</span><strong>{{ money(total.provider_already_paid, total.currency) }}</strong></div><p class="fin-help vt-money-note">Deposits are existing receipts, not new earnings. This records the provider’s own cash collection. Bookboll owes no payout for these arrival balances.</p>
+            <div v-if="total.provider_pending" class="fin-row"><span>Provider balances → stay pending</span><strong>{{ money(total.provider_pending, total.currency) }}</strong></div>
+            <div v-if="total.provider_already_paid" class="fin-row"><span>Already collected → provider revenue</span><strong>{{ money(total.provider_already_paid, total.currency) }}</strong></div><p class="fin-help vt-money-note">Deposits are existing receipts, not new earnings. Paid and pending amounts remain separate. Bookboll owes no payout for these arrival balances.</p>
           </div>
 
           <section v-for="impact in preview.report_impact || []" :key="impact.currency" class="vt-money fin-panel">
@@ -438,7 +442,7 @@ load()
  * palettes, and a test walks this block to keep it that way. A token the theme
  * does not define falls through to whatever literal follows it, which is how a
  * panel ends up light-coloured in dark mode with light text on top of it. */
-.vt-dialog { width: min(760px, calc(100vw - 24px)); max-width: 760px; }
+.vt-dialog { width: min(920px, calc(100vw - 24px)); max-width: 920px; }
 .vt-fieldset { border: 0; padding: 0; margin: 0; }
 .vt-steps { display:flex; list-style:none; padding:0; margin:0 0 20px; gap:20px; font-size:13px; color:var(--text-muted); }
 .vt-steps li { display:flex; align-items:center; gap:8px; }

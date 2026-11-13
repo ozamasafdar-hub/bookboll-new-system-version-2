@@ -1017,6 +1017,8 @@ class UserService
             'business_types'         => 'nullable|array',
         ]);
 
+        $formData += $this->validatedPermissionOverrides($request, $formData['role']);
+
         if (in_array($formData['role'], $providerTeamRoles, true) && empty($formData['owner_user_id'])) {
             return sendError('Provider staff require an owner_user_id.', [
                 'owner_user_id' => ['Select the business owner for this team member.'],
@@ -1063,6 +1065,7 @@ class UserService
                 'phone'                 => $formData['phone'] ?? null,
                 'country_id'            => $formData['country_id'] ?? null,
                 'assigned_country_ids'  => $formData['assigned_country_ids'] ?? null,
+                'custom_permissions' => $formData['custom_permissions'] ?? null,
                 'owner_user_id'         => in_array($formData['role'], $providerTeamRoles, true)
                     ? ($formData['owner_user_id'] ?? null)
                     : null,
@@ -1264,6 +1267,18 @@ class UserService
         return $this->userModel->findOrFail($id);
     }
 
+    private function validatedPermissionOverrides($request, string $role): array
+    {
+        $provider = in_array($role, \App\Support\Capabilities::providerRoles(), true);
+        $caps = $provider ? \App\Support\Capabilities::ownerCaps() : \App\Support\Capabilities::all();
+        return $request->validate([
+            'custom_permissions' => 'sometimes|array:grant,revoke',
+            'custom_permissions.grant' => 'sometimes|array', 'custom_permissions.revoke' => 'sometimes|array',
+            'custom_permissions.grant.*' => ['string', \Illuminate\Validation\Rule::in(array_intersect($caps, $request->user()->capabilities()))],
+            'custom_permissions.revoke.*' => ['string', \Illuminate\Validation\Rule::in($caps)],
+        ]);
+    }
+
     public function updateUser($request, $id)
     {
         $user = $this->findById($id);
@@ -1304,6 +1319,8 @@ class UserService
             'business_name'          => 'nullable|string|max:150',
         ]);
 
+        $formData += $this->validatedPermissionOverrides($request, $formData['role'] ?? $user->getRoleNames()->first() ?? 'staff');
+
         try {
             DB::beginTransaction();
 
@@ -1314,6 +1331,7 @@ class UserService
                 'phone'  => array_key_exists('phone', $formData) ? $formData['phone'] : null,
             ], fn ($value) => $value !== null);
 
+            if (array_key_exists('custom_permissions', $formData)) $updateData['custom_permissions'] = $formData['custom_permissions'];
             if (array_key_exists('country_id', $formData)) {
                 $updateData['country_id'] = $formData['country_id'];
             }
@@ -1363,6 +1381,12 @@ class UserService
                 }
 
                 $user->venues()->sync($formData['venues'] ?? []);
+                // Remove stale membership pins when the edited JSON/pivot becomes
+                // authoritative. Otherwise a removed venue remains accessible.
+                \App\Models\BusinessMembership::where('user_id', $user->id)
+                    ->where('status', \App\Models\BusinessMembership::STATUS_ACTIVE)
+                    ->update(['scope'=>'all', 'location_ids'=>null]);
+
 
                 // Mirror into the json column the dashboard reads, so removing a
                 // venue in the UI actually removes it everywhere.

@@ -45,12 +45,6 @@ export const TEMPLATE_VARS = [
     { code: '[booking_code]', label: 'Booking reference',    sample: '#7AF320' },
     { code: '[players]',      label: 'Number of players',    sample: '10' },
   ]},
-  { group: 'Membership', vars: [
-    { code: '[program]',           label: 'Program name',        sample: 'Elite Football Academy' },
-    { code: '[plan]',              label: 'Billing plan',        sample: 'Monthly' },
-    { code: '[next_billing_date]', label: 'Next billing date',   sample: 'Aug 4, 2026' },
-    { code: '[trial_end_date]',    label: 'Trial end date',      sample: 'Jul 18, 2026' },
-  ]},
   { group: 'Money', vars: [
     { code: '[amount]',         label: 'Amount',              sample: '250.00' },
     { code: '[currency]',       label: 'Currency',            sample: 'AED' },
@@ -63,7 +57,6 @@ export const TEMPLATE_VARS = [
   { group: 'Links', vars: [
     { code: '[booking_link]',    label: 'View booking link',      sample: 'bookboll.com/my-bookings' },
     { code: '[cancel_link]',     label: 'Cancel booking link',    sample: 'bookboll.com/my-bookings?cancel=7AF320' },
-    { code: '[membership_link]', label: 'Manage membership link', sample: 'bookboll.com/my-memberships' },
     { code: '[website_link]',    label: 'Your website link',      sample: 'dubaisports.bookboll.com' },
     { code: '[review_link]',     label: 'Leave-a-review link',    sample: 'bookboll.com/review/7AF320' },
   ]},
@@ -110,41 +103,6 @@ export const NOTIFICATION_EVENTS = [
     key: 'payment_receipt', label: 'Payment receipt', icon: 'Receipt',
     desc: 'Sent when a payment is collected (online or marked paid at the venue).',
     audiences: ['client', 'provider'],
-  },
-  {
-    key: 'membership_started', label: 'Membership started', icon: 'GraduationCap',
-    desc: 'Welcome message when a customer joins one of your programs.',
-    audiences: ['client', 'provider'],
-  },
-  {
-    key: 'trial_ending', label: 'Trial ending soon', icon: 'Hourglass',
-    desc: 'Nudges a trial member before their free trial converts to a paid plan.',
-    audiences: ['client'], remindTrial: true,
-  },
-  {
-    key: 'membership_renewal_reminder', label: 'Renewal reminder', icon: 'Hourglass',
-    desc: 'Heads-up to a member before their next recurring charge. Pick how long before below.',
-    audiences: ['client'], remindRenewal: true,
-  },
-  {
-    key: 'membership_payment', label: 'Membership renewal charged', icon: 'Repeat',
-    desc: 'Receipt for each recurring membership charge.',
-    audiences: ['client'],
-  },
-  {
-    key: 'membership_payment_failed', label: 'Payment failed', icon: 'CreditCard',
-    desc: 'Sent when a recurring charge is declined — nudges the member to update their card. Pick how long they have below.',
-    audiences: ['client', 'provider'], remindDunning: true,
-  },
-  {
-    key: 'membership_cancelled', label: 'Membership cancelled', icon: 'UserX',
-    desc: 'Confirms a cancelled membership and when access ends.',
-    audiences: ['client', 'provider'],
-  },
-  {
-    key: 'membership_winback', label: 'Win back a member', icon: 'HeartHandshake',
-    desc: 'Invites a cancelled member back with a soft offer.',
-    audiences: ['client'],
   },
   {
     key: 'review_request', label: 'Review request', icon: 'Star',
@@ -224,80 +182,6 @@ const BUILTIN_TEMPLATES = {
       '💰 Payment collected\n[currency] [amount] · [payment_method]\n[customer_name] · Ref [booking_code]'
     ),
   },
-  membership_started: {
-    client: T(
-      'Welcome to [program]! 🎉',
-      'Hi [customer_first_name],\n\nWelcome to [program] at [business_name]!\n\nPlan: [plan]\nFirst billing: [next_billing_date]\n\nManage your membership anytime: [membership_link]\n\nSee you at the first session!\n[business_name]',
-      'Welcome to [program]! Plan: [plan]. First billing: [next_billing_date]. Manage: [membership_link] [business_name]',
-      '🎉 Welcome to [program], [customer_first_name]!\nPlan: [plan] · First billing: [next_billing_date]\nManage anytime: [membership_link]\nSee you at the first session! [business_name]'
-    ),
-    provider: T(
-      'New member: [customer_name] joined [program]',
-      'New membership.\n\n[customer_name] ([customer_email]) joined [program].\nPlan: [plan] · Next billing: [next_billing_date]',
-      'New member: [customer_name] joined [program]. Plan: [plan]. Next billing: [next_billing_date].',
-      '🎉 New member\n[customer_name] ([customer_email]) joined [program]\nPlan: [plan] · Next billing: [next_billing_date]'
-    ),
-  },
-  trial_ending: {
-    client: T(
-      'Your free trial ends [trial_end_date]',
-      'Hi [customer_first_name],\n\nYour free trial of [program] ends on [trial_end_date]. After that your [plan] plan starts at [currency] [amount].\n\nLoving it? Nothing to do — you’re all set.\nNot for you? Cancel anytime before then: [membership_link]\n\n[business_name]',
-      'Free trial of [program] ends [trial_end_date], then [plan] at [currency] [amount]. Cancel anytime before: [membership_link]',
-      '⏳ Your free trial ends [trial_end_date]\nAfter that, your [plan] plan for [program] starts at [currency] [amount].\nLoving it? You\'re all set. Not for you? Cancel: [membership_link]'
-    ),
-  },
-  membership_renewal_reminder: {
-    client: T(
-      'Your [program] membership renews [next_billing_date]',
-      'Hi [customer_first_name],\n\nJust a heads-up — your [plan] membership for [program] renews on [next_billing_date] for [currency] [amount].\n\nNo action needed — we’ll charge the card on file automatically.\nNeed to make a change? [membership_link]\n\n[business_name]',
-      'Reminder: your [program] membership ([plan]) renews [next_billing_date] for [currency] [amount]. No action needed. Manage: [membership_link]',
-      '⏳ Renewal reminder\n[program] · [plan] · [currency] [amount]\nRenews [next_billing_date] — no action needed, we’ll charge your card on file.\nManage: [membership_link]'
-    ),
-  },
-  membership_payment: {
-    client: T(
-      'Receipt: [program] — [currency] [amount]',
-      'Hi [customer_first_name],\n\nYour [plan] membership payment went through.\n\nProgram: [program]\nAmount: [currency] [amount]\nNext billing: [next_billing_date]\n\nManage your membership: [membership_link]\n\n[business_name]',
-      'Payment received: [currency] [amount] for [program] ([plan]). Next billing: [next_billing_date]. Manage: [membership_link]',
-      '🧾 Membership payment received\n[program] · [plan] · [currency] [amount]\nNext billing: [next_billing_date]\nManage: [membership_link]'
-    ),
-  },
-  membership_payment_failed: {
-    client: T(
-      'Action needed: [program] payment failed',
-      'Hi [customer_first_name],\n\nWe couldn’t process your [plan] membership payment for [program] ([currency] [amount]).\n\nPlease update your card by [next_billing_date] to keep your membership active — otherwise it may be paused.\n\nUpdate your payment details: [membership_link]\n\n[business_name]',
-      'We couldn\'t process your [program] payment ([currency] [amount]). Update your card by [next_billing_date] to keep your membership: [membership_link]',
-      '⚠️ Payment failed for [program]\n[plan] · [currency] [amount]\nUpdate your card by [next_billing_date] to keep your membership active.\nUpdate: [membership_link]'
-    ),
-    provider: T(
-      'Payment failed: [customer_name] — [program]',
-      'A recurring payment failed.\n\n[customer_name] ([customer_email]) — [program]\nAmount: [currency] [amount]\nRetry until: [next_billing_date]\n\nWe’ve asked them to update their card. No action needed unless it stays unpaid.',
-      'Payment failed: [customer_name] — [program] ([currency] [amount]). Retrying until [next_billing_date].',
-      '⚠️ Payment failed\n[customer_name] — [program]\n[currency] [amount] · retrying until [next_billing_date]'
-    ),
-  },
-  membership_cancelled: {
-    client: T(
-      'Your [program] membership is cancelled',
-      'Hi [customer_first_name],\n\nYour membership to [program] has been cancelled. You can keep attending until [next_billing_date].\n\nChanged your mind? Rejoin anytime: [website_link]\n\n[business_name]',
-      'Your [program] membership is cancelled. You can keep attending until [next_billing_date]. Rejoin anytime: [website_link]',
-      'Your [program] membership is cancelled.\nYou can keep attending until [next_billing_date].\nChanged your mind? Rejoin anytime: [website_link]'
-    ),
-    provider: T(
-      'Membership cancelled: [customer_name] — [program]',
-      '[customer_name] cancelled their [program] membership.\nAccess ends: [next_billing_date]',
-      '[customer_name] cancelled their [program] membership. Access ends [next_billing_date].',
-      'Membership cancelled\n[customer_name] — [program]\nAccess ends: [next_billing_date]'
-    ),
-  },
-  membership_winback: {
-    client: T(
-      'We’d love to have you back at [program]',
-      'Hi [customer_first_name],\n\nWe noticed you left [program] — and we’d love to welcome you back.\n\nCome back this month and your first month is on us. No pressure, and you can cancel anytime.\n\nRejoin here: [membership_link]\n\nHope to see you on the court again,\n[business_name]',
-      'We miss you at [program], [customer_first_name]! Come back this month and your first month is on us: [membership_link]',
-      '💚 We’d love you back at [program]\nRejoin this month and your first month is on us — cancel anytime.\nRejoin: [membership_link]'
-    ),
-  },
   review_request: {
     client: T(
       'How was [listing] at [business_name]?',
@@ -323,9 +207,6 @@ export function builtinSettings() {
   }
   return {
     remind_before_days: 1,
-    trial_ending_days: 3,
-    renewal_reminder_days: 3,
-    dunning_retry_days: 3,
     events,
   }
 }
@@ -340,11 +221,18 @@ function deepMerge(base, patch) {
   return out
 }
 
+// Never revive obsolete auto-billing templates from saved platform/business settings.
+export function currentNotificationSettings(settings) {
+  const allowed = new Set(NOTIFICATION_EVENTS.map(event => event.key))
+  return { remind_before_days: settings.remind_before_days ?? 1,
+    events: Object.fromEntries(Object.entries(settings.events || {}).filter(([key]) => allowed.has(key))) }
+}
+
 /** Marketplace defaults (Laravel settings), builtin-merged. */
 export async function loadPlatformNotificationSettings() {
   const res = await apiFetch('/admin/notification-templates')
   if (!res.success) return builtinSettings()
-  return deepMerge(builtinSettings(), res.data?.templates || null)
+  return currentNotificationSettings(deepMerge(builtinSettings(), res.data?.templates || null))
 }
 
 /**
@@ -359,7 +247,7 @@ export async function loadProviderNotificationSettings(_ownerId) {
   }
   const platformMerged = deepMerge(builtinSettings(), res.data?.platform || null)
   const saved = res.data?.templates || null
-  return { settings: deepMerge(platformMerged, saved), providerSaved: saved }
+  return { settings: currentNotificationSettings(deepMerge(platformMerged, saved)), providerSaved: saved }
 }
 
 /** Save marketplace defaults (super admin / platform staff). */

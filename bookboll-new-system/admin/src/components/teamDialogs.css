@@ -1,0 +1,18 @@
+.modal.team-dialog { width: min(800px, calc(100vw - 32px)); max-width: 800px; max-height: calc(100dvh - 40px); }
+.team-dialog .modal-header, .team-dialog .modal-footer { flex-shrink: 0; padding: 22px 26px; }
+.team-dialog .modal-body { padding: 24px 26px; }
+.team-dialog h2 { margin: 0; font-size: 20px; line-height: 1.4; }
+.team-dialog h3 { margin: 0 0 14px; font-size: 15px; }
+.team-eyebrow { margin: 0 0 6px; color: var(--primary-ink); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.team-help { color: var(--text-muted); font-size: 13px; line-height: 1.6; margin: 8px 0 14px; }
+.team-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.team-form-section + .team-form-section { border-top: 1px solid var(--border); padding-top: 22px; margin-top: 22px; }
+.team-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.team-form-grid .form-group { margin: 0; }
+.team-status { max-width: 320px; margin-top: 18px; }
+.team-review { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+.team-review dl { display: grid; grid-template-columns: 135px 1fr; gap: 12px 20px; margin: 0; font-size: 14px; }
+.team-review dt { color: var(--text-muted); }
+.team-review dd { margin: 0; text-align: left; overflow-wrap: anywhere; }
+.team-changes { padding: 16px 20px 16px 36px; background: var(--warning-bg); border-radius: 10px; margin: 18px 0; font-size: 13px; line-height: 1.7; color: var(--warning-ink); }
+@media(max-width:600px) { .team-form-grid { grid-template-columns: 1fr; } .team-dialog .modal-body, .team-dialog .modal-header, .team-dialog .modal-footer { padding: 18px; } .team-review dl { grid-template-columns: 1fr; gap: 5px; } .team-review dd { margin-bottom: 12px; } }
