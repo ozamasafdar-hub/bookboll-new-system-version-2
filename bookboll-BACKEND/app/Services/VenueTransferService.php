@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Booking;
 use App\Models\Business;
+use App\Models\BusinessMembership;
 use App\Models\Payment;
 use App\Models\Venue;
 use App\Models\VenueOperatingAgreement;
@@ -59,12 +60,13 @@ class VenueTransferService
             // business is a valid operator, just one nobody has logged into.
             'businesses'       => Business::query()
                 ->whereIn('status', [Business::STATUS_ACTIVE, Business::STATUS_PENDING])
+                ->with(['activeMemberships' => fn ($q) => $q->whereIn('role', BusinessMembership::MANAGING_ROLES)->orderBy('id')])
                 ->orderBy('name')
                 ->get(['id', 'name', 'owner_id'])
                 ->map(fn (Business $b) => [
                     'id'            => (string) $b->id,
                     'name'          => $b->name ?: '',
-                    'owner_user_id' => $b->owner_id ? (string) $b->owner_id : null,
+                    'owner_user_id' => ($owner = $this->destinationOwnerId($b)) ? (string) $owner : null,
                 ])->values()->all(),
         ]);
     }
@@ -455,7 +457,7 @@ class VenueTransferService
             // The move itself.
             $venue->forceFill([
                 'business_id'   => $destination->id,
-                'owner_user_id' => $destination->owner_id,
+                'owner_user_id' => $this->destinationOwnerId($destination),
                 'operator_type' => 'provider',
             ])->save();
 
@@ -583,6 +585,15 @@ class VenueTransferService
 
     /* ─────────────────────────────── shared ──────────────────────────────── */
 
+    /** Older admin-created businesses attach their owner through membership. */
+    protected function destinationOwnerId(Business $business): ?int
+    {
+        $owner = $business->owner_id ?: $business->activeMemberships
+            ->whereIn('role', BusinessMembership::MANAGING_ROLES)->first()?->user_id;
+
+        return $owner ? (int) $owner : null;
+    }
+
     /** Binds the review to the exact rows and sums it was built from. */
     protected function stateHash(Venue $venue, array $paymentIds, ?Business $destination): string
     {
@@ -602,6 +613,7 @@ class VenueTransferService
             'business' => $venue->business_id,
             'operator' => $venue->operator_type,
             'destination' => $destination ? [$destination->id, $destination->owner_id, $destination->name, $destination->status] : null,
+            'destination_owners' => $destination?->activeMemberships()->whereIn('role', BusinessMembership::MANAGING_ROLES)->orderBy('id')->get(['user_id', 'role'])->toArray(),
             'rows'    => $fingerprint,
         ]));
     }

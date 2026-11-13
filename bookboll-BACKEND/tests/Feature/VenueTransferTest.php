@@ -61,6 +61,28 @@ it('requires a fresh review when the destination owner changes',function () {
     expect($v->fresh()->business_id)->toBeNull();
 });
 
+it('recognizes membership-based owners in transfer options and the moved venue', function () {
+    $a = transferAdmin(); $v = legacyVenue(); $d = destinationBusiness(); $owner = User::factory()->create();
+    \App\Models\BusinessMembership::create(['business_id' => $d->id, 'user_id' => $owner->id,
+        'role' => 'owner', 'status' => 'active', 'scope' => 'all']);
+    $options = $this->actingAs($a)->getJson("/api/admin/venues/{$v->id}/transfer-options")->assertOk();
+    expect(collect($options->json('data.businesses'))->firstWhere('id', (string) $d->id)['owner_user_id'])->toBe((string) $owner->id);
+    $review = previewTransfer($a, $v, $d, ['history_mode' => 'preserve'])->assertOk();
+    $this->postJson("/api/admin/venues/{$v->id}/transfers", ['preview_token' => $review->json('data.preview_token'),
+        'idempotency_key' => 'membership-owner-move'])->assertOk();
+    expect((int) $v->fresh()->owner_user_id)->toBe($owner->id)->and((int) $v->fresh()->business_id)->toBe($d->id);
+});
+
+it('invalidates a transfer review when the destination gains a membership owner', function () {
+    $a = transferAdmin(); $v = legacyVenue(); $d = destinationBusiness();
+    $review = previewTransfer($a, $v, $d, ['history_mode' => 'preserve'])->assertOk();
+    \App\Models\BusinessMembership::create(['business_id' => $d->id, 'user_id' => User::factory()->create()->id,
+        'role' => 'owner', 'status' => 'active', 'scope' => 'all']);
+    $this->postJson("/api/admin/venues/{$v->id}/transfers", ['preview_token' => $review->json('data.preview_token'),
+        'idempotency_key' => 'changed-membership-owner'])->assertStatus(409);
+    expect($v->fresh()->business_id)->toBeNull();
+});
+
 function transferAdmin(): User
 {
     $u = User::factory()->create(['status' => User::ACTIVE]);

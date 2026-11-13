@@ -42,7 +42,7 @@ const groups = computed(() => {
   const m = {}
   for (const key of editableCapsForRole(props.role).filter(c => !props.editableCapabilities || props.editableCapabilities.includes(c) || baseCaps.value.includes(c))) {
     const info = CAP_INFO[key]
-    if (!info) continue
+    if (!info || info.retired) continue
     ;(m[info.group] ||= []).push({ key, label: info.label })
   }
   return Object.entries(m).map(([group, caps]) => ({ group, caps }))

@@ -38,6 +38,8 @@ const businessOptions = computed(() => (options.value?.businesses || []).filter(
   String(b.id) === String(form.value.business_id) || b.name.toLowerCase().includes(businessSearch.value.trim().toLowerCase())))
 const impactRows = [['bookboll_received','Bookboll received'], ['platform_fees','Of which: platform fees'], ['provider_received','Provider received'], ['provider_pending','Provider still to collect']]
 const preview = ref(null)
+const dialogBody = ref(null)
+watch(() => Boolean(preview.value), () => dialogBody.value?.scrollTo({ top: 0 }), { flush: 'post' })
 const agreed = ref(false)
 const busy = ref(false)
 const error = ref('')
@@ -133,9 +135,9 @@ const reviewStats = computed(() => {
   if (form.value.history_mode === 'preserve') return [landlord]
 
   return [
-    { label: 'Payment records updated', value: count(p.payment_count), tone: 'go' },
-    { label: 'Deposits re-labelled as Bookboll fees', value: count(p.eligible_count), tone: 'go' },
-    { label: 'Arrival balances closed as provider cash', value: count(p.pending_arrival_count), tone: 'info' },
+    { label: 'Payment records to update', value: count(p.payment_count), tone: 'go' },
+    { label: 'Deposits to classify as Bookboll fees', value: count(p.eligible_count), tone: 'go' },
+    { label: 'Arrival balances to mark as provider cash', value: count(p.pending_arrival_count), tone: 'info' },
     { label: 'Excluded · kept unchanged', value: count(p.excluded_count), tone: p.excluded_count > 0 ? 'warn' : '' },
     landlord,
   ]
@@ -234,7 +236,7 @@ load()
         <button class="btn-icon" :disabled="busy" aria-label="Close transfer" @click="emit('close')"><X :size="18" /></button>
       </div>
 
-      <div class="modal-body">
+      <div class="modal-body" ref="dialogBody">
         <ol class="vt-steps" aria-label="Transfer progress"><li :aria-current="!preview ? 'step' : undefined" :class="{active:!preview}"><span>1</span> Business & history</li><li :aria-current="preview ? 'step' : undefined" :class="{active:preview}"><span>2</span> Review & confirm</li></ol>
         <!-- The move itself, before any of its settings: who hands over to whom. -->
         <div class="vt-move">

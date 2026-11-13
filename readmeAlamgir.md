@@ -192,6 +192,9 @@ Release work still required:
 
 ### Team, notifications and venue transfer update — 13 November 2026
 
+- Transfer destinations must resolve active `owner` / `provider_admin` memberships as well as `businesses.owner_id`. Legacy admin-created businesses with an owner membership are not ownerless. The moved venue retains that owner's compatibility link, and any owner-membership change invalidates a prior transfer review. Covered by MySQL `VenueTransferTest`.
+- Team permission labels refer to manual members and Stripe payment setup. Legacy withdrawal overrides remain stored for compatibility but are not offered as an active wallet control.
+
 - Business invitations load server-authorized roles, venues and grantable capabilities from `GET /admin/businesses/{id}/invitation-options`. The POST persists account status, venue scope and permission overrides; foreign venues and platform-only grants are rejected. Team edit payloads must preserve `custom_permissions`. Updating venue pins clears the older membership pins so removed access does not remain effective.
 - One owner per business: invitations and reviewed platform-account moves cannot replace an existing owner. First-owner assignment updates both `businesses.owner_id` and the canonical active `owner` membership inside a business-row lock. A changed owner invalidates an outstanding review. Assignment retry keys must belong to the same actor, business and preview token.
 - Notifications now exposes active booking templates. Old customer membership auto-billing/trial/charge-retry templates are excluded even when saved in previous settings. Manual members are managed under `/subscriptions`; this register does not automatically send customer lifecycle messages. Marketplace listing subscriptions are a separate business expense. Comeback offer settings remain global/country/city rules, accessible directly from Notifications → Manage comeback offer.
