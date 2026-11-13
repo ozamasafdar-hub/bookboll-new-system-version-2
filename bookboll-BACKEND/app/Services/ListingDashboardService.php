@@ -118,7 +118,7 @@ class ListingDashboardService
         }
         if ($request->filled('owner_user_id')) {
             $ownerId = $request->owner_user_id;
-            $query->whereHas('venue', fn ($q) => $q->where('owner_user_id', $ownerId));
+            $query->whereHas('venue', fn ($q) => $q->ownedBy((int) $ownerId));
         }
 
         return $query;
@@ -190,7 +190,7 @@ class ListingDashboardService
 
         if ($request->filled('owner_user_id')) {
             $ownerId = $request->owner_user_id;
-            $query->whereHas('venue', fn ($q) => $q->where('owner_user_id', $ownerId));
+            $query->whereHas('venue', fn ($q) => $q->ownedBy((int) $ownerId));
         }
         if ($request->filled('venue_id') || $request->filled('location_id')) {
             $query->where('venue_id', $request->venue_id ?? $request->location_id);

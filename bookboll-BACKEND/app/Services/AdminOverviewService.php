@@ -62,7 +62,7 @@ class AdminOverviewService
             ];
         }
 
-        $ids = $venueIds ?? Venue::where('owner_user_id', $ownerId)->pluck('id')->all();
+        $ids = $venueIds ?? Venue::ownedBy($ownerId)->pluck('id')->all();
 
         $hasListing = $ids
             ? Listing::whereIn('venue_id', $ids)->exists()

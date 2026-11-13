@@ -187,7 +187,7 @@ class BrandResolutionService
      */
     protected function modules(Business $b, int $ownerId): array
     {
-        $venueIds = Venue::where('owner_user_id', $ownerId)->pluck('id');
+        $venueIds = Venue::ownedBy((int) $ownerId)->pluck('id');
 
         $venues = $venueIds->isNotEmpty() && Listing::query()
             ->whereIn('venue_id', $venueIds)
