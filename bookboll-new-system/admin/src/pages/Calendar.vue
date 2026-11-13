@@ -466,12 +466,17 @@ const visibleDayBookings = computed(() => {
 const dayFocusMinute = computed(() => calendarFocusMinute(visibleDayBookings.value,
   orderedLocations.value.flatMap(loc => (openIntervalsByLoc.value[loc.id]?.open || []).map(iv => iv.startM))))
 const jumpHours = computed(() => daySlots.value.filter(h => h.endsWith(':00')))
+const earlierBookings = computed(() => visibleDayBookings.value.filter(b => b.start_time && b.end_time && bookingMinutes(b).start < dayFocusMinute.value))
 function scrollDayToMinute(minute) {
   if (dayScrollEl.value && view.value === 'day') {
     dayScrollEl.value.scrollTop = Math.max(0, (minute - dayBounds.value.start) * pxPerMin.value)
   }
 }
 function scrollDayToActivity() { scrollDayToMinute(dayFocusMinute.value) }
+function scrollToFirstBooking() {
+  const starts = visibleDayBookings.value.filter(b => b.start_time && b.end_time).map(b => bookingMinutes(b).start)
+  if (starts.length) scrollDayToMinute(Math.max(0, Math.min(...starts) - 30))
+}
 function jumpToTime(event) {
   scrollDayToMinute(toMinutes(event.target.value))
   event.target.value = ''
@@ -605,7 +610,7 @@ function hasPendingPayment(bk) {
       <div v-if="view === 'day'" class="day-navigation">
         <span aria-live="polite">{{ loading ? 'Loading schedule…' : `${visibleDayBookings.length} bookings across ${orderedLocations.length} venues` }}<span class="day-scroll-hint"> · Scroll sideways for more venues</span></span>
         <div class="day-jump-controls">
-          <button type="button" :disabled="loading || !visibleDayBookings.length" @click="scrollDayToActivity">First booking</button>
+          <button type="button" :disabled="loading || !visibleDayBookings.length" @click="scrollToFirstBooking">{{ earlierBookings.length ? `${earlierBookings.length} early booking${earlierBookings.length === 1 ? '' : 's'}` : 'First booking' }}</button>
           <select aria-label="Go to time" @change="jumpToTime"><option value="" disabled selected>Go to time</option><option v-for="h in jumpHours" :key="h" :value="h">{{ fmt12(h) }}{{ toMinutes(h) >= 1440 ? ' (next day)' : '' }}</option></select>
         </div>
       </div>

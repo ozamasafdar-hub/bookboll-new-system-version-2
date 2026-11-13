@@ -7,11 +7,13 @@ export function bookingMinutes(booking) {
   return { start, end }
 }
 
-// Focus real activity before opening hours: a 24-hour venue should not force an
-// otherwise empty midnight viewport. Callers pass only the currently shown venues.
+// Open on daytime activity when present. Early bookings remain in the full grid
+// and get an explicit jump control, instead of forcing every venue to midnight.
+// Callers pass only the currently shown venues.
 export function calendarFocusMinute(bookings, openingMinutes = []) {
   const starts = bookings.filter(b => b.start_time && b.end_time).map(b => bookingMinutes(b).start)
-  if (starts.length) return Math.max(0, Math.min(...starts) - 30)
+  const daytime = starts.filter(m => m >= 6 * 60)
+  if (starts.length) return Math.max(0, Math.min(...(daytime.length ? daytime : starts)) - 30)
   const daytimeOpenings = openingMinutes.filter(m => Number.isFinite(m) && m > 0)
   return daytimeOpenings.length ? Math.min(...daytimeOpenings) : 7 * 60
 }

@@ -30,3 +30,6 @@ test('real midnight bookings remain visible and empty days have a useful fallbac
   assert.equal(calendarFocusMinute([], [0, 540, 960]), 540)
   assert.equal(calendarFocusMinute([], []), 420)
 })
+test('a single early booking does not force every venue into an empty overnight viewport', () => {
+  assert.equal(calendarFocusMinute([{start_time:'00:00',end_time:'01:00'}, {start_time:'07:00',end_time:'08:00'}], [0]), 390)
+})
