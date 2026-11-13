@@ -474,8 +474,16 @@ function scrollDayToMinute(minute) {
 }
 function scrollDayToActivity() { scrollDayToMinute(dayFocusMinute.value) }
 function scrollToFirstBooking() {
-  const starts = visibleDayBookings.value.filter(b => b.start_time && b.end_time).map(b => bookingMinutes(b).start)
-  if (starts.length) scrollDayToMinute(Math.max(0, Math.min(...starts) - 30))
+  const first = visibleDayBookings.value.filter(b => b.start_time && b.end_time)
+    .sort((a, b) => bookingMinutes(a).start - bookingMinutes(b).start)[0]
+  if (!first) return
+  scrollDayToMinute(Math.max(0, bookingMinutes(first).start - 30))
+  const scroller = dayScrollEl.value
+  const column = [...scroller.querySelectorAll('.day-col')].find(el => el.dataset.trCol === String(resolvedLocationId(first)))
+  if (column) {
+    const gutterWidth = scroller.querySelector('.day-gutter').getBoundingClientRect().width
+    scroller.scrollLeft += column.getBoundingClientRect().left - scroller.getBoundingClientRect().left - gutterWidth
+  }
 }
 function jumpToTime(event) {
   scrollDayToMinute(toMinutes(event.target.value))
@@ -921,9 +929,9 @@ function hasPendingPayment(bk) {
 .cal-scroll:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
 .day-navigation { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 9px 18px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-muted); }
 .day-jump-controls { display: flex; gap: 12px; align-items: center; }
-.day-jump-controls button { color: var(--primary-ink); font-weight: 600; }
+.day-jump-controls button { color: var(--primary-ink); font-weight: 600; white-space: nowrap; flex-shrink: 0; }
 .day-jump-controls button:disabled { opacity: .45; cursor: default; }
-.day-jump-controls select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font: inherit; }
+.day-jump-controls select { width: auto; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font: inherit; }
 @media (max-width: 700px) { .day-scroll-hint { display: none; } }
 .cal-table { border-collapse: collapse; width: 100%; min-width: max-content; }
 
