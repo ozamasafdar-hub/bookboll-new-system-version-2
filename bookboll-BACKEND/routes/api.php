@@ -474,8 +474,11 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::post('registrations/{id}/approve', [UserController::class, 'approveUser'])->name('users.approve');
             Route::post('registrations/{id}/reject', [UserController::class, 'rejectUser'])->name('users.reject');
 
+            // Before the resource: `users/{user}` is registered by apiResource and
+            // would otherwise swallow "required-data" as an id and dispatch to a
+            // show() that does not exist (a 500 for every caller).
+            Route::get('users/required-data', [UserController::class, 'requiredDataForUser'])->name('users.required-data');
             Route::apiResource('users', UserController::class);
-            Route::get('users/required-data', [UserController::class, 'requiredDataForUser']);
             Route::get('businesses', [BusinessController::class, 'adminIndex'])->name('businesses.index');
             // Registering an operator before anyone from it has a login, and the
             // capability probe the dashboard checks before offering that form.
