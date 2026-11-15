@@ -354,13 +354,24 @@ class MarketplaceGeoService
             })
             ->first();
 
-        if (! $business?->owner_id) {
+        if (! $business) {
             return sendSuccess('Served regions fetched', ['countries' => [], 'cities' => []]);
         }
 
+        // Not businesses.owner_id: one created from the admin "Add business"
+        // form is ownerless, and its venues are linked by venues.business_id.
+        $ownerId = \App\Support\BusinessMembershipSync::ownerUserIdForBusiness((int) $business->id);
+
         $tally = Venue::query()
             ->where('status', Venue::ACTIVE)
-            ->where('owner_user_id', $business->owner_id)
+            ->where(function ($q) use ($ownerId, $business) {
+                if ($ownerId) {
+                    $q->orWhere('owner_user_id', $ownerId);
+                }
+                if (schemaHas('venues', 'business_id')) {
+                    $q->orWhere('business_id', $business->id);
+                }
+            })
             ->whereNotNull('city_id')
             ->selectRaw('city_id, COUNT(*) as venue_count')
             ->groupBy('city_id')

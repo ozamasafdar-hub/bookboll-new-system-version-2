@@ -114,7 +114,10 @@ class BrandResolutionService
 
     protected function mapBrand(Business $b, string $requestedSlug): array
     {
-        $ownerId = (int) ($b->owner_id ?: $b->activeMemberships()->whereIn('role', \App\Models\BusinessMembership::MANAGING_ROLES)->value('user_id'));
+        // Never the raw column: an ownerless business has no owner_id, and (int)
+        // null is 0 — which the storefront took as its scope and then matched no
+        // venue, no listing and no programme, rendering an empty site.
+        $ownerId = (int) (\App\Support\BusinessMembershipSync::ownerUserIdForBusiness((int) $b->id) ?: 0);
 
         return [
             'ownerUserId'     => (string) $ownerId,

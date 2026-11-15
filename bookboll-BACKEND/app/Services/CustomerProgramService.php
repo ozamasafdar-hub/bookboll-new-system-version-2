@@ -14,7 +14,6 @@ use App\Support\StripeDocumentLink;
 use App\Models\ProviderWallet;
 use App\Models\User;
 use App\Models\Schedule;
-use App\Models\Venue;
 use App\Models\WalletTransaction;
 use App\Support\QatarMarketGeo;
 use Illuminate\Support\Facades\Log;
