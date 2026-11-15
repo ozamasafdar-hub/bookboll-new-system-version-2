@@ -321,8 +321,7 @@ class SiteSettingsService
     {
         // A venue reaches its business by the legacy owner key or by
         // venues.business_id — the only link for an ownerless business.
-        $venueIds = Venue::query()
-            ->where(function ($q) use ($ownerId, $businessId) {
+        $venueIds = Venue::where(function ($q) use ($ownerId, $businessId) {
                 $q->where('owner_user_id', $ownerId);
                 if ($businessId) {
                     $q->orWhere('business_id', $businessId);

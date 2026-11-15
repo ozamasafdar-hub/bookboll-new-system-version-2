@@ -141,9 +141,8 @@ class CustomerProgramService
             });
         } elseif ($cityId) {
             $cityId = (int) $cityId;
-            $venueIds = Venue::query()->where('city_id', $cityId)->pluck('id');
-            $ownerIds = Venue::query()
-                ->where('city_id', $cityId)
+            $venueIds = Venue::where('city_id', $cityId)->pluck('id');
+            $ownerIds = Venue::where('city_id', $cityId)
                 ->whereNotNull('owner_user_id')
                 ->pluck('owner_user_id');
 

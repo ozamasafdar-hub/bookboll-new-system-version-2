@@ -114,7 +114,10 @@ class BrandResolutionService
 
     protected function mapBrand(Business $b, string $requestedSlug): array
     {
-        $ownerId = (int) $b->owner_id;
+        // Never the raw column: an ownerless business has no owner_id, and (int)
+        // null is 0 — which the storefront took as its scope and then matched no
+        // venue, no listing and no programme, rendering an empty site.
+        $ownerId = (int) (\App\Support\BusinessMembershipSync::ownerUserIdForBusiness((int) $b->id) ?: 0);
 
         return [
             'ownerUserId'     => (string) $ownerId,
@@ -187,7 +190,16 @@ class BrandResolutionService
      */
     protected function modules(Business $b, int $ownerId): array
     {
-        $venueIds = Venue::ownedBy((int) $ownerId)->pluck('id');
+        // The business is already in hand, so key on it directly and only fall
+        // back to the legacy owner key for venues that predate business_id — a
+        // venue re-homed to another business must not keep showing here.
+        $venueIds = Venue::where(function ($q) use ($b, $ownerId) {
+                $q->where('business_id', $b->id);
+                if ($ownerId) {
+                    $q->orWhere(fn ($legacy) => $legacy->whereNull('business_id')->where('owner_user_id', $ownerId));
+                }
+            })
+            ->pluck('id');
 
         $venues = $venueIds->isNotEmpty() && Listing::query()
             ->whereIn('venue_id', $venueIds)
