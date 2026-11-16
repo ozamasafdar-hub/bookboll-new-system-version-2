@@ -19,6 +19,7 @@ import { useJurisdiction } from '../lib/jurisdiction.js'
 import { useConfirm } from '../lib/confirm.js'
 import { useInputPrompt } from '../lib/inputPrompt.js'
 import { useToast } from '../lib/toast.js'
+import { webBaseUrl } from '../lib/appBase.js'
 import WhatsappIcon from '../components/WhatsappIcon.vue'
 import {
   Flag, Search, MapPin, CalendarDays, Users, Gift, Trophy, Eye, Trash2,
@@ -266,7 +267,13 @@ function timeAgo(d) {
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`
   return `${Math.floor(s / 86400)}d ago`
 }
-const profileHref = id => (id ? `/u/${id}` : '')
+// Communities and public profiles live on the customer web app, not here: a
+// relative href opened admin.bookboll.com/communities/7, which has no route
+// and rendered blank.
+const profileHref = id => (id ? `${webBaseUrl()}/u/${id}` : '')
+// The public page resolves by uuid only (CustomerCommunityService::show), never
+// the numeric id the moderation rows are keyed by.
+const communityHref = c => (c?.uuid ? `${webBaseUrl()}/communities/${c.uuid}` : '')
 function waLink(num, msg) {
   const digits = String(num || '').replace(/[^\d]/g, '')
   if (!digits) return ''
@@ -483,7 +490,7 @@ async function restoreCommunity(c) {
               <AlertTriangle :size="14" /><span>{{ c.moderation_reason }}</span>
             </div>
             <div class="mod-actions">
-              <a :href="`/communities/${c.id}`" target="_blank" class="mod-btn"><ExternalLink :size="14" /> View</a>
+              <a v-if="c.uuid" :href="communityHref(c)" target="_blank" rel="noopener" class="mod-btn"><ExternalLink :size="14" /> View</a>
               <button v-if="c.moderation_status === 'active'" class="mod-btn warn" @click="flagCommunity(c)"><AlertTriangle :size="14" /> Flag</button>
               <button v-if="c.moderation_status !== 'removed'" class="mod-btn danger" @click="removeCommunity(c)"><Trash2 :size="14" /> Remove</button>
               <button v-else class="mod-btn ok" @click="restoreCommunity(c)"><RotateCcw :size="14" /> Restore</button>

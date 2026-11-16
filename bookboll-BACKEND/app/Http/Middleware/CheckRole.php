@@ -25,11 +25,16 @@ class CheckRole
         }
 
         if (! $user->hasAnyRole($roles)) {
-            if ($request->expectsJson()) {
+            // An API caller gets a JSON refusal whether or not it sent an Accept
+            // header: the routes behind this alias all live under /api and are
+            // authenticated by a Sanctum token, whose guard has no logout() —
+            // the session branch below threw a 500 for every such caller
+            // instead of the 403 it meant.
+            if ($request->expectsJson() || $request->is('api/*') || ! $request->hasSession()) {
                 return response()->json(['message' => 'Forbidden. You do not have the required role.'], 403);
             }
 
-            auth()->logout();
+            auth()->guard('web')->logout();
             $request->session()->regenerateToken();
 
             return redirect()->route('login')->withErrors(['email' => 'Access denied. Admin privileges required.']);

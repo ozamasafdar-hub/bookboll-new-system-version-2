@@ -305,3 +305,58 @@ it('resolves an ownerless business from its owner id everywhere the legacy looku
         ->and(AccessScope::managedBusiness($owner)?->id)->toBe($business->id)
         ->and(\App\Support\PremiumPlan::businessFor($owner)?->id)->toBe($business->id);
 });
+
+/*
+ * The Listings page filters its venue cards and rows by owner_user_id (the
+ * dashboard sends the signed-in provider's owner id). For an ownerless business
+ * the venues carry business_id and no owner key, so the page came back empty
+ * while Bookings — scoped through AccessScope — still listed their bookings.
+ */
+
+it('lists an ownerless business\'s venues and listings when the dashboard filters by owner id', function () {
+    [$owner, $business, $venues] = lsmOwnerlessBusinessWithOwner();
+    $venue = $venues->first();
+    $listing = \App\Models\Listing::create([
+        'name' => 'Court A', 'venue_id' => $venue->id, 'status' => 'active',
+        'base_price' => 50, 'capacity' => 4, 'slot_duration' => 60,
+        'payment_options' => ['cash_on_arrival' => '1'], 'max_bookings_per_slot' => 1,
+    ]);
+    $manager = lsmLegacyManagerUnder($owner);
+
+    $venuesRes = $this->actingAs($manager)->getJson("/api/admin/venues/dashboard?owner_user_id={$owner->id}")->assertOk();
+    expect(collect($venuesRes->json('data.locations'))->pluck('id')->map(fn ($v) => (int) $v)->all())
+        ->toEqualCanonicalizing($venues->pluck('id')->all());
+
+    $listingsRes = $this->actingAs($manager)->getJson("/api/admin/listings/dashboard?owner_user_id={$owner->id}")->assertOk();
+    expect(collect($listingsRes->json('data.listings'))->pluck('id')->map(fn ($v) => (int) $v)->all())->toBe([$listing->id]);
+
+    // Another owner's id must not widen the view.
+    $other = User::factory()->create(['status' => User::ACTIVE]);
+    $other->assignRole('provider_admin');
+    $none = $this->actingAs($manager)->getJson("/api/admin/listings/dashboard?owner_user_id={$other->id}")->assertOk();
+    expect($none->json('data.listings'))->toBe([]);
+});
+
+it('links a venue created by a member of an ownerless business to that business', function () {
+    [$owner, $business] = lsmOwnerlessBusinessWithOwner();
+    $manager = lsmLegacyManagerUnder($owner);
+
+    $country = \Nnjeim\World\Models\Country::create([
+        'name' => 'Qatar', 'iso2' => 'QA', 'iso3' => 'QAT',
+        'phone_code' => '974', 'region' => 'Asia', 'subregion' => 'Asia', 'status' => 1,
+    ]);
+    $state = \Nnjeim\World\Models\State::create(['name' => 'Doha', 'country_id' => $country->id, 'country_code' => 'QAT']);
+    $city = \Nnjeim\World\Models\City::create([
+        'name' => 'Doha', 'country_id' => $country->id, 'country_code' => 'QAT', 'state_id' => $state->id, 'status' => 1,
+    ]);
+
+    $res = $this->actingAs($manager)->postJson('/api/admin/venues/dashboard', [
+        'name' => 'New Hall', 'status' => 'active', 'country_id' => $country->id, 'city_id' => $city->id,
+    ]);
+    $res->assertOk();
+
+    $venue = Venue::where('name', 'New Hall')->firstOrFail();
+    expect((int) $venue->business_id)->toBe($business->id)
+        ->and((int) $venue->owner_user_id)->toBe($owner->id)
+        ->and(AccessScope::allowedVenueIds($owner->fresh()))->toContain($venue->id);
+});

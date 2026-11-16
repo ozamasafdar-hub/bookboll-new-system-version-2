@@ -386,12 +386,19 @@ class PostService
             return ['owner' => null, 'unknown' => false];
         }
 
-        $ownerId = Business::query()
+        $businessId = Business::query()
             ->where(function ($q) use ($slug) {
                 $q->whereRaw('LOWER(username) = ?', [$slug])
                     ->orWhereRaw('LOWER(brand_subdomain) = ?', [$slug]);
             })
-            ->value('owner_id');
+            ->value('id');
+
+        // Posts are keyed by their author's owner id. An ownerless business has
+        // no owner_id column to read, so resolve the member who runs it —
+        // otherwise its blog read as an unknown brand and showed nothing.
+        $ownerId = \App\Support\BusinessMembershipSync::ownerUserIdForBusiness(
+            $businessId ? (int) $businessId : null
+        );
 
         // A brand was asked for but doesn't exist — show nothing rather than
         // leaking the Bookboll blog onto an unknown subdomain.

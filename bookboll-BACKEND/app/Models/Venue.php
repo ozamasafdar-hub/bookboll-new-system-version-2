@@ -83,6 +83,28 @@ class Venue extends Model
 
     protected $appends = ['location_label', 'google_maps_url'];
 
+    /**
+     * Venues that belong to the business an owner-side user id stands for.
+     *
+     * A venue reaches its business two ways: the legacy owner key, and
+     * venues.business_id — the ONLY link for a business created ownerless
+     * (owner_id null). Filtering on owner_user_id alone returned nothing for
+     * such a business, so its owner and every manager under them opened an
+     * empty Listings page while Bookings (scoped through AccessScope, which
+     * reads both) still showed their bookings.
+     */
+    public function scopeOwnedBy($query, int $ownerId)
+    {
+        $businessId = \App\Support\BusinessMembershipSync::businessIdForOwner($ownerId);
+
+        return $query->where(function ($q) use ($ownerId, $businessId) {
+            $q->where('owner_user_id', $ownerId);
+            if ($businessId && schemaHas('venues', 'business_id')) {
+                $q->orWhere('business_id', $businessId);
+            }
+        });
+    }
+
     public function scopeActive($query)
     {
         return $query->where('status', self::ACTIVE);

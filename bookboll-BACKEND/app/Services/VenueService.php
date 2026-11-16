@@ -415,7 +415,8 @@ class VenueService
         AccessScope::applyVenue($query, 'id', auth()->user());
 
         if ($request->filled('owner_user_id')) {
-            $query->where('owner_user_id', $request->owner_user_id);
+            // Owner key OR business link — see Venue::scopeOwnedBy.
+            $query->ownedBy((int) $request->owner_user_id);
         }
         // The dashboard sends multi-selects as one comma-joined value, so
         // "2,5" has to become [2, 5] — `where('country_id', '2,5')` matched
@@ -594,6 +595,13 @@ class VenueService
             }
 
             $venue = $this->venueModel::create($attrs);
+
+            // The business link too, where the schema has it: for an ownerless
+            // business this is the only key its other members resolve through.
+            $businessId = AccessScope::businessId($actor);
+            if ($businessId && schemaHas('venues', 'business_id')) {
+                $venue->forceFill(['business_id' => $businessId])->save();
+            }
 
             // Both notions of "my venue" are written: AccessScope reads
             // venues.owner_user_id, assertDashboardVenueAccess reads the pivot.

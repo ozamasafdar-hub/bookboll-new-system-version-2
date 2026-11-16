@@ -89,25 +89,38 @@ class BusinessMembershipSync
      */
     public static function ownerUserIdForMember(User $user): ?int
     {
-        $membership = BusinessMembership::query()
+        $businessId = BusinessMembership::query()
             ->where('user_id', $user->id)
             ->where('status', BusinessMembership::STATUS_ACTIVE)
-            ->first(['business_id']);
+            ->value('business_id');
 
-        if (! $membership) {
+        return self::ownerUserIdForBusiness($businessId ? (int) $businessId : null);
+    }
+
+    /**
+     * The owner-side user id a BUSINESS's records are written under.
+     *
+     * `businesses.owner_id` when it is set, otherwise the member who runs the
+     * business. An ownerless business has no owner_id at all, and reading it
+     * raw yields 0 — which the white-label storefront then sent as its scope,
+     * matching no venue and rendering an empty site.
+     */
+    public static function ownerUserIdForBusiness(?int $businessId): ?int
+    {
+        if (! $businessId) {
             return null;
         }
 
-        $ownerId = DB::table('businesses')->where('id', $membership->business_id)->value('owner_id');
+        $ownerId = DB::table('businesses')->where('id', $businessId)->value('owner_id');
         if ($ownerId) {
             return (int) $ownerId;
         }
 
         $managing = BusinessMembership::query()
-            ->where('business_id', $membership->business_id)
+            ->where('business_id', $businessId)
             ->where('status', BusinessMembership::STATUS_ACTIVE)
             ->whereIn('role', BusinessMembership::MANAGING_ROLES)
-            ->orderByRaw("CASE WHEN role = ? THEN 0 ELSE 1 END", [BusinessMembership::ROLE_OWNER])
+            ->orderByRaw('CASE WHEN role = ? THEN 0 ELSE 1 END', [BusinessMembership::ROLE_OWNER])
             ->orderBy('id')
             ->value('user_id');
 

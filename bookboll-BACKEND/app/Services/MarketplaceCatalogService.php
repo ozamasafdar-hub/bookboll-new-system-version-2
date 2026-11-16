@@ -166,11 +166,11 @@ class MarketplaceCatalogService
     public function brandLocations(Request $request)
     {
         $scope = $this->resolveScope($request);
-        if ($scope['empty'] || empty($scope['businessId'])) {
+        if ($scope['empty'] || ! $this->scopedToBusiness($scope)) {
             return sendSuccess('Brand locations fetched successfully', ['locations' => []]);
         }
 
-        $venues = $this->constrainBusiness(Venue::where('status', Venue::ACTIVE), $scope)
+        $venues = $this->applyVenueScope(Venue::where('status', Venue::ACTIVE), $scope)
             ->with(['city:id,name', 'schedules'])
             ->orderBy('sort_order')
             ->orderBy('name')
@@ -235,7 +235,7 @@ class MarketplaceCatalogService
             return sendSuccess('Venue fetched successfully', ['facility' => null]);
         }
 
-        if ($scope['whiteLabel'] && !$this->constrainBusiness(Venue::whereKey($venue->id),$scope)->exists()) {
+        if (! $this->venueInScope($venue, $scope)) {
             return sendSuccess('Venue fetched successfully', ['facility' => null]);
         }
 
@@ -299,7 +299,7 @@ class MarketplaceCatalogService
 
         $venue = $listing->venue;
 
-        if ($scope['whiteLabel'] && !$this->constrainBusiness(Venue::whereKey($venue->id),$scope)->exists()) {
+        if (! $this->venueInScope($venue, $scope)) {
             return sendSuccess('Listing fetched successfully', ['detail' => null]);
         }
 
@@ -469,11 +469,15 @@ class MarketplaceCatalogService
                 ->first();
 
             if (! $business) {
-                return ['empty' => true, 'whiteLabel' => true, 'ownerId' => null, 'cityIds' => []];
+                return ['empty' => true, 'whiteLabel' => true, 'ownerId' => null, 'businessId' => null, 'cityIds' => []];
             }
 
-            $ownerId = $business->owner_id;
-            $businessId = $business->id;
+            $businessId = (int) $business->id;
+            // Not $business->owner_id: a business created from the admin "Add
+            // business" form is OWNERLESS, so the column is null and every
+            // owner-keyed read below matched nothing — the storefront served an
+            // empty site on a published subdomain.
+            $ownerId = \App\Support\BusinessMembershipSync::ownerUserIdForBusiness($businessId);
         }
 
         $cityIds = $this->resolveCityIds($request);
@@ -486,6 +490,70 @@ class MarketplaceCatalogService
             'cityIds'    => $cityIds,
             'countryId'  => $this->resolveCountryId($request),
         ];
+    }
+
+    /** Is this scope pinned to one business's storefront? */
+    protected function scopedToBusiness(array $scope): bool
+    {
+        return ! empty($scope['ownerId']) || ! empty($scope['businessId']);
+    }
+
+    /**
+     * Narrow a VENUES query to the scope's business.
+     *
+     * A venue reaches its business by the legacy owner key or by
+     * venues.business_id — the only link an ownerless business has. Both are
+     * read, or a white-label site shows none of its own venues.
+     */
+    protected function applyVenueScope($query, array $scope)
+    {
+        $ownerId    = $scope['ownerId'] ?? null;
+        $businessId = $scope['businessId'] ?? null;
+        $hasColumn  = (bool) ($businessId && schemaHas('venues', 'business_id'));
+
+        if (! $ownerId && ! $hasColumn) {
+            // Nothing to scope by. Never fall through to an empty where group,
+            // which would hand one brand's site the whole catalogue.
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where(function ($q) use ($ownerId, $businessId, $hasColumn) {
+            if ($hasColumn) {
+                $q->orWhere('business_id', $businessId);
+            }
+            if ($ownerId) {
+                // The owner key is only a fallback for venues that predate
+                // business_id — a venue re-homed to another business must not
+                // keep showing on its old owner's brand.
+                $q->orWhere(fn ($legacy) => $hasColumn
+                    ? $legacy->whereNull('business_id')->where('owner_user_id', $ownerId)
+                    : $legacy->where('owner_user_id', $ownerId));
+            }
+        });
+    }
+
+    /** Does this venue belong to the scope's business? */
+    protected function venueInScope(Venue $venue, array $scope): bool
+    {
+        if (! $this->scopedToBusiness($scope)) {
+            return true;
+        }
+
+        $ownerId    = $scope['ownerId'] ?? null;
+        $businessId = $scope['businessId'] ?? null;
+        $hasColumn  = schemaHas('venues', 'business_id');
+
+        if ($businessId && $hasColumn && (int) $venue->business_id === (int) $businessId) {
+            return true;
+        }
+
+        if ($ownerId && (int) $venue->owner_user_id === (int) $ownerId) {
+            // Same fallback rule as applyVenueScope(): the owner key counts
+            // only while the venue has no business of its own.
+            return ! $hasColumn || $venue->business_id === null;
+        }
+
+        return false;
     }
 
     /**
@@ -621,8 +689,8 @@ class MarketplaceCatalogService
             $query->where('country_id', $scope['countryId']);
         }
 
-        if ($scope['whiteLabel']) {
-            $this->constrainBusiness($query, $scope);
+        if ($this->scopedToBusiness($scope)) {
+            $this->applyVenueScope($query, $scope);
         } elseif (! $scope['whiteLabel']) {
             $suspended = $this->suspendedOwnerIds();
             if ($suspended) {
@@ -634,13 +702,6 @@ class MarketplaceCatalogService
         }
 
         return $query;
-    }
-
-    protected function constrainBusiness($query, array $scope) {
-        return $query->where(function ($q) use ($scope) {
-            $q->where('business_id', $scope['businessId'] ?? 0);
-            if (!empty($scope['ownerId'])) $q->orWhere(fn($legacy) => $legacy->whereNull('business_id')->where('owner_user_id',$scope['ownerId']));
-        });
     }
 
     protected function listingQuery(array $scope)

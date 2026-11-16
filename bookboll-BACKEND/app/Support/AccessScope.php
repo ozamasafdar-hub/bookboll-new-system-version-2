@@ -218,9 +218,10 @@ class AccessScope
      * and the marketing composer. If those two ever disagreed, a provider would see
      * people they cannot email, or email people they cannot see.
      *
-     * A customer is in scope when they have BOOKED at a venue in scope, or SUBSCRIBED
-     * to a programme in scope. Subscriptions match on email because that is the only
-     * link class_subscriptions carries.
+     * A customer is in scope when they have BOOKED at a venue in scope, SUBSCRIBED
+     * to a programme in scope, or were ADDED by the business (pivot / created_by).
+     * Subscriptions match on email because that is the only link class_subscriptions
+     * carries. Nobody else: a marketplace signup is not a business's customer.
      *
      * @return array<int, int>|null  null = unrestricted (global admin); [] = nobody
      */
@@ -263,8 +264,9 @@ class AccessScope
 
         $ownerIds   = self::scopeOwnerIds($user);
         $programIds = self::scopedProgramIds($user, $venueIds);
+        $businessId = self::businessId($user);
 
-        return $query->where(function ($q) use ($venueIds, $programIds, $ownerIds) {
+        return $query->where(function ($q) use ($venueIds, $programIds, $ownerIds, $businessId) {
             // Nothing is in scope yet; each branch below widens it. Without this seed
             // a caller owning no venue and no programme would match every customer.
             $q->whereRaw('1 = 0');
@@ -281,13 +283,23 @@ class AccessScope
 
                 // Belt and braces beside the pivot: users.created_by records who typed
                 // the row in (TracksCreator). Covers anything created before the pivot
-                // existed, or by a path that forgets to link.
-                $q->orWhereExists(function ($sub) use ($ownerIds) {
+                // existed, or by a path that forgets to link. A creator counts as the
+                // business's own through the legacy owner key OR a membership — a
+                // member assigned into an ownerless business carries no owner key.
+                $q->orWhereExists(function ($sub) use ($ownerIds, $businessId) {
                     $sub->selectRaw('1')->from('users as creators')
                         ->whereColumn('creators.id', 'users.created_by')
-                        ->where(function ($c) use ($ownerIds) {
+                        ->where(function ($c) use ($ownerIds, $businessId) {
                             $c->whereIn('creators.id', $ownerIds)
                                 ->orWhereIn('creators.owner_user_id', $ownerIds);
+                            if ($businessId) {
+                                $c->orWhereExists(function ($m) use ($businessId) {
+                                    $m->selectRaw('1')->from('business_memberships')
+                                        ->whereColumn('business_memberships.user_id', 'creators.id')
+                                        ->where('business_memberships.business_id', $businessId)
+                                        ->where('business_memberships.status', 'active');
+                                });
+                            }
                         });
                 });
             }
@@ -313,47 +325,14 @@ class AccessScope
                 });
             }
 
-            // ── Not yet anyone's customer ──
-            // A marketplace signup who has not booked anywhere and joined no
-            // programme is nobody's customer yet, so every business may see them
-            // (product decision, 2026-11-03: "no claim"). Only real activity — a
-            // booking or a subscription — takes them out of this shared pool. A
-            // business adding them by hand marks them as its own client (the pivot
-            // branch above) but does not hide them from anyone else: typing in an
-            // email is not a relationship the customer took part in.
-            $q->orWhere(fn ($o) => self::unattachedCustomer($o));
+            // That is the whole of it. Marketplace signups who have booked nowhere
+            // and joined nothing are NOT shown: a shared pool of every Bookboll
+            // customer was briefly offered to every business (2026-11-03, "no
+            // claim") and withdrawn 2026-11-13 — on live it put 12,000+ strangers
+            // in front of a business with 450 customers of its own. A business
+            // sees the people it has a relationship with: booked with it, joined
+            // its programme, or typed in by its team.
         });
-    }
-
-    /**
-     * Narrow to customers who have done nothing with ANY business yet: no booking at
-     * any venue and no programme subscription, marketplace-wide. business_customer
-     * rows and created_by are deliberately not consulted — see the branch comment in
-     * applyCustomerScope().
-     */
-    public static function unattachedCustomer($q)
-    {
-        return $q
-            // Customers only. customerIdsInScope() starts from User::query(), and
-            // without this the branch would hand every staff and admin account —
-            // none of which has a booking or a pivot row — to every business.
-            ->whereExists(function ($sub) {
-                $sub->selectRaw('1')->from('model_has_roles')
-                    ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
-                    ->whereColumn('model_has_roles.model_id', 'users.id')
-                    ->where('model_has_roles.model_type', User::class)
-                    ->where('roles.name', 'customer');
-            })
-            ->whereNotExists(function ($sub) {
-                $sub->selectRaw('1')->from('bookings')
-                    ->whereColumn('bookings.user_id', 'users.id');
-            })
-            ->whereNotExists(function ($sub) {
-                $sub->selectRaw('1')->from('class_subscriptions')
-                    ->whereNotNull('class_subscriptions.customer_email')
-                    ->where('class_subscriptions.customer_email', '!=', '')
-                    ->whereRaw('LOWER(class_subscriptions.customer_email) = LOWER(users.email)');
-            });
     }
 
     /**
