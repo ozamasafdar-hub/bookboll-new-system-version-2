@@ -41,7 +41,7 @@ use Stripe\StripeClient;
  * history worth keeping, not a column on the business. The one exception is
  * `businesses.plan`, a cache of "is this business entitled right now", kept because
  * the storefront reads it on every white-label page load; applyEntitlement() is the
- * only thing that ever writes it.
+ * billing writer; audited superadmin overrides take precedence.
  */
 class ProviderPlanService
 {
@@ -74,6 +74,8 @@ class ProviderPlanService
             'plan'                  => $platform ? 'premium' : ($b?->plan ?: 'free'),
             'is_premium'            => $platform ? true : PremiumPlan::businessEntitled($b),
             'is_platform'           => $platform,
+            'admin_managed' => (bool) $b?->plan_override,
+            'plan_source' => $b?->plan_override ? 'superadmin' : 'billing',
             'billing'               => $sub?->billing,
             'status'                => $sub?->status,
             'premium_since'         => optional($b?->premium_since)?->toIso8601String(),
@@ -147,6 +149,8 @@ class ProviderPlanService
         if ($error) {
             return $error;
         }
+
+        if ($business->plan_override) return sendError('Your plan is managed by Bookboll. Contact support to change it.', [], 409);
 
         if (PremiumPlan::businessEntitled($business)) {
             return sendError('This business is already on the Premium plan.', [], 409);
@@ -452,7 +456,7 @@ class ProviderPlanService
     }
 
     /**
-     * The ONLY writer of the entitlement cache on `businesses`.
+     * Refresh the entitlement cache from billing, respecting a superadmin override.
      *
      * Everything else about a plan lives in business_subscriptions; `plan` is kept on
      * the business because the storefront and every gated request read it, and those
@@ -465,20 +469,24 @@ class ProviderPlanService
             return;
         }
 
-        $entitled = $sub?->isEntitling() ?? false;
+        // Reload the override under a row lock: webhook/sync must not erase an admin grant.
+        DB::transaction(function () use ($business, $sub) {
+            $business = Business::whereKey($business->id)->lockForUpdate()->firstOrFail();
+            $entitled = $business->plan_override !== null ? $business->plan_override === 'premium' : ($sub?->isEntitling() ?? false);
 
-        $fields = ['plan' => $entitled ? 'premium' : 'free'];
+            $fields = ['plan' => $entitled ? 'premium' : 'free'];
 
-        if ($entitled && ! $business->premium_since) {
-            $fields['premium_since'] = now();
-        }
-        if (! $entitled) {
-            // The white-label badge removal is a paid feature, so it must not keep
-            // hiding once the plan lapses.
-            $fields['brand_whitelabel'] = false;
-        }
+            if ($entitled && ! $business->premium_since) {
+                $fields['premium_since'] = now();
+            }
+            if (! $entitled) {
+                // The white-label badge removal is a paid feature, so it must not keep
+                // hiding once the plan lapses.
+                $fields['brand_whitelabel'] = false;
+            }
 
-        $business->update($fields);
+            $business->update($fields);
+        });
     }
 
     /** @return array<string, mixed> */

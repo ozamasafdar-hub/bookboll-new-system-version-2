@@ -498,6 +498,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
             // would otherwise swallow "required-data" as an id and dispatch to a
             // show() that does not exist (a 500 for every caller).
             Route::get('users/required-data', [UserController::class, 'requiredDataForUser'])->name('users.required-data');
+            Route::get('users/{id}/security', [\App\Http\Controllers\Admin\AccountManagementController::class, 'account']);
+            Route::post('users/{id}/security', [\App\Http\Controllers\Admin\AccountManagementController::class, 'security'])->middleware('throttle:10,1');
+            Route::get('businesses/{id}/plan-management', [\App\Http\Controllers\Admin\AccountManagementController::class, 'plan']);
+            Route::put('businesses/{id}/plan-management', [\App\Http\Controllers\Admin\AccountManagementController::class, 'updatePlan']);
             Route::apiResource('users', UserController::class);
             Route::get('businesses', [BusinessController::class, 'adminIndex'])->name('businesses.index');
             // Registering an operator before anyone from it has a login, and the

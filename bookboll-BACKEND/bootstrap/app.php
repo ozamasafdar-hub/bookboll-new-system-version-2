@@ -62,7 +62,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 \Illuminate\Support\Facades\Mail::to('alamgir000009@gmail.com')
                     ->send(new \App\Mail\ExceptionNotificationEmail($e, [
                         'user_id' => auth()->id(),
-                        'request_data' => request()->all(),
+                        'request_data' => request()->except(['password', 'password_confirmation', 'current_password', 'token', 'otp', 'authorization']),
                     ]));
             } catch (\Exception $mailException) {
                 \Illuminate\Support\Facades\Log::error('Failed to send exception notification email: ' . $mailException->getMessage());

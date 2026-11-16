@@ -87,6 +87,7 @@ class Business extends Model
             'brand_languages'         => 'array',
             'brand_whitelabel'        => 'boolean',
             'premium_since'           => 'datetime',
+            'plan_override_at' => 'datetime',
             'brand_show_venues'       => 'boolean',
             'brand_show_events'       => 'boolean',
             'brand_show_programs'     => 'boolean',

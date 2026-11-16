@@ -403,6 +403,12 @@ class BusinessService
                 // Premium chip reflects what the provider is actually paying for.
                 'plan'            => $b->plan ?: 'free',
                 'premium_since'   => $b->premium_since?->toIso8601String(),
+                'plan_override' => $b->plan_override,
+                'brand_subdomain' => $b->brand_subdomain ?: $b->username,
+                'brand_enabled' => (bool) $b->brand_enabled,
+                'brand_custom_domain' => $b->brand_domain_status === 'active' ? $b->brand_custom_domain : null,
+                'owner_status' => $owner?->status,
+                'last_login' => $owner?->last_login_at,
                 'created_at'      => $b->created_at?->toIso8601String(),
             ];
         });

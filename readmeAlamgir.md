@@ -1,3 +1,7 @@
+## Superadmin account and plan management — 16 November 2026
+
+[Required deployment and account-management checks](docs/ACCOUNT_MANAGEMENT.md). My Team now includes Account security, complimentary Premium/Free management, website links and copies, account filters and country/venue access controls. Superadmin-only APIs enforce security and plan actions; logs retain actor and reason without passwords. Apply MySQL migration `2026_11_16_000002_add_business_plan_overrides`; `AccountManagementTest.php` is mandatory in CI. Complimentary Premium includes the configured Premium website booking rate, creates no payment record, and survives Stripe sync. Resolve active Stripe billing before manually overriding a plan. New team accounts have no shared default password. Access changes revoke sessions and custom permissions now round-trip correctly.
+
 ## 16 November 2026 — chat mentions, unread alerts and calendar density
 
 [Chat alerts: deployment, configuration and required checks](docs/CHAT_ALERTS.md). Marketplace community/event chats now accept validated @mentions. Superadmin → Settings → Automated notifications has separate email/WhatsApp switches for direct messages, group messages and mentions. Customers have separate chat preferences; WhatsApp requires explicit opt-in. Railway simulates delivery and cannot send real messages. Apply the new MySQL migration and run the scheduled `chat:send-alerts` command in production. The new tests are mandatory in CI.

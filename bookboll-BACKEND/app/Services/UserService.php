@@ -310,6 +310,7 @@ class UserService
                 return sendError('Your account is pending admin approval. Please wait for approval before logging in.');
             }
 
+            if ($user->status !== User::ACTIVE) return sendError('This account is inactive. Contact your administrator.', [], 403);
             $user->forceFill(['last_login_at' => now()])->save();
 
             if ($requestFrom == MobileApps::ADMIN) {
@@ -910,7 +911,7 @@ class UserService
         // offers venues belonging to the business the member is being added to.
         // Selecting just id+name meant that filter matched nothing and the picker
         // always read "No locations yet".
-        $venues = Venue::orderBy('name')->get(['id', 'name', 'owner_user_id', 'country_id', 'city_id']);
+        $venues = Venue::orderBy('name')->get(['id', 'name', 'owner_user_id', 'business_id', 'country_id', 'city_id']);
 
         return sendSuccess('Users fetched successfully', [
             'users'  => $paginated,
@@ -966,7 +967,7 @@ class UserService
             'business_types'        => $business?->business_types ?? [],
             'business_status'       => $business?->status,
             'business_id'           => $business?->id,
-            'custom_permissions'    => null,
+            'custom_permissions'    => $user->custom_permissions ?? ['grant'=>[], 'revoke'=>[]],
             // The venues this person is pinned to. Was hardcoded [], so the
             // dashboard's scope picker always opened empty and every existing
             // assignment — including the ones carried over from the old system —
@@ -1000,7 +1001,7 @@ class UserService
             'email'                  => 'required|email',
             'role'                   => 'required|exists:roles,name',
             'status'                 => 'required|in:' . $this->userModel::ACTIVE . ',' . $this->userModel::INACTIVE,
-            'password'               => 'nullable|min:3',
+            'password'               => 'nullable|string|min:12|max:128',
             'phone'                  => 'nullable|string|max:30',
             'country_id'             => 'nullable|integer',
             'assigned_country_ids'   => 'nullable|array',
@@ -1052,7 +1053,7 @@ class UserService
             }
 
             if (empty($formData['password'])) {
-                $formData['password'] = '12345678';
+                $formData['password'] = Str::random(48);
             }
 
             $plainPassword = $formData['password'];
@@ -1132,7 +1133,10 @@ class UserService
             DB::commit();
 
             try {
-                Mail::to($user->email)->send(new UserWelcomeEmail($user, $plainPassword));
+                if (!config('preview.workspace') && !config('preview.enabled')) {
+                    $url = rtrim(config('app.admin_url', config('app.url')), '/') . '/login';
+                    Mail::raw("Your Bookboll team account is ready. Open {$url} and choose Forgot password to set your own password using {$user->email}.", fn ($mail) => $mail->to($user->email)->subject('Set up your Bookboll team account'));
+                }
             } catch (Exception $e) {
                 Log::error('Failed to send welcome email: ' . $e->getMessage(), ['Exception' => $e]);
             }
@@ -1202,7 +1206,7 @@ class UserService
             }
 
             if (empty($formData['password'])) {
-                $formData['password'] = '12345678';
+                $formData['password'] = Str::random(48);
             }
 
             $plainPassword = $formData['password'];
@@ -1211,7 +1215,7 @@ class UserService
             $existing->update([
                 'name'                 => $formData['name'],
                 'status'               => $formData['status'],
-                'password'             => $formData['password'],
+                // Existing account keeps its password.
                 'phone'                => $formData['phone'] ?? $existing->phone,
                 'country_id'           => $formData['country_id'] ?? $existing->country_id,
                 'assigned_country_ids' => $formData['assigned_country_ids'] ?? $existing->assigned_country_ids,
@@ -1236,11 +1240,12 @@ class UserService
             DB::commit();
 
             try {
-                Mail::to($existing->email)->send(new UserWelcomeEmail($existing, $plainPassword));
+                if (!config('preview.workspace') && !config('preview.enabled')) Mail::raw('Your Bookboll account now has team access. Sign in with your existing password.', fn ($mail) => $mail->to($existing->email)->subject('Bookboll team access added'));
             } catch (Exception $e) {
                 Log::error('Failed to send welcome email: ' . $e->getMessage(), ['Exception' => $e]);
             }
 
+            \App\Support\AccountAdministration::revokeSessions($existing);
             $existing->load(['roles', 'venues', 'ownedBusiness']);
             $existing->makeHidden('roles');
             $user  = $existing;
@@ -1295,6 +1300,7 @@ class UserService
             return RoleGrantGuard::denied('assign that role');
         }
 
+        \App\Support\AccountAdministration::guardEdit($request, $user);
         $providerTeamRoles = config('roles.provider_team_roles', []);
 
         $formData = $request->validate([
@@ -1406,6 +1412,11 @@ class UserService
                 \App\Support\BusinessMembershipSync::syncForStaff($user->fresh(), $user->fresh()->owner_user_id, auth()->id());
             }
 
+            \App\Support\AccountAdministration::revokeSessions($user);
+            \App\Support\AccountAdministration::audit($request, 'account.access_updated', 'user', $user->id, [
+                'role' => $user->getRoleNames()->all(), 'status' => $user->status,
+                'location_ids' => $user->assigned_location_ids, 'country_ids' => $user->assigned_country_ids,
+            ]);
             DB::commit();
 
             $user->load(['roles', 'venues', 'ownedBusiness']);
@@ -1439,6 +1450,8 @@ class UserService
             return RoleGrantGuard::denied('delete that user');
         }
 
+        if ($user->hasRole('super_admin') && !User::role('super_admin')->where('status', User::ACTIVE)->where('id', '!=', $user->id)->exists()) return sendError('Keep at least one active superadmin.', [], 422);
+        \App\Support\AccountAdministration::revokeSessions($user);
         $user->delete();
 
         return sendSuccess('User deleted successfully');

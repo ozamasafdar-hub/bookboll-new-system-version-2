@@ -599,7 +599,8 @@ async function changePassword() {
                 </span>
               </div>
 
-              <p v-if="!planState.is_premium" class="muted" style="margin:0 0 14px;">
+              <p v-if="planState.admin_managed" class="muted">Your {{ planState.is_premium ? 'complimentary Premium' : 'Free' }} plan is managed by Bookboll. Contact support to change it.</p>
+              <p v-if="!planState.is_premium && !planState.admin_managed" class="muted" style="margin:0 0 14px;">
                 Your Free plan has no subscription fee. Premium is US$588 per year, billed annually with no free trial. Paid Premium halves your own-website booking commission and adds marketing, exports, promo codes and more.
               </p>
               <template v-else>
@@ -618,7 +619,7 @@ async function changePassword() {
               </template>
 
               <div class="plan-actions">
-                <button v-if="!planState.is_premium" class="btn btn-primary" @click="openUpgrade('')">
+                <button v-if="!planState.is_premium && !planState.admin_managed" class="btn btn-primary" @click="openUpgrade('')">
                   <Crown :size="15" /> Upgrade to Premium
                 </button>
                 <button v-else-if="planState.cancel_at_period_end" class="btn btn-primary" :disabled="planBusy" @click="doKeepPlan">

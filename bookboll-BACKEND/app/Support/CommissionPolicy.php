@@ -55,6 +55,9 @@ class CommissionPolicy
             return false;
         }
 
+        // A complimentary Premium grant includes the configured Premium website fee.
+        if ($business->plan_override === 'premium') return true;
+
         $sub = $business->relationLoaded('currentSubscription')
             ? $business->currentSubscription
             : $business->currentSubscription()->first();

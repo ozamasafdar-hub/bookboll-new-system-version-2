@@ -1,7 +1,10 @@
 <script setup>
+import AccountSecurity from '../components/AccountSecurity.vue'
+import BusinessPlanManagement from '../components/BusinessPlanManagement.vue'
+import '../styles/management.css'
 import BusinessSetup from '../components/BusinessSetup.vue'
 import BusinessInvite from '../components/BusinessInvite.vue'
-import { brandPreviewUrl } from '../lib/brand.js'
+import { brandPreviewUrl, wildcardDnsAvailable } from '../lib/brand.js'
 import BusinessAssignment from '../components/BusinessAssignment.vue'
 import AccountPicker from '../components/AccountPicker.vue'
 import { financeRequest } from '../lib/financeApi.js'
@@ -13,7 +16,7 @@ import { askConfirm } from '../lib/confirm.js'
 import { pushToast } from '../lib/toast.js'
 import { markDirty, clearDirty, confirmDiscardIfDirty } from '../lib/unsavedGuard.js'
 import { useCurrentUser } from '../lib/currentUser.js'
-import { Plus, Search, Trash2, Pencil as Edit2, X, Shield, UserCog, User, MapPin, Building2, AtSign, Users, UsersRound, ChevronDown, Info, Crown, CircleArrowDown } from 'lucide-vue-next'
+import { KeyRound, RefreshCw, ExternalLink, Plus, Search, Trash2, Pencil as Edit2, X, Shield, UserCog, User, MapPin, Building2, AtSign, Users, UsersRound, ChevronDown, Info, Crown, CircleArrowDown } from 'lucide-vue-next'
 import PaginationBar from '../components/PaginationBar.vue'
 import FilterBar from '../components/FilterBar.vue'
 import { idIn } from '../lib/geoFilter.js'
@@ -123,6 +126,19 @@ const isScopedRole = (r) => SCOPED_ROLES.includes(r)
 const commissionRates = ref({})
 const teamView = ref('businesses')
 const businessReview = ref(false)
+const securityAccount = ref(null), planBusiness = ref(null)
+const directoryStatus = ref(''), directoryRole = ref(''), directoryLogin = ref('')
+const loadError = ref(''), loadingDirectory = ref(false)
+const directoryRoles = computed(() => teamView.value === 'platform' ? PLATFORM_ROLES : PROVIDER_ROLES)
+function accountMatch(u) { return (!directoryStatus.value || u.status === directoryStatus.value) && (!directoryRole.value || u.role === directoryRole.value) && (!directoryLogin.value || (directoryLogin.value === 'never' ? !u.last_login : !!u.last_login)) }
+watch(teamView, () => { directoryRole.value = ''; directoryStatus.value = ''; directoryLogin.value = '' })
+function websiteLink(p) { return p.brand_enabled && p.brand_custom_domain && wildcardDnsAvailable() ? `https://${p.brand_custom_domain}` : brandPreviewUrl(p.brand_subdomain || p.username, { preview: !p.brand_enabled }) }
+async function copyWebsite(p) { try { await navigator.clipboard.writeText(websiteLink(p)); pushToast('Website link copied.', 'success') } catch { pushToast('Open the website and copy its address from the browser.', 'info') } }
+async function allPages(path, key, query = {}) {
+ const rows = []; let page = 1, result
+ do { result = await apiFetch(path, { query: { ...query, records_per_page: 200, page } }); if (!result.success) throw new Error(apiErr(result)); rows.push(...unwrapPage(result.data?.[key])); page++ } while (page <= Number(result.data?.[key]?.last_page || 1))
+ return { ...result, data: { ...result.data, [key]: rows } }
+}
 const assignmentBusiness = ref(null)
 const businessApiReady = ref(false)
 const businessCapabilityLoading = ref(false)
@@ -208,7 +224,8 @@ const showBusinessSetup = ref(false)
 const inviteBusiness = ref(null)
 const inviteRoles = computed(() => {
   const inBusiness = adminForm.value.owner_user_id || editing.value?.business_id || editing.value?.role === 'provider_admin'
-  return assignableRoles.value.filter(r => inBusiness ? PROVIDER_ROLES.includes(r) : PLATFORM_ROLES.includes(r))
+  if (editing.value?.role === 'provider_admin') return ['provider_admin']
+  return assignableRoles.value.filter(r => inBusiness ? PROVIDER_ROLES.includes(r) && r !== 'provider_admin' : PLATFORM_ROLES.includes(r))
 })
 function openBusinessNew() { showBusinessSetup.value = true }
 function createdBusiness(b) { teamView.value = 'businesses'; search.value = b.username; load() }
@@ -269,7 +286,7 @@ function defaultAdminForm() {
     assign_owner_user_id: '', assign_owner_role: 'provider_admin',
     commission_rate_facility: null, commission_rate_program: null,
     business_status: 'approved', description: '', license_number: '',
-    custom_permissions: {}, assigned_location_ids: [], assigned_listing_ids: [], assigned_program_ids: [],
+    assigned_country_ids: [], custom_permissions: {}, assigned_location_ids: [], assigned_listing_ids: [], assigned_program_ids: [],
   }
 }
 
@@ -293,7 +310,7 @@ function openAdminNew() {
   businessApiReady.value=false
   businessReview.value = false
   editing.value = null
-  adminForm.value = { ...defaultAdminForm(), role: assignableRoles.value.find(r => PLATFORM_ROLES.includes(r)) || 'staff' }
+  adminForm.value = { ...defaultAdminForm(), role: assignableRoles.value.includes('platform_staff') ? 'platform_staff' : assignableRoles.value.find(r => PLATFORM_ROLES.includes(r)) || 'staff' }
   formError.value = ''
   triedSave.value = false
   clearDirty()
@@ -306,7 +323,7 @@ function openAdminEdit(u) {
   adminForm.value = {
     business_name: u.business_name || '', business_types: normalizeBusinessTypes(u.business_types),
     full_name: u.full_name || '', email: u.email || '', role: u.role || 'staff',
-    country_id: u.country_id || '', location_id: u.location_id || '',
+    country_id: u.country_id || '', assigned_country_ids: [...(u.assigned_country_ids || (u.country_id && u.role === 'country_admin' ? [u.country_id] : []))], location_id: u.location_id || '',
     owner_user_id: u.owner_user_id || '', status: u.status || 'active',
     username: u.username || '', phone: u.phone || '', city_id: u.city_id || '',
     commission_rate_facility: u.commission_rate_facility ?? null,
@@ -331,7 +348,7 @@ async function persistAdminUser(payload) {
     status: payload.status || 'active',
     phone: payload.phone || null,
     country_id: payload.country_id || null,
-    assigned_country_ids: payload.assigned_country_ids || null,
+    ...(payload.assigned_country_ids !== undefined ? { assigned_country_ids: payload.assigned_country_ids } : {}),
     owner_user_id: payload.owner_user_id || null,
     custom_permissions: payload.custom_permissions || { grant:[], revoke:[] },
     // Which venues this person may manage. Scoped roles only: for an owner or a
@@ -448,12 +465,10 @@ async function saveAdmin() {
     custom_permissions: adminForm.value.custom_permissions || { grant:[], revoke:[] },
   }
   if (resolvedUsername !== undefined) payload.username = resolvedUsername
-  if (adminForm.value.role === 'platform_staff' && !editing.value) {
-    const j = jurisdictionCountryIds.value
-    payload.assigned_country_ids = j ? [...j] : []
-  }
-  if (adminForm.value.role === 'country_admin') {
-    payload.assigned_country_ids = resolvedCountryId ? [Number(resolvedCountryId)] : (adminForm.value.assigned_country_ids || [])
+  if (['platform_staff', 'country_admin'].includes(adminForm.value.role)) {
+    payload.assigned_country_ids = [...(adminForm.value.assigned_country_ids || [])]
+    payload.country_id = payload.assigned_country_ids.length ? Number(payload.assigned_country_ids[0]) : null
+    if (adminForm.value.role === 'country_admin' && !payload.assigned_country_ids.length) { formError.value = 'Choose at least one country for a country admin.'; return }
   }
   saving.value = true
   const error = await persistAdminUser(payload)
@@ -461,7 +476,7 @@ async function saveAdmin() {
   if (error) { formError.value = error.message; pushToast('Could not save user.', 'error'); return }
   clearDirty()
   logAudit({ action: editing.value ? AUDIT.UPDATED : AUDIT.CREATED, entity_type: 'admin_user', entity_id: editing.value?.id || payload.email, details: `${editing.value ? 'Updated' : 'Created'} ${roleLabelFn(adminForm.value.role)} ${payload.full_name || payload.email || ''}`.trim() })
-  pushToast(editing.value ? 'User updated' : isOwner ? 'Business created' : 'User created', 'success')
+  pushToast(editing.value ? 'Account updated; previous sign-ins have been revoked.' : isOwner ? 'Business created' : 'User created', 'success')
   showModal.value = false
   await load()
   await loadUserContext()
@@ -496,7 +511,7 @@ const TEAM_ROLES = ASSIGNABLE_TEAM_ROLES.map(v => ({
 function defaultTeamForm() {
   return {
     full_name: '', email: '', role: 'staff', location_id: '', phone: '', status: 'active',
-    custom_permissions: {}, assigned_location_ids: [], assigned_listing_ids: [], assigned_program_ids: [],
+    assigned_country_ids: [], custom_permissions: {}, assigned_location_ids: [], assigned_listing_ids: [], assigned_program_ids: [],
   }
 }
 
@@ -516,7 +531,12 @@ const editorLocations = computed(() => {
   if (!isSuperAdmin.value) return locations.value
 
   const owner = editorOwnerId.value
-  if (!owner) return locations.value.filter(l => !l.owner_user_id)
+  const businessId = editing.value?.business_id
+  if (businessId) {
+    const businessOwner = businesses.value.find(b => String(b.id) === String(businessId))?.owner_user_id
+    return locations.value.filter(l => String(l.business_id || '') === String(businessId) || (!l.business_id && businessOwner && String(l.owner_user_id) === String(businessOwner)))
+  }
+  if (!owner) return locations.value
 
   return locations.value.filter(l => String(l.owner_user_id ?? '') === String(owner))
 })
@@ -617,11 +637,13 @@ async function removeTeam(u) {
 
 // ── Load (Laravel Sanctum) ────────────────────────────────────────────────────
 async function load() {
+  loadingDirectory.value = true; loadError.value = ''
+  try {
   if (isPlatformSide.value) {
     const [platformRes, staffRes, bizRes, countriesRes] = await Promise.all([
-      apiFetch('/admin/users', { query: { scope: 'platform', records_per_page: 200 } }),
-      apiFetch('/admin/users', { query: { scope: 'provider_staff', records_per_page: 500 } }),
-      apiFetch('/admin/businesses', { query: { records_per_page: 200 } }),
+      allPages('/admin/users', 'users', { scope: 'platform' }),
+      allPages('/admin/users', 'users', { scope: 'provider_staff' }),
+      allPages('/admin/businesses', 'businesses'),
       apiFetch('/admin/locations/countries'),
     ])
     const platformUsers = unwrapPage(platformRes.data?.users)
@@ -672,6 +694,7 @@ async function load() {
     listings.value = []
     programs.value = []
   }
+  } catch (e) { loadError.value = e.message || 'The directory could not be loaded.' } finally { loadingDirectory.value = false }
 }
 onMounted(load)
 watch(() => currentUser.value?.id, () => load())
@@ -709,8 +732,9 @@ const providerGroups = computed(() => {
         country_id: b.country_id ?? ownerRow?.country_id,
         plan: b.plan || 'free',
         premium_since: b.premium_since || null,
-        status: ownerRow?.status || 'active',
-        last_login: ownerRow?.last_login || ownerRow?.last_login_at,
+        plan_override: b.plan_override, brand_subdomain: b.brand_subdomain, brand_enabled: b.brand_enabled, brand_custom_domain: b.brand_custom_domain,
+        status: ownerRow?.status || b.owner_status || 'active',
+        last_login: ownerRow?.last_login || ownerRow?.last_login_at || b.last_login,
       }
       return {
         provider,
@@ -747,7 +771,7 @@ watch(search, (q) => {
 const filteredPlatformTeam = computed(() => {
   const q = search.value.trim().toLowerCase()
   return platformTeam.value.filter(u =>
-    memberGeoMatch(u) && (!q ||
+    accountMatch(u) && memberGeoMatch(u) && (!q ||
       (u.full_name || '').toLowerCase().includes(q) ||
       (u.email || '').toLowerCase().includes(q) ||
       roleLabel(u.role).toLowerCase().includes(q))
@@ -759,6 +783,7 @@ const { page: platformPage, perPage: platformPerPage, totalPages: platformTotalP
 const filteredProviderGroups = computed(() => {
   const q = search.value.trim().toLowerCase()
   return providerGroups.value.filter(g => {
+    if ((directoryStatus.value || directoryRole.value || directoryLogin.value) && !g.staff.some(accountMatch)) return false
     if (filterCountry.value.length || filterCity.value.length) {
       if (!memberGeoMatch(g.provider) && !g.staff.some(memberGeoMatch)) return false
     }
@@ -837,6 +862,7 @@ function scopeText(u) {
 
   if (u.location_id) return locName(u.location_id)
   if (u.owner_user_id) return ownerTag(u.owner_user_id)
+  if (u.assigned_country_ids?.length) return u.assigned_country_ids.map(countryName).filter(Boolean).join(', ') || `${u.assigned_country_ids.length} countries`
   if (u.country_id) return countryName(u.country_id)
   if (GLOBAL_ROLES.includes(u.role)) return 'Global'
 
@@ -848,14 +874,7 @@ function scopeText(u) {
 
 const statusBadge = (s) => ({ approved: 'badge-success', active: 'badge-success', pending: 'badge-warning', rejected: 'badge-error', suspended: 'badge-error' }[s] || 'badge-neutral')
 
-// Premium is a paid Stripe subscription, so there is no admin switch that grants it —
-// handing it out here would leave a provider entitled with nothing billed. The
-// buttons stay hidden; the chip below reports what Stripe says.
 const isPremiumPlan = (p) => p?.plan === 'premium'
-const planBusyId = ref('')
-async function setProviderPlan(_provider, _plan) {
-  pushToast('Premium is a paid subscription — the provider starts it from their own dashboard.', 'info')
-}
 const timeAgo = (ts) => {
   if (!ts) return 'Never'
   const diff = Date.now() - new Date(ts).getTime()
@@ -886,15 +905,22 @@ function avatarColor(id) {
       <div class="page-header">
         <div>
           <h1 class="page-title">Team &amp; Users</h1>
-          <div class="page-subtitle">{{ isSuperAdmin ? 'Platform admins and all provider businesses with their staff.' : 'Bookboll staff and the provider businesses in your jurisdiction.' }}</div>
+          <div class="page-subtitle">{{ isSuperAdmin ? 'Manage business accounts, team access and sign-in security.' : 'Bookboll staff and the provider businesses in your jurisdiction.' }}</div>
         </div>
-        <div class="workspace-actions"><button class="btn btn-secondary" @click="openAdminNew"><Plus :size="16" />Invite user</button><button v-if="assignableRoles.includes('provider_admin')" class="btn btn-primary" @click="openBusinessNew"><Building2 :size="16" />Add business</button></div>
+        <div class="workspace-actions"><button class="btn btn-secondary" :disabled="loadingDirectory" @click="load"><RefreshCw :size="15" />Refresh</button><button class="btn btn-secondary" @click="openAdminNew"><Plus :size="16" />Add platform account</button><button v-if="assignableRoles.includes('provider_admin')" class="btn btn-primary" @click="openBusinessNew"><Building2 :size="16" />Add business</button></div>
       </div>
 
       <div class="workspace-switcher" aria-label="Team directory">
         <button :aria-pressed="teamView === 'businesses'" @click="teamView = 'businesses'"><Building2 :size="22" /><span><strong>Provider businesses <b>{{ providerGroups.length }}</b></strong><small>Owners, teams and business accounts</small></span></button>
         <button :aria-pressed="teamView === 'platform'" @click="teamView = 'platform'"><Shield :size="22" /><span><strong>Platform team <b>{{ platformTeam.length }}</b></strong><small>Bookboll access and responsibilities</small></span></button>
       </div>
+      <p v-if="loadError" class="form-error" role="alert">{{ loadError }} <button class="btn btn-sm btn-secondary" @click="load">Retry</button></p>
+      <details class="team-role-guide"><summary>Understand roles &amp; access</summary>
+        <p>{{ teamView === 'platform' ? 'Platform accounts work for Bookboll. Country and venue assignments limit where they work.' : 'Business roles only work within their assigned business and venues. They never gain platform access.' }}</p>
+        <dl v-if="teamView === 'platform'"><dt>Superadmin</dt><dd>Full platform control, account security and complimentary plans.</dd><dt>Country admin</dt><dd>Administration within assigned countries.</dd><dt>Platform staff</dt><dd>Day-to-day operations with assigned venues and permissions.</dd></dl>
+        <dl v-else><dt>Owner</dt><dd>Runs the business and its team. Each business has one owner.</dd><dt>Manager / Supervisor</dt><dd>Manage operations within assigned venues; use Edit access to inspect exact permissions.</dd><dt>Staff / Viewer</dt><dd>Staff handle bookings and collections. Viewers can view permitted records.</dd></dl>
+        <p>Use Edit access for venue assignments and advanced permissions. Deactivate an account to stop sign-in without deleting its history.</p>
+      </details>
       <!-- Search -->
       <FilterBar
         v-model:search="search"
@@ -902,15 +928,18 @@ function avatarColor(id) {
         v-model:city="filterCity"
         :countries="countries"
         :cities="cities"
-        :extra-count="(filterBizTypes.length ? 1 : 0) + (filterPlan ? 1 : 0)"
+        :extra-count="(filterBizTypes.length ? 1 : 0) + (filterPlan ? 1 : 0) + (directoryStatus ? 1 : 0) + (directoryRole ? 1 : 0) + (directoryLogin ? 1 : 0)"
         search-placeholder="Search by name, email or @username…"
-        @clear="filterBizTypes = []; filterPlan = ''"
+        @clear="filterBizTypes = []; filterPlan = ''; directoryStatus = ''; directoryRole = ''; directoryLogin = ''"
       >
         <div class="lf-selects">
-          <div class="lf-field"><label>Business type</label>
+          <div class="lf-field"><label>Account status</label><select v-model="directoryStatus" class="lf-select"><option value="">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="blocked">Blocked</option></select></div>
+          <div class="lf-field"><label>Role</label><select v-model="directoryRole" class="lf-select"><option value="">All roles</option><option v-for="r in directoryRoles" :key="r" :value="r">{{ roleLabel(r) }}</option></select></div>
+          <div class="lf-field"><label>Sign-in activity</label><select v-model="directoryLogin" class="lf-select"><option value="">Everyone</option><option value="never">Never signed in</option><option value="used">Has signed in</option></select></div>
+          <div v-if="teamView==='businesses'" class="lf-field"><label>Business type</label>
             <MultiSelect v-model="filterBizTypes" :options="bizTypeOptions" placeholder="All types" />
           </div>
-          <div class="lf-field"><label>Plan</label>
+          <div v-if="teamView==='businesses'" class="lf-field"><label>Plan</label>
             <select v-model="filterPlan" class="lf-select">
               <option value="">All plans</option>
               <option value="premium">Premium</option>
@@ -943,7 +972,7 @@ function avatarColor(id) {
                   <td style="color:var(--text-muted);">{{ scopeText(u) }}</td>
                   <td><span class="badge" :class="u.status==='active'?'badge-success':'badge-neutral'">{{ u.status }}</span></td>
                   <td style="color:var(--text-muted);">{{ timeAgo(u.last_login) }}</td>
-                  <td><div class="row-actions"><button class="btn-icon" @click="openAdminEdit(u)"><Edit2 :size="15" /></button><button class="btn-icon danger" @click="removeAdmin(u)"><Trash2 :size="15" /></button></div></td>
+                  <td><div class="row-actions"><button class="btn btn-sm btn-secondary" @click="openAdminEdit(u)"><Edit2 :size="14" />Edit access</button><button v-if="isSuperAdmin && String(u.id)!==String(currentUser?.id)" class="btn btn-sm btn-secondary" @click="securityAccount=u"><KeyRound :size="14" />Account security</button><button class="btn-icon danger" @click="removeAdmin(u)"><Trash2 :size="15" /></button></div></td>
                 </tr>
               </tbody>
             </table>
@@ -973,15 +1002,15 @@ function avatarColor(id) {
             <div class="biz-owner-email">{{ g.provider.id ? g.provider.email : 'Owner not assigned' }}</div>
             <div class="biz-badges">
               <span class="biz-plan-chip" :class="{ premium: isPremiumPlan(g.provider) }" :title="isPremiumPlan(g.provider) ? 'On the Premium plan' : 'On the Free plan'">
-                <Crown v-if="isPremiumPlan(g.provider)" :size="11" />{{ isPremiumPlan(g.provider) ? 'Premium' : 'Free' }}
+                <Crown v-if="isPremiumPlan(g.provider)" :size="11" />{{ isPremiumPlan(g.provider) ? 'Premium' : 'Free' }}{{ g.provider.plan_override==='premium' ? ' · complimentary' : '' }}
               </span>
               <span v-for="t in normalizeBusinessTypes(g.provider.business_types)" :key="t" class="biz-type-chip">{{ businessTypeLabel(t) }}</span>
               <span class="badge" :class="statusBadge(g.provider.business_status)">{{ g.provider.business_status || 'pending' }}</span>
-              <span class="biz-staff-count"><UsersRound :size="12" />{{ g.staff.length }} team member{{ g.staff.length === 1 ? '' : 's' }}</span>
+              <span class="biz-type-chip">Website {{ g.provider.brand_enabled ? 'published' : 'draft' }}</span><span class="biz-staff-count"><UsersRound :size="12" />{{ g.staff.length }} team member{{ g.staff.length === 1 ? '' : 's' }}</span>
               <span v-if="g.provider.country_id" class="biz-country-pill">{{ countryName(g.provider.country_id) }}</span>
             </div>
             <div class="biz-actions" @click.stop>
-              <a class="btn btn-sm btn-secondary" :href="brandPreviewUrl(g.provider.username, { preview: true })" target="_blank" rel="noopener">View website</a>
+              <a v-if="g.provider.brand_subdomain || g.provider.username" class="btn btn-sm btn-secondary" :href="websiteLink(g.provider)" target="_blank" rel="noopener"><ExternalLink :size="13" />{{ g.provider.brand_enabled ? 'Open website' : 'Preview website' }}</a><button v-if="g.provider.brand_subdomain || g.provider.username" class="btn btn-sm btn-secondary" @click="copyWebsite(g.provider)">Copy link</button><button v-if="isSuperAdmin" class="btn btn-sm btn-secondary" @click="planBusiness=g.provider"><Crown :size="13" />Manage plan</button>
               <button v-if="!g.provider.id" class="btn btn-sm btn-secondary" @click="inviteBusiness=g.provider">Invite owner</button>
               <!-- The owner gap is read in the header ("Owner not assigned"), so
                    the fix for it belongs here rather than below a staff table the
@@ -989,8 +1018,6 @@ function avatarColor(id) {
               <button v-if="!g.provider.id" class="btn btn-sm btn-primary biz-assign-btn" @click="assignmentBusiness=g.provider">
                 <UsersRound :size="13" />Assign platform account
               </button>
-              <button v-if="false && isSuperAdmin && !isPremiumPlan(g.provider)" class="btn-icon plan-up" :disabled="planBusyId === g.provider.id" @click="setProviderPlan(g.provider, 'premium')" title="Upgrade to Premium"><Crown :size="15" /></button>
-              <button v-else-if="false && isSuperAdmin" class="btn-icon plan-down" :disabled="planBusyId === g.provider.id" @click="setProviderPlan(g.provider, 'free')" title="Move to Free"><CircleArrowDown :size="15" /></button>
               <button v-if="g.provider.id" class="btn-icon" @click="openAdminEdit(g.provider)" title="Edit business"><Edit2 :size="15" /></button>
               <button v-if="g.provider.id" class="btn-icon danger" @click="removeAdmin(g.provider)" title="Delete business"><Trash2 :size="15" /></button>
             </div>
@@ -1020,7 +1047,7 @@ function avatarColor(id) {
                   <td style="font-size:13px;color:var(--text-muted);">{{ scopeSummary(m) }}</td>
                   <td><span class="badge" :class="m.status==='active'?'badge-success':'badge-neutral'">{{ m.status }}</span></td>
                   <td style="font-size:12px;color:var(--text-muted);">{{ timeAgo(m.last_login) }}</td>
-                  <td><div class="row-actions"><button class="btn btn-sm btn-secondary" :aria-label="'Edit access for ' + m.full_name" @click="openAdminEdit(m)"><Edit2 :size="14" />Edit access</button><button v-if="!m.isBusinessOwner" class="btn-icon danger" @click="removeAdmin(m)" aria-label="Remove team member"><Trash2 :size="15" /></button></div></td>
+                  <td><div class="row-actions"><button class="btn btn-sm btn-secondary" :aria-label="'Edit access for ' + m.full_name" @click="openAdminEdit(m)"><Edit2 :size="14" />Edit access</button><button v-if="isSuperAdmin && String(m.id)!==String(currentUser?.id)" class="btn btn-sm btn-secondary" @click="securityAccount=m"><KeyRound :size="14" />Account security</button><button v-if="!m.isBusinessOwner" class="btn-icon danger" @click="removeAdmin(m)" aria-label="Remove team member"><Trash2 :size="15" /></button></div></td>
                 </tr>
                 <tr v-if="!g.staff.length">
                   <td colspan="6" class="empty-staff">No team members yet. Invite an owner or staff member, or assign an existing platform account.</td>
@@ -1038,6 +1065,8 @@ function avatarColor(id) {
         </div>
       </div>
 
+      <AccountSecurity v-if="securityAccount && isSuperAdmin" :account="securityAccount" @close="securityAccount=null" @saved="load" />
+      <BusinessPlanManagement v-if="planBusiness && isSuperAdmin" :business="planBusiness" @close="planBusiness=null" @saved="load" />
       <BusinessSetup v-if="showBusinessSetup" :countries="countries.filter(c => !jurisdictionCountryIds || jurisdictionCountryIds.has(c.id) || jurisdictionCountryIds.has(String(c.id)))" @close="showBusinessSetup=false" @created="createdBusiness" @invite="inviteBusiness=$event" @assign="assignNewBusiness" />
       <BusinessInvite v-if="inviteBusiness" :business="inviteBusiness" @close="inviteBusiness=null" @saved="load" />
       <BusinessAssignment v-if="assignmentBusiness" :business="assignmentBusiness" @close="assignmentBusiness=null" @assigned="assignmentSaved"/>
@@ -1045,7 +1074,7 @@ function avatarColor(id) {
       <div v-if="showModal" class="modal-backdrop" @click.self="requestCloseTeamModal">
         <div class="modal team-dialog" v-dialog="requestCloseTeamModal" @input="markDirty" @change="markDirty">
           <div class="modal-header">
-            <div class="modal-title">{{ newBusiness ? (businessReview ? 'Review new business' : 'Add business') : editing ? 'Edit user' : 'Invite user' }}</div>
+            <div class="modal-title">{{ newBusiness ? (businessReview ? 'Review new business' : 'Add business') : editing ? 'Edit account access' : 'Add platform account' }}</div>
             <button class="btn-icon" @click="requestCloseTeamModal" aria-label="Close"><X :size="18" /></button>
           </div>
           <div class="modal-body">
@@ -1074,7 +1103,7 @@ function avatarColor(id) {
               <div class="form-group"><label class="form-label" for="team-name">{{ adminForm.role === 'provider_admin' ? 'Owner’s full name' : 'Full name' }} *</label><input id="team-name" v-model="adminForm.full_name" :aria-invalid="triedSave && !adminForm.full_name.trim()" autocomplete="name" /><small v-if="triedSave && !adminForm.full_name.trim()" class="form-error">Enter a full name.</small></div>
               <div class="form-group"><label class="form-label" for="team-email">Email *</label><input id="team-email" v-model="adminForm.email" type="email" :aria-invalid="triedSave && !!businessErrors.email" autocomplete="email" /><small v-if="triedSave && businessErrors.email" class="form-error">{{ businessErrors.email }}</small></div>
             </div>
-            <div v-if="!newBusiness" class="tm-section-title">Role &amp; access</div>
+            <p v-if="!editing && !newBusiness" class="workspace-note">A new account gets a secure password setup email. Existing customer accounts keep their password. Workspace emails are simulated.</p><div v-if="!newBusiness" class="tm-section-title">Role &amp; access</div>
             <div v-if="!newBusiness" class="form-group"><label class="form-label">Role</label>
               <RoleSelect v-model="adminForm.role" :roles="inviteRoles" inline />
             </div>
@@ -1127,11 +1156,11 @@ function avatarColor(id) {
             <div v-else-if="isProviderScopedRole(adminForm.role)" class="grid grid-2 tm-company-row">
               <div class="form-group">
                 <label class="form-label" for="team-company">Company</label>
-                <select id="team-company" v-model="adminForm.owner_user_id">
+                <p v-if="editing?.business_id" class="workspace-note">{{ editing.business_name || businesses.find(b => String(b.id)===String(editing.business_id))?.name }}</p><select v-else id="team-company" v-model="adminForm.owner_user_id" :disabled="!!editing">
                   <option value="">@bookboll</option>
                   <option v-for="b in businessOwners" :key="b.id" :value="b.id">@{{ b.username || b.full_name }}</option>
                 </select>
-                <div class="field-hint">The business this person works for.</div>
+                <div class="field-hint">The business this person works for. Existing accounts change business through a reviewed assignment.</div>
               </div>
               <div class="form-group">
                 <label class="form-label" for="team-status">Status</label>
@@ -1145,7 +1174,8 @@ function avatarColor(id) {
               inherit country_id from their assigned provider at save time — no manual selection needed.
               Provider admins set their country in the Company details section above.
             -->
-            <div class="grid grid-2" v-if="['super_admin','country_admin'].includes(adminForm.role)">
+            <div v-if="['country_admin','platform_staff'].includes(adminForm.role)" class="form-group"><label class="form-label">Country access</label><MultiSelect v-model="adminForm.assigned_country_ids" :options="countries.filter(c => !jurisdictionCountryIds || jurisdictionCountryIds.has(c.id)).map(c => ({ value:c.id, label:c.name }))" placeholder="Choose countries" /><div class="field-hint">Choose countries or assign specific venues below. Without either, platform staff have no venue access.</div></div>
+            <div class="grid grid-2" v-if="['super_admin'].includes(adminForm.role)">
               <div class="form-group"><label class="form-label">Country</label>
                 <select v-model="adminForm.country_id"><option value="">—</option><option v-for="c in countries" :key="c.id" :value="c.id">{{ c.name }}</option></select>
               </div>
@@ -1324,6 +1354,8 @@ function avatarColor(id) {
 </template>
 
 <style scoped>
+.team-role-guide{margin:16px 0;border-bottom:1px solid var(--border);padding-bottom:16px;font-size:13px;color:var(--text-muted)}.team-role-guide summary{color:var(--text);cursor:pointer;font-weight:600}.team-role-guide dl{display:grid;grid-template-columns:160px 1fr;gap:12px;max-width:850px}.team-role-guide dt{font-weight:600;color:var(--text)}.team-role-guide dd{margin:0}.team-role-guide p{line-height:1.6;max-width:850px}.biz-actions{flex-wrap:wrap}.row-actions{flex-wrap:wrap}
+
 .biz-assign-btn { white-space: nowrap; margin-right: 4px; }
 @media (max-width: 760px) { .biz-assign-btn { font-size: 12px; padding: 6px 10px; } }
 .biz-owner { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); }

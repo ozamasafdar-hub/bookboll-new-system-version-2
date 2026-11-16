@@ -209,10 +209,14 @@ class BusinessMembershipSync
         // record, and revoking it here would sign them out of their business
         // for changing their phone number.
         if (! $businessId) {
-            return BusinessMembership::query()
+            $membership = BusinessMembership::query()
                 ->where('user_id', $user->id)
                 ->where('status', BusinessMembership::STATUS_ACTIVE)
                 ->first();
+            if ($membership && !in_array($membership->role, BusinessMembership::MANAGING_ROLES, true) && $membership->role !== $role) {
+                $membership->forceFill(['role' => $role, 'version' => $membership->version + 1])->save();
+            }
+            return $membership;
         }
 
         self::revokeStaffMembershipsExcept($user, $businessId);

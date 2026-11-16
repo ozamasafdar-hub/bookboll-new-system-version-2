@@ -1,0 +1,13 @@
+.management-dialog{width:min(760px,calc(100vw - 32px));max-width:760px;max-height:90dvh;display:flex;flex-direction:column}
+.management-dialog .modal-header,.management-dialog .modal-footer{flex-shrink:0}
+.management-dialog .modal-header h2{margin:0;font-size:19px}.management-dialog .modal-header p{margin:5px 0 0;color:var(--text-muted);font-size:13px;overflow-wrap:anywhere}
+.management-dialog .modal-body{overflow:auto;min-height:0;display:flex;flex-direction:column;gap:20px;padding:24px}
+.management-context{display:flex;gap:12px;padding:16px;background:var(--bg-hover,var(--bg));border:1px solid var(--border);border-radius:8px;color:var(--text)}
+.management-context span{display:flex;flex-direction:column;gap:5px}.management-context small,.management-choices small,.management-field small,.management-grid small{color:var(--text-muted);font-size:12px;line-height:1.5}
+.management-choices{padding:0;margin:0;border:0;display:grid;gap:8px}.management-choices legend{font-weight:600;margin-bottom:10px;font-size:14px}
+.management-choices label{display:flex;align-items:flex-start;gap:12px;padding:14px;border:1px solid var(--border);border-radius:8px;cursor:pointer}.management-choices label:has(input:checked){border-color:var(--primary,#2463eb);background:color-mix(in srgb,var(--primary,#2463eb) 9%,transparent)}.management-choices label:has(input:disabled){opacity:.6;cursor:not-allowed}
+.management-choices span{display:flex;flex-direction:column;gap:5px}.management-choices input,.management-confirm input{width:16px!important;height:16px;flex:0 0 16px;margin-top:3px;accent-color:var(--primary,#2463eb)}
+.management-field,.management-grid label{display:flex;flex-direction:column;gap:8px;font-size:13px;font-weight:600}.management-field textarea{width:100%;resize:vertical}.management-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.management-confirm{display:flex;gap:10px;font-size:13px;line-height:1.6}.management-note{font-size:13px;color:var(--text-muted);margin:0;line-height:1.6}
+.management-history{border-top:1px solid var(--border);padding-top:16px;font-size:13px}.management-history summary{cursor:pointer;font-weight:600}.management-history article{padding:12px 0;display:flex;flex-direction:column;gap:5px;border-bottom:1px solid var(--border)}.management-history small{color:var(--text-muted);overflow-wrap:anywhere}
+@media(max-width:600px){.management-grid{grid-template-columns:1fr}.management-dialog .modal-body{padding:16px}.management-dialog .modal-footer{flex-wrap:wrap}}

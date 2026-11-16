@@ -53,6 +53,7 @@ class RoleGrantGuard
             return false;
         }
 
+        if ($role === 'super_admin') return AccountAdministration::isSuperAdmin($actor);
         $isGlobal = $actor->hasAnyRole(Capabilities::globalRoles());
 
         // Only a global admin creates global or platform-side accounts.
@@ -75,9 +76,8 @@ class RoleGrantGuard
         if (! $actor || ! $target) {
             return false;
         }
-        if ($actor->hasRole('super_admin')) {
-            return true;
-        }
+        if ($target->hasRole('super_admin')) return AccountAdministration::isSuperAdmin($actor);
+        if (AccountAdministration::isSuperAdmin($actor)) return true;
 
         return self::rankOf($actor) >= self::rankOf($target);
     }

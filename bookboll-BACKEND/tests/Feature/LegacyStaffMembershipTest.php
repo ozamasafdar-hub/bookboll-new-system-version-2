@@ -133,7 +133,7 @@ it('records legacy employee roles as staff memberships', function () {
         ->and(AccessScope::businessId($guard))->toBe($business->id);
 });
 
-it('moves the membership when the owner changes and revokes it when the role leaves the business', function () {
+it('rejects unreviewed account moves while keeping the legacy repair bridge functional', function () {
     [$ownerA, $businessA] = lsmOwnerlessBusinessWithOwner();
     [$ownerB, $businessB] = lsmOwnerlessBusinessWithOwner();
     $admin = lsmSuperAdmin();
@@ -146,14 +146,23 @@ it('moves the membership when the owner changes and revokes it when the role lea
 
     $this->actingAs($admin)->putJson("/api/admin/users/{$mover->id}", [
         'owner_user_id' => $ownerB->id,
-    ])->assertOk();
+    ])->assertUnprocessable();
+    expect(AccessScope::businessId($mover->fresh()))->toBe($businessA->id);
+    // Repair/backfill code still has to migrate legacy links correctly. Public
+    // account editing must use the separately reviewed assignment flow instead.
+    $mover->update(['owner_user_id' => $ownerB->id]);
+    BusinessMembershipSync::syncForStaff($mover->fresh(), $ownerB->id, $admin->id);
 
     expect(BusinessMembership::where('user_id', $mover->id)->active()->pluck('business_id')->all())->toBe([$businessB->id])
         ->and(BusinessMembership::where('user_id', $mover->id)->where('business_id', $businessA->id)->value('status'))->toBe('revoked');
 
     $this->actingAs($admin)->putJson("/api/admin/users/{$mover->id}", [
         'role' => 'platform_staff',
-    ])->assertOk();
+    ])->assertUnprocessable();
+    expect(AccessScope::businessId($mover->fresh()))->toBe($businessB->id);
+    $mover->update(['owner_user_id' => null]);
+    $mover->syncRoles(['platform_staff']);
+    BusinessMembershipSync::syncForStaff($mover->fresh(), null, $admin->id);
 
     expect(BusinessMembership::where('user_id', $mover->id)->active()->count())->toBe(0)
         ->and($mover->fresh()->owner_user_id)->toBeNull();
