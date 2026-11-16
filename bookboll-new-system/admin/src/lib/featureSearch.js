@@ -26,7 +26,7 @@ export const FEATURE_DESTINATIONS = [
   entry('promos', 'Promo codes', 'Manage discounts and promotional codes.', 'Marketing', '/promocodes', 'coupon voucher promotion discount sale offer'),
   entry('email', 'Email sender', 'Configure the email address used for messages.', 'Marketing', '/email-sender', 'smtp email delivery sender notifications'),
   entry('whatsapp', 'WhatsApp', 'Set up your WhatsApp sender.', 'Marketing', '/whatsapp', 'whatsapp chat messages phone sender'),
-  entry('notifications', 'Notification templates', 'Manage automated messages to customers.', 'Settings', '/notifications', 'email sms confirmation reminder message notification template'),
+  entry('notifications', 'Notification templates', 'Manage automated messages to customers.', 'Settings', '/notifications', 'email sms whatsapp confirmation reminder message notification template chat mention tagging alerts'),
   entry('team', 'Team & users', 'Manage staff roles and access to your business.', 'Administration', '/team', 'invite employee staff permissions access owner add user business'),
   entry('settings', 'Settings', 'Manage account and business preferences.', 'Settings', '/settings', 'account business profile policies preferences'),
   entry('analytics', 'Business analytics', 'Explore bookings, revenue and customer activity.', 'Reports', '/dashboard', 'reports statistics revenue sales commission performance'),

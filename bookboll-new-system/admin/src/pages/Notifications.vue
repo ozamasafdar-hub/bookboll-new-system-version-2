@@ -13,6 +13,7 @@
  */
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
+import ChatNotificationSettings from '../components/ChatNotificationSettings.vue'
 import FeatureSearch from '../components/FeatureSearch.vue'
 import { useCurrentUser } from '../lib/currentUser.js'
 import { pushToast } from '../lib/toast.js'
@@ -162,6 +163,7 @@ async function save() {
     </div>
 
     <FeatureSearch />
+    <ChatNotificationSettings v-if="isSuperAdmin && isPlatformMode" />
 
     <!-- Channel setup and availability -->
     <div class="nt-channels">

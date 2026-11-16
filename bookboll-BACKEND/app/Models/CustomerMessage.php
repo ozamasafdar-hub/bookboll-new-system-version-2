@@ -24,10 +24,12 @@ class CustomerMessage extends Model
         'sender_id',
         'recipient_id',
         'body',
+        'mentions',
         'read_at',
     ];
 
     protected $casts = [
+        'mentions' => 'array',
         'read_at'    => 'datetime',
         'deleted_at' => 'datetime',
         'created_at' => 'datetime',

@@ -1,3 +1,9 @@
+## 16 November 2026 — chat mentions, unread alerts and calendar density
+
+[Chat alerts: deployment, configuration and required checks](docs/CHAT_ALERTS.md). Marketplace community/event chats now accept validated @mentions. Superadmin → Settings → Automated notifications has separate email/WhatsApp switches for direct messages, group messages and mentions. Customers have separate chat preferences; WhatsApp requires explicit opt-in. Railway simulates delivery and cannot send real messages. Apply the new MySQL migration and run the scheduled `chat:send-alerts` command in production. The new tests are mandatory in CI.
+
+Calendar columns remain 240 px for one or two overlapping bookings, then expand by 120 px per simultaneous lane. Long chat threads return their newest messages in chronological order.
+
 ## 13 November 2026 — calendar, business onboarding and provider Stripe setup
 
 Read [PROVIDER_SETUP_AND_STRIPE.md](PROVIDER_SETUP_AND_STRIPE.md) before deploying. It supersedes older booking-wallet connection instructions: an active wallet setting does not enable full online payments. Verified business Stripe accounts, per-checkout recipient/fee/amount snapshots and signed settlement checks now drive the connection flow. Deposit + arrival still requires no provider gateway. The existing `provider_connect_settlement` live-use gate remains mandatory and requires real Stripe **test-mode** evidence; mocked tests do not unlock it.

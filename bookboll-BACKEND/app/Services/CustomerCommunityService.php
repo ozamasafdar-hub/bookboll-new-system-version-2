@@ -776,7 +776,7 @@ class CustomerCommunityService
         }
 
         $membership = $this->membershipFor($community->id, $user->uuid);
-        if (! $this->isMember($membership)) {
+        if (! $this->isMember($membership) && $community->owner_customer_id !== $user->uuid) {
             return sendError('Members only.', [], 403);
         }
 
@@ -787,9 +787,9 @@ class CustomerCommunityService
     protected function groupThreadRows(string $key, int $limit): array
     {
         $rows = CustomerMessage::where('conversation_key', $key)
-            ->orderBy('created_at')
+            ->orderByDesc('created_at')->orderByDesc('id')
             ->limit(max(1, min($limit, 500)))
-            ->get();
+            ->get()->reverse()->values();
 
         if ($rows->isEmpty()) {
             return [];
@@ -808,6 +808,7 @@ class CustomerCommunityService
                 'sender_id'        => $m->sender_id,
                 'recipient_id'     => $m->recipient_id,
                 'body'             => $m->body,
+                'mentions' => $m->mentions ?? [],
                 'created_at'       => optional($m->created_at)?->toIso8601String(),
                 'read_at'          => optional($m->read_at)?->toIso8601String(),
                 'senderName'       => $p?->name ?: 'Player',
@@ -871,7 +872,7 @@ class CustomerCommunityService
         return sendSuccess('Messages', ['messages' => $this->groupThreadRows($key, $limit)]);
     }
 
-    protected function sendMeetMessage(User $user, string $key, string $body)
+    protected function sendMeetMessage(User $user, string $key, string $body, array $mentions = [])
     {
         $game = $this->gameFromMeetKey($key);
         if (! $game) {
@@ -884,12 +885,14 @@ class CustomerCommunityService
             return sendError('This event was cancelled, so its chat is closed.', [], 422);
         }
 
-        $message = CustomerMessage::create([
-            'conversation_key' => $key,
-            'sender_id'        => $user->uuid,
-            'recipient_id'     => null,
-            'body'             => $body,
-        ]);
+        $chat = app(ChatService::class);
+        $tags = $chat->mentions($user, $key, $body, $mentions);
+        $message = \Illuminate\Support\Facades\DB::transaction(function () use ($user, $key, $body, $tags, $chat) {
+            $m = CustomerMessage::create(['conversation_key' => $key, 'sender_id' => $user->uuid,
+                'recipient_id' => null, 'body' => $body, 'mentions' => $tags]);
+            $chat->queue($m);
+            return $m;
+        });
 
         $this->notify->meetChatMessage($game, $message, $user);
 
@@ -900,6 +903,7 @@ class CustomerCommunityService
                 'sender_id'        => $message->sender_id,
                 'recipient_id'     => null,
                 'body'             => $message->body,
+                'mentions' => $message->mentions ?? [],
                 'created_at'       => optional($message->created_at)?->toIso8601String(),
                 'read_at'          => null,
                 'senderName'       => $user->name ?: 'Player',
@@ -998,15 +1002,15 @@ class CustomerCommunityService
         return sendSuccess('Message deleted', ['ok' => true]);
     }
 
-    public function sendGroupMessage(User $user, string $key, string $body)
+    public function sendGroupMessage(User $user, string $key, string $body, array $mentions = [])
     {
-        $clean = trim($body);
-        if (! $user->uuid || $clean === '') {
+        $clean = $mentions ? $body : trim($body);
+        if (! $user->uuid || trim($clean) === '') {
             return sendError('Empty message');
         }
 
         if ($this->isMeetKey($key)) {
-            return $this->sendMeetMessage($user, $key, $clean);
+            return $this->sendMeetMessage($user, $key, $clean, $mentions);
         }
 
         $communityUuid = $this->communityUuidFromGroupKey($key);
@@ -1039,12 +1043,14 @@ class CustomerCommunityService
             );
         }
 
-        $message = CustomerMessage::create([
-            'conversation_key' => $key,
-            'sender_id'        => $user->uuid,
-            'recipient_id'     => null,
-            'body'             => $clean,
-        ]);
+        $chat = app(ChatService::class);
+        $tags = $chat->mentions($user, $key, $clean, $mentions);
+        $message = \Illuminate\Support\Facades\DB::transaction(function () use ($user, $key, $clean, $tags, $chat) {
+            $m = CustomerMessage::create(['conversation_key' => $key, 'sender_id' => $user->uuid,
+                'recipient_id' => null, 'body' => $clean, 'mentions' => $tags]);
+            $chat->queue($m);
+            return $m;
+        });
 
         $this->notify->chatMessage($community, $message, $user);
 
@@ -1055,6 +1061,7 @@ class CustomerCommunityService
                 'sender_id'        => $message->sender_id,
                 'recipient_id'     => null,
                 'body'             => $message->body,
+                'mentions' => $message->mentions ?? [],
                 'created_at'       => optional($message->created_at)?->toIso8601String(),
             ],
         ]);

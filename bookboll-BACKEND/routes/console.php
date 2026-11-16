@@ -8,6 +8,8 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+Schedule::command('chat:send-alerts')->everyMinute()->withoutOverlapping();
+
 Schedule::command('slot-locks:clear')->everyFiveMinutes();
 
 // Not at 00:00: that minute already carries the five-minute, hourly and

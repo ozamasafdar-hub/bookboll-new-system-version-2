@@ -77,6 +77,7 @@ class SettingService
      */
     public function put(string $key, mixed $value): array
     {
+        abort_if($key === ChatService::SETTINGS_KEY, 403, 'Use the superadmin chat alert controls.');
         $value = self::normaliseValue($value);
 
         $setting = $this->settingModel::updateOrCreate(['key' => $key], ['value' => $value]);

@@ -1,4 +1,6 @@
 <script setup>
+import ChatComposer from '../components/ChatComposer.vue'
+import ChatMessageBody from '../components/ChatMessageBody.vue'
 import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { customer, isCustomer } from '../../lib/customerSession.js'
@@ -302,6 +304,7 @@ async function load() {
     }
   }
   loading.value = false
+  if (route.query.chat === '1' && canMeetChat.value && !meetChatOpen.value) await openMeetChat()
 }
 onMounted(load)
 watch(() => route.params.id, load)
@@ -389,6 +392,7 @@ async function setCourtWinner(round, court, side) {
 const meetChatOpen = ref(false)
 const meetMsgs = ref([])
 const meetText = ref('')
+const meetSending = ref(false)
 const meetBox = ref(null)
 let meetTimer = null
 const canMeetChat = computed(() => !!game.value && (isHost.value || myAccepted.value))
@@ -404,12 +408,14 @@ async function openMeetChat() {
 }
 function closeMeetChat() { meetChatOpen.value = false; if (meetTimer) { clearInterval(meetTimer); meetTimer = null } }
 onUnmounted(() => { if (meetTimer) clearInterval(meetTimer) })
-async function sendMeetChat() {
+async function sendMeetChat(mentions = []) {
   const txt = meetText.value.trim()
-  if (!txt || lifeState.value === 'archived') return
+  if (!txt || meetSending.value || lifeState.value === 'archived') return
+  meetSending.value = true
+  const res = await sendGroupMessage(groupKey('meet', game.value.id), customer.value.id, txt, mentions)
+  meetSending.value = false
+  if (res.error) { err.value = res.error; return }
   meetText.value = ''
-  const res = await sendGroupMessage(groupKey('meet', game.value.id), customer.value.id, txt)
-  if (res.error) { err.value = res.error; meetText.value = txt; return }
   await refreshMeetChat(true)
 }
 
@@ -853,14 +859,12 @@ function hostAgain() {
             <div v-if="!meetMsgs.length" class="gd-chat-empty">Only the people going see this chat — sort the logistics here.</div>
             <div v-for="m in meetMsgs" :key="m.id" class="gd-chat-msg" :class="{ mine: m.sender_id === customer?.id }">
               <div v-if="m.sender_id !== customer?.id" class="gd-chat-who">{{ m.senderName }}</div>
-              <div class="gd-chat-bubble">{{ m.body }}</div>
+              <div class="gd-chat-bubble"><ChatMessageBody :message="m" :viewer-id="customer?.id" /></div>
             </div>
           </div>
           <div v-if="lifeState === 'archived'" class="gd-chat-ended"><Clock :size="14" /> Event ended — chat is read-only.</div>
-          <div v-else class="gd-chat-bar">
-            <input v-model="meetText" type="text" placeholder="Message everyone going…" @keydown.enter="sendMeetChat" />
-            <button type="button" class="gd-chat-send" :disabled="!meetText.trim()" @click="sendMeetChat"><Send :size="17" /></button>
-          </div>
+          <ChatComposer v-else v-model="meetText" :thread-key="groupKey('meet', game.id)" :busy="meetSending" placeholder="Message everyone going…" @send="sendMeetChat" />
+          <p v-if="err" role="alert">{{ err }}</p>
         </div>
       </div>
 

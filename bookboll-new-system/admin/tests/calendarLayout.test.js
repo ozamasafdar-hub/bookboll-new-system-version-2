@@ -4,9 +4,9 @@ import { bookingMinutes, layoutCalendarColumn, calendarFocusMinute } from '../sr
 test('ten simultaneous bookings remain ten readable cards', () => {
   const result = layoutCalendarColumn(Array.from({length:10}, (_, id) => ({id, start_time:'15:00', end_time:'17:00'})), 1)
   assert.equal(result.events.length, 10)
-  assert.equal(result.width, 1840)
+  assert.equal(result.width, 1200)
   assert.equal(new Set(result.events.map(x => x.leftPct)).size, 10)
-  assert.ok(result.events.every(x => x.widthPct * result.width / 100 >= 184))
+  assert.ok(result.events.every(x => x.widthPct * result.width / 100 >= 120))
 })
 test('adjacent bookings reuse a lane while overlaps stay separate', () => {
   const r = layoutCalendarColumn([{id:1,start_time:'13:00',end_time:'15:00'}, {id:2,start_time:'14:00',end_time:'16:00'}, {id:3,start_time:'16:00',end_time:'17:00'}], 1)
@@ -32,4 +32,12 @@ test('real midnight bookings remain visible and empty days have a useful fallbac
 })
 test('a single early booking does not force every venue into an empty overnight viewport', () => {
   assert.equal(calendarFocusMinute([{start_time:'00:00',end_time:'01:00'}, {start_time:'07:00',end_time:'08:00'}], [0]), 390)
+})
+
+ test('one and two overlaps keep the default width; three expand it', () => {
+  for (const [count,width] of [[1,240],[2,240],[3,360],[5,600]]) {
+    const r=layoutCalendarColumn(Array.from({length:count},(_,id)=>({id,start_time:'19:00',end_time:'20:00'})),1)
+    assert.equal(r.width,width)
+    assert.equal(r.events[0].widthPct,100/count)
+  }
 })

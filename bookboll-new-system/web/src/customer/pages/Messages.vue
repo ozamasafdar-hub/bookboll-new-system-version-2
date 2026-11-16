@@ -1,4 +1,6 @@
 <script setup>
+import ChatComposer from '../components/ChatComposer.vue'
+import ChatMessageBody from '../components/ChatMessageBody.vue'
 import { COMMUNITY_AUDIENCES, communityRole, canContribute, canModerateCommunity, permissionFor, permissionLabel } from '../../lib/communityAccess.js'
 import { filterConversations } from '../../lib/communityPresentation.js'
 import { askConfirm } from '../../lib/confirm.js'
@@ -147,7 +149,7 @@ async function openThread(refresh = false) {
 }
 function scrollDown() { if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight }
 
-async function send() {
+async function send(mentions = []) {
   const body = draft.value.trim()
   if (!body || sending.value || !peerId.value) return
   sending.value = true
@@ -155,7 +157,7 @@ async function send() {
   const target = peerId.value
   if (isGroup.value) {
     if (!canPostGroup.value) { sending.value = false; return }
-    const r = await sendGroupMessage(groupKey('community', groupCid.value), me.value, body)
+    const r = await sendGroupMessage(groupKey('community', groupCid.value), me.value, body, mentions)
     sending.value = false
     if (r.error) { actionError.value = r.error; return }
     if (target !== peerId.value) { loadList(); return }
@@ -268,17 +270,14 @@ watch(me, () => { if (me.value) { loadList(); openThread() } else { requestVersi
                   </router-link>
                   <div class="ms-bubble" :class="{ mine: m.sender_id === me }">
                     <router-link v-if="isGroup && m.sender_id !== me" :to="`/u/${m.sender_id}`" class="ms-who">{{ m.senderName }}</router-link>
-                    <span class="ms-bubble-body">{{ m.body }}</span>
+                    <ChatMessageBody :message="m" :viewer-id="me" />
                     <span class="ms-bubble-time">{{ fmt(m.created_at) }}</span>
                   </div>
                   <button v-if="isGroup && canModerateGroup" type="button" class="ms-delete-message" :disabled="!!deleting" :aria-label="'Delete message from ' + (m.senderName || 'member')" title="Delete for everyone" @click="removeMessage(m)"><Trash2 :size="15" /></button>
                 </div>
               </template>
             </div>
-            <div v-if="!isGroup || canPostGroup" class="ms-compose">
-              <input aria-label="Message" v-model="draft" :placeholder="isGroup ? (groupLocked ? 'Post an announcement…' : `Message ${peer?.full_name || 'the community'}…`) : 'Write a message…'" @keyup.enter="send" />
-              <button aria-label="Send message" :disabled="sending || !draft.trim()" @click="send"><Send :size="18" /></button>
-            </div>
+            <ChatComposer v-if="!isGroup || canPostGroup" :key="peerId" v-model="draft" :thread-key="isGroup ? peerId : ''" :busy="sending" :placeholder="isGroup ? `Message ${peer?.full_name || 'the community'}…` : 'Write a message…'" @send="send" />
             <div v-else-if="amGroupMember" class="ms-readonly"><Lock :size="14" /> {{ permissionLabel(permissionFor(groupInfo?.settings, 'chat')) }} can send messages. You can read the conversation.</div>
           </template>
           <div v-else class="ms-empty"><MessageCircle :size="40" /><span>Select a conversation</span></div>

@@ -37,6 +37,7 @@ chown -R www-data:www-data storage bootstrap/cache
 (
     while :; do
         php artisan send-booking-reminders || echo 'Comeback preview check failed; inspect application logs'
+        php artisan chat:send-alerts || echo 'Chat preview check failed; inspect application logs'
         sleep 60
     done
 ) &

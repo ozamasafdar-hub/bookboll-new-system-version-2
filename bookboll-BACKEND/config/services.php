@@ -88,6 +88,8 @@ return [
 
 
     'whatsapp' => [
+        'chat_template' => env('WHATSAPP_CHAT_TEMPLATE'),
+        'chat_language' => env('WHATSAPP_CHAT_LANGUAGE', 'en_US'),
         'comeback_template' => env('WHATSAPP_COMEBACK_TEMPLATE'),
         'comeback_language' => env('WHATSAPP_COMEBACK_LANGUAGE', 'en_US'),
         // Meta Graph API version and Bookboll's own access token. A token typed into

@@ -199,12 +199,17 @@ class CustomerCommunityController extends Controller
         $data = $request->validate([
             'key'  => 'required|string|max:200',
             'body' => 'required|string|max:5000',
+            'mentions' => 'sometimes|array|max:20',
+            'mentions.*.user_id' => 'required|uuid',
+            'mentions.*.start' => 'required|integer|min:0|max:10000',
+            'mentions.*.length' => 'required|integer|min:2|max:600',
         ]);
 
         return $this->communities->sendGroupMessage(
             auth()->user(),
             $data['key'],
-            $data['body']
+            $data['body'],
+            $data['mentions'] ?? []
         );
     }
 

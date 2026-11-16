@@ -188,10 +188,10 @@ class CustomerMessageService
         }
 
         $rows = CustomerMessage::where('conversation_key', $this->conversationKey($user->uuid, $peerId))
-            ->orderBy('created_at')
-            ->orderBy('id')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->limit(max(1, min($limit, 500)))
-            ->get();
+            ->get()->reverse()->values();
 
         $peer = User::where('uuid', $peerId)->first(['uuid', 'name', 'image']);
 
@@ -216,13 +216,16 @@ class CustomerMessageService
             return sendError('That person could not be found.', [], 404);
         }
 
-        $message = CustomerMessage::create([
-            'conversation_key' => $this->conversationKey($user->uuid, $recipientId),
-            'sender_id'        => $user->uuid,
-            'recipient_id'     => $recipientId,
-            'body'             => $clean,
-        ]);
-
+        $message = \Illuminate\Support\Facades\DB::transaction(function () use ($user, $recipientId, $clean) {
+            $message = CustomerMessage::create([
+                'conversation_key' => $this->conversationKey($user->uuid, $recipientId),
+                'sender_id' => $user->uuid,
+                'recipient_id' => $recipientId,
+                'body' => $clean,
+            ]);
+            app(ChatService::class)->queue($message);
+            return $message;
+        });
         $this->pushDirectMessage($user, $recipient, $message);
 
         return sendSuccess('Message sent', ['message' => $this->mapMessage($message)]);

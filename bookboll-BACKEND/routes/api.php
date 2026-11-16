@@ -537,6 +537,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         // Notifications page. A provider's own templates are on
         // /business/notification-templates and keep their own gate.
         Route::middleware('capability:platform_admin,manage_platform_website')->group(function () {
+            Route::match(['get', 'put'], 'chat-notifications', [\App\Http\Controllers\ChatController::class, 'settings']);
             Route::get('notification-templates', [NotificationTemplateController::class, 'showPlatform'])->name('notification-templates.show');
             Route::put('notification-templates', [NotificationTemplateController::class, 'updatePlatform'])->name('notification-templates.update');
         });
@@ -838,6 +839,9 @@ Route::prefix('customer')->group(function () {
         Route::get('communities/{uuid}/chat/unread', [CustomerCommunityController::class, 'chatUnread'])->name('customer.communities.chat.unread');
         Route::get('messages/unread-count', [CustomerCommunityController::class, 'unreadMessages'])->name('customer.messages.unread');
         Route::get('notifications/feed', [CustomerGameController::class, 'notificationFeed'])->name('customer.notifications.feed');
+        Route::get('messages/participants', [\App\Http\Controllers\ChatController::class, 'participants']);
+        Route::post('messages/group/read', [\App\Http\Controllers\ChatController::class, 'read']);
+        Route::match(['get', 'put'], 'messages/preferences', [\App\Http\Controllers\ChatController::class, 'preferences']);
         Route::get('messages/group', [CustomerCommunityController::class, 'loadGroupThread'])->name('customer.messages.group.index');
         Route::post('messages/group', [CustomerCommunityController::class, 'sendGroupMessage'])->name('customer.messages.group.store');
         Route::delete('messages/group/{id}', [CustomerCommunityController::class, 'deleteGroupMessage'])->name('customer.messages.group.destroy');

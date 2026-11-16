@@ -202,15 +202,19 @@ export async function loadGroupThread(key, limit = 200) {
   if (!key) return []
   const res = await apiFetch('/customer/messages/group', { query: { key, limit } })
   if (!res.success) return []
-  return res.data?.messages || []
+  const messages = res.data?.messages || []
+  if (messages.length && typeof document !== 'undefined' && document.visibilityState === 'visible') {
+    await apiFetch('/customer/messages/group/read', { method: 'POST', body: { key, through: messages.at(-1).id } })
+  }
+  return messages
 }
 
-export async function sendGroupMessage(key, senderId, body) {
+export async function sendGroupMessage(key, senderId, body, mentions = []) {
   const clean = (body || '').trim()
   if (!senderId || !clean) return { error: 'Empty message' }
   const res = await apiFetch('/customer/messages/group', {
     method: 'POST',
-    body: { key, body: clean },
+    body: { key, body: clean, mentions },
   })
   if (!res.success) return { error: formatErr(res, 'Could not send.') }
   return { message: res.data?.message }

@@ -48,5 +48,6 @@ export function layoutCalendarColumn(bookings, pixelsPerMinute, dayStart = 0) {
     })
     i = j
   }
-  return { events, width: Math.max(240, maxLanes * 184), lanes: maxLanes }
+  // Two bookings share the normal column; only a third concurrent lane widens it.
+  return { events, width: Math.max(240, maxLanes * 120), lanes: maxLanes }
 }

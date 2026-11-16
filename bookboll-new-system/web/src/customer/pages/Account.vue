@@ -8,6 +8,7 @@ import { uploadImage } from '../../lib/imageUpload.js'
 import { profileStrength } from '../../lib/social.js'
 import { useSeo } from '../../lib/seo.js'
 import { ensureSignedIn } from '../../lib/authGate.js'
+import ChatPreferences from '../components/ChatPreferences.vue'
 import PersonalPage from '../components/PersonalPage.vue'
 useSeo({ title: 'My account', noindex: true, path: '/account' })
 import BrandMark from '../../components/BrandMark.vue'
@@ -243,6 +244,7 @@ function signOut() { customerSignOut(); router.push('/') }
         </button>
 
         </section>
+        <ChatPreferences v-if="!isWhiteLabel" />
         <div class="acc-save">
         <p class="acc-save-hint">Profile and preference changes apply when you save. Your profile picture saves immediately.</p>
         <div v-if="saveErr" class="acc-err">{{ saveErr }}</div>
