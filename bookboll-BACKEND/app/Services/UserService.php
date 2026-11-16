@@ -53,7 +53,7 @@ class UserService
             $user = $this->userModel->where("email", $formData['email'])->first();
 
             if ($user) {
-                if ($user->status == User::BLOCKED) {
+                if (in_array($user->status, [User::BLOCKED, User::INACTIVE], true)) {
                     DB::rollBack();
                     return sendError('Your account is blocked by admin. Please contact for further details.');
                 }
@@ -427,7 +427,7 @@ class UserService
 
             $user = User::where('provider_id', $googleId)->orWhere('email', $email)->first();
 
-            if ($user && $user->status == User::BLOCKED) {
+            if ($user && in_array($user->status, [User::BLOCKED, User::INACTIVE], true)) {
                 throw new CustomerAuthException('Your account is block by admin please contact for further details');
             }
 
@@ -526,7 +526,7 @@ class UserService
                 }
             })->first();
 
-            if ($user && $user->status == User::BLOCKED) {
+            if ($user && in_array($user->status, [User::BLOCKED, User::INACTIVE], true)) {
                 DB::rollBack();
                 return sendError('Your account is block by admin please contact for further details');
             }
@@ -626,7 +626,7 @@ class UserService
                 return sendError('Invalid credentials');
             }
 
-            if ($user->status == User::BLOCKED) {
+            if (in_array($user->status, [User::BLOCKED, User::INACTIVE], true)) {
                 return sendError('Your account is blocked by admin. Please contact for further details.');
             }
 
@@ -1033,6 +1033,10 @@ class UserService
                     'owner_user_id' => ['Invalid business owner.'],
                 ], 422);
             }
+        }
+
+        if ($actorBusiness = AccessScope::businessId($request->user())) {
+            abort_unless(\App\Support\BusinessMembershipSync::businessIdForOwner(isset($formData['owner_user_id']) ? (int) $formData['owner_user_id'] : null) === $actorBusiness, 403, 'Team access is limited to your business.');
         }
 
         $existing = $this->userModel::where('email', $formData['email'])->first();

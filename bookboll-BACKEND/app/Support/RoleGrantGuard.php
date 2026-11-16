@@ -58,9 +58,10 @@ class RoleGrantGuard
 
         // Only a global admin creates global or platform-side accounts.
         if (in_array($role, Capabilities::platformRoles(), true)) {
-            return $isGlobal;
+            return $isGlobal && !AccessScope::businessId($actor);
         }
 
+        if ($role === 'provider_admin' && AccessScope::businessId($actor)) return false;
         if (in_array($role, Capabilities::providerRoles(), true)) {
             // A provider manager may staff their own business; never above themselves.
             return $isGlobal || self::rankOf($actor) >= self::rank($role);
@@ -75,6 +76,9 @@ class RoleGrantGuard
     {
         if (! $actor || ! $target) {
             return false;
+        }
+        if ($businessId = AccessScope::businessId($actor)) {
+            if (AccessScope::businessId($target) !== $businessId) return false;
         }
         if ($target->hasRole('super_admin')) return AccountAdministration::isSuperAdmin($actor);
         if (AccountAdministration::isSuperAdmin($actor)) return true;

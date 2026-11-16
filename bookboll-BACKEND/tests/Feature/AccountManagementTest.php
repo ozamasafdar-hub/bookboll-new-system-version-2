@@ -102,6 +102,9 @@ it('deactivates accounts with immediate session revocation and refuses subsequen
     $this->actingAs(managementUser())->putJson("/api/admin/users/$target->id",['status'=>'inactive'])->assertOk();
     expect($target->tokens()->count())->toBe(0);
     $this->postJson('/api/login',['email'=>$target->email,'password'=>'old-password-1234'])->assertForbidden();
+    // A customer token carries the same account roles, so it cannot be a way
+    // around account deactivation into the admin application.
+    $this->postJson('/api/customer/login',['email'=>$target->email,'password'=>'old-password-1234'])->assertJsonPath('success',false);
 });
 
 it('prevents self lockout and unauthorized superadmin grants', function () {
@@ -139,4 +142,12 @@ it('emails a reset code outside preview without changing the current password',f
     $this->actingAs(managementUser())->postJson("/api/admin/users/$target->id/security",['action'=>'reset_email','reason'=>'Account holder requested reset'])->assertOk()->assertJsonPath('data.delivery','sent');
     Mail::assertSent(\App\Mail\CustomerForgotPasswordOtpEmail::class);
     expect($target->fresh()->password)->toBe($hash);
+});
+
+it('keeps provider account editors inside their own business on the shared admin API',function () {
+    $a=managementBusiness();$b=managementBusiness();$staff=managementUser('staff');$staff->update(['owner_user_id'=>$b->owner_id]);
+    $this->actingAs($a->owner)->putJson("/api/admin/users/$staff->id",['name'=>'Unauthorized change'])->assertForbidden();
+    $this->postJson('/api/admin/users',['name'=>'Outside staff','email'=>'outside@example.test','role'=>'staff','status'=>'active','owner_user_id'=>$b->owner_id])->assertForbidden();
+    $this->postJson('/api/admin/users',['name'=>'Extra owner','email'=>'extra-owner@example.test','role'=>'provider_admin','status'=>'active'])->assertForbidden();
+    expect($staff->fresh()->name)->not->toBe('Unauthorized change');
 });
