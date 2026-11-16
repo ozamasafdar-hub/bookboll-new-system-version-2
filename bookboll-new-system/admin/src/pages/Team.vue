@@ -129,7 +129,7 @@ const businessReview = ref(false)
 const securityAccount = ref(null), planBusiness = ref(null)
 const directoryStatus = ref(''), directoryRole = ref(''), directoryLogin = ref('')
 const loadError = ref(''), loadingDirectory = ref(false)
-const directoryRoles = computed(() => teamView.value === 'platform' ? PLATFORM_ROLES : PROVIDER_ROLES)
+const directoryRoles = computed(() => teamView.value === 'platform' ? [...new Set([...PLATFORM_ROLES, ...platformTeam.value.map(u => u.role)])] : PROVIDER_ROLES)
 function accountMatch(u) { return (!directoryStatus.value || u.status === directoryStatus.value) && (!directoryRole.value || u.role === directoryRole.value) && (!directoryLogin.value || (directoryLogin.value === 'never' ? !u.last_login : !!u.last_login)) }
 watch(teamView, () => { directoryRole.value = ''; directoryStatus.value = ''; directoryLogin.value = '' })
 function websiteLink(p) { return p.brand_enabled && p.brand_custom_domain && wildcardDnsAvailable() ? `https://${p.brand_custom_domain}` : brandPreviewUrl(p.brand_subdomain || p.username, { preview: !p.brand_enabled }) }
@@ -225,7 +225,7 @@ const inviteBusiness = ref(null)
 const inviteRoles = computed(() => {
   const inBusiness = adminForm.value.owner_user_id || editing.value?.business_id || editing.value?.role === 'provider_admin'
   if (editing.value?.role === 'provider_admin') return ['provider_admin']
-  return assignableRoles.value.filter(r => inBusiness ? PROVIDER_ROLES.includes(r) && r !== 'provider_admin' : PLATFORM_ROLES.includes(r))
+  return assignableRoles.value.filter(r => inBusiness ? PROVIDER_ROLES.includes(r) && r !== 'provider_admin' : PLATFORM_ROLES.includes(r) || (editing.value && r === editing.value.role))
 })
 function openBusinessNew() { showBusinessSetup.value = true }
 function createdBusiness(b) { teamView.value = 'businesses'; search.value = b.username; load() }
@@ -854,6 +854,7 @@ const ownerTag   = (id) => { const o = allUsers.value.find(u => u.id === id); re
 // restricted to a single venue.
 const GLOBAL_ROLES = ['super_admin', 'admin']
 function scopeText(u) {
+  if (GLOBAL_ROLES.includes(u.role)) return 'Global'
   if (u.role === 'provider_admin') return u.username ? `@${u.username}` : '—'
 
   const pins = u.assigned_location_ids || []
@@ -972,7 +973,7 @@ function avatarColor(id) {
                   <td style="color:var(--text-muted);">{{ scopeText(u) }}</td>
                   <td><span class="badge" :class="u.status==='active'?'badge-success':'badge-neutral'">{{ u.status }}</span></td>
                   <td style="color:var(--text-muted);">{{ timeAgo(u.last_login) }}</td>
-                  <td><div class="row-actions"><button class="btn btn-sm btn-secondary" @click="openAdminEdit(u)"><Edit2 :size="14" />Edit access</button><button v-if="isSuperAdmin && String(u.id)!==String(currentUser?.id)" class="btn btn-sm btn-secondary" @click="securityAccount=u"><KeyRound :size="14" />Account security</button><button class="btn-icon danger" @click="removeAdmin(u)"><Trash2 :size="15" /></button></div></td>
+                  <td><div class="row-actions"><button class="btn btn-sm btn-secondary" @click="openAdminEdit(u)"><Edit2 :size="14" />Edit access</button><button v-if="isSuperAdmin && String(u.id)!==String(currentUser?.id)" class="btn btn-sm btn-secondary" @click="securityAccount=u"><KeyRound :size="14" />Account security</button><button v-if="String(u.id)!==String(currentUser?.id)" class="btn-icon danger" :aria-label="'Delete account for ' + u.full_name" @click="removeAdmin(u)"><Trash2 :size="15" /></button></div></td>
                 </tr>
               </tbody>
             </table>
@@ -1192,6 +1193,7 @@ function avatarColor(id) {
             <div v-if="isScopedRole(adminForm.role)" class="perm-editor-wrap">
               <PermissionScopeEditor
                 :role="adminForm.role"
+                :platform-scope="!adminForm.owner_user_id && !editing?.business_id"
                 v-model:permissions="adminForm.custom_permissions"
                 v-model:locationIds="adminForm.assigned_location_ids"
                 v-model:listingIds="adminForm.assigned_listing_ids"

@@ -16,6 +16,7 @@ import MultiSelect from './MultiSelect.vue'
 
 const props = defineProps({
   role:        { type: String, default: 'staff' },
+  platformScope: { type: Boolean, default: false },
   permissions: { type: Object, default: () => ({}) },     // { grant:[], revoke:[] }
   locationIds: { type: Array,  default: () => [] },
   listingIds:  { type: Array,  default: () => [] },
@@ -107,9 +108,9 @@ const programOptions = computed(() => asOptions(scopedPrograms.value))
       <div class="pse-scope-top">
         <div>
           <div id="pse-scope-title" class="pse-section-title">Access scope</div>
-          <p class="pse-hint">{{ allowWholeBusiness ? 'Leave locations empty to give access to the whole business.' : 'Select at least one venue within your own access.' }}</p>
+          <p class="pse-hint">{{ allowWholeBusiness ? (platformScope ? 'Select specific venues, or leave this empty to use the assigned countries. With neither, no venues are accessible.' : 'Leave locations empty to give access to the whole business.') : 'Select at least one venue within your own access.' }}</p>
         </div>
-        <span class="pse-scope-pill" :class="{ all: !locationIds.length }"><MapPin :size="13" />{{ !locationIds.length ? (allowWholeBusiness ? 'Whole business' : 'Select venues') : `${locationIds.length} of ${availableLocations.length} locations` }}</span>
+        <span class="pse-scope-pill" :class="{ all: !locationIds.length }"><MapPin :size="13" />{{ !locationIds.length ? (allowWholeBusiness ? (platformScope ? 'Country access' : 'Whole business') : 'Select venues') : `${locationIds.length} of ${availableLocations.length} locations` }}</span>
       </div>
 
       <div class="pse-field">
@@ -121,7 +122,7 @@ const programOptions = computed(() => asOptions(scopedPrograms.value))
             <button type="button" :disabled="!locationIds.length" @click="unselectAllLocations">Unselect all</button>
           </div>
         </div>
-        <MultiSelect v-if="availableLocations.length" :model-value="locationIds" :options="locationOptions" :placeholder="allowWholeBusiness ? 'All locations' : 'Select venues'" :max-display="2" @update:model-value="emit('update:locationIds', $event)" />
+        <MultiSelect v-if="availableLocations.length" :model-value="locationIds" :options="locationOptions" :placeholder="platformScope ? 'Use country access (or choose venues)' : allowWholeBusiness ? 'All locations' : 'Select venues'" :max-display="2" @update:model-value="emit('update:locationIds', $event)" />
         <div v-else class="pse-empty">No locations yet.</div>
         <div v-if="selectedLocations.length" class="pse-selected" aria-label="Selected locations">
           <span v-for="l in selectedLocations" :key="l.id" class="pse-tagchip">{{ l.name }}<button type="button" :aria-label="`Remove ${l.name}`" @click="removeLocation(l.id)"><X :size="12" /></button></span>
