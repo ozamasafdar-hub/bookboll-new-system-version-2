@@ -75,6 +75,13 @@ it('does not mark a newer message read when acknowledging an older response', fu
     expect(DB::table('chat_alerts')->where('status','skipped')->count())->toBe(1);
 });
 
+it('bridges legacy community read acknowledgements into alert suppression', function () {
+    chatSend($this)->assertOk();
+    $this->actingAs($this->recipient)->postJson('/api/customer/communities/'.$this->community->uuid.'/chat/read')->assertOk();
+    $this->travel(3)->minutes();app(ChatAlertService::class)->deliver();Notification::assertNothingSent();
+    expect(DB::table('chat_reads')->where('user_id',$this->recipient->id)->value('last_message_id'))->toBe(CustomerMessage::first()->id);
+});
+
 it('enforces superadmin settings and rechecks toggles before delivery', function () {
     chatSend($this)->assertOk();
     $settings=app(ChatService::class)->settings(); $settings['group']['email']=false;

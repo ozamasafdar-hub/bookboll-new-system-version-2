@@ -1074,9 +1074,13 @@ class CustomerCommunityService
             return sendSuccess('OK', ['ok' => true]);
         }
 
-        CommunityMember::where('community_id', $community->id)
-            ->where('customer_id', $user->uuid)
-            ->update(['last_read_at' => now()]);
+        // Existing mobile clients use this endpoint. Bridge it to the durable
+        // cursor as well, so reading there suppresses email/WhatsApp alerts.
+        $chat = app(ChatService::class);
+        $key = 'community__'.$community->uuid;
+        $chat->requireGroup($user, $key);
+        $through = CustomerMessage::where('conversation_key', $key)->latest('id')->value('uuid');
+        if ($through) $chat->markRead($user, $key, $through);
 
         return sendSuccess('Marked read', ['ok' => true]);
     }

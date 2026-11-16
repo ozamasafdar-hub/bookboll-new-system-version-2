@@ -135,7 +135,8 @@ async function openThread(refresh = false) {
     const messages = communityRole(cm, viewer) !== 'visitor' ? await loadGroupThread(id) : []
     if (version !== requestVersion || id !== peerId.value) return
     thread.value = messages
-    if (amGroupMember.value) markCommunityChatRead(cid, viewer)
+    // loadGroupThread acknowledges the last returned message, including the
+    // legacy unread badge. Do not advance past that response with a second read.
   } else {
     const result = await loadThreadWithPeer(id)
     if (version !== requestVersion || id !== peerId.value) return

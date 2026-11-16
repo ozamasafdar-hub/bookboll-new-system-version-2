@@ -96,10 +96,17 @@ class ChatService
     public function markRead(User $user, string $key, string $through): void
     {
         $this->requireGroup($user, $key);
-        $id = CustomerMessage::where('conversation_key', $key)->where('uuid', $through)->value('id');
-        if (!$id) return;
+        $message = CustomerMessage::where('conversation_key', $key)->where('uuid', $through)->first();
+        if (!$message) return;
+        $id = $message->id;
         DB::table('chat_reads')->insertOrIgnore(['user_id' => $user->id, 'conversation_key' => $key, 'last_message_id' => 0]);
         DB::table('chat_reads')->where('user_id', $user->id)->where('conversation_key', $key)->where('last_message_id', '<', $id)->update(['last_message_id' => $id]);
+        if (str_starts_with($key, 'community__')) {
+            $communityId = Community::where('uuid', substr($key, 11))->value('id');
+            CommunityMember::where('community_id', $communityId)->where('customer_id', $user->uuid)
+                ->where(fn ($q) => $q->whereNull('last_read_at')->orWhere('last_read_at', '<', $message->created_at))
+                ->update(['last_read_at' => $message->created_at]);
+        }
     }
 
     public function unread(User $user, CustomerMessage $message): bool

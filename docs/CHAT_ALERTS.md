@@ -8,7 +8,7 @@
 - Customer **My account → Chat alerts** has email (default on) and WhatsApp (default off) preferences. This is separate from marketing consent. WhatsApp requires explicit chat opt-in and a valid account phone number.
 - Each message creates durable MySQL alert rows in the same transaction as the message. Only opted-in channels enabled at send time are queued. Settings, membership and read state are checked again before delivery. Enabling a switch does not replay history.
 - Wait two minutes, then combine eligible unread messages into one alert per recipient/conversation/channel. Cooldown is 15 minutes; pending messages are reconsidered afterward. A mention replaces the generic group classification for that recipient, avoiding duplicate alerts. Alerts older than 24 hours expire.
-- Emails and WhatsApp contain a chat link, not private message contents. The destination still requires sign-in and membership. Web group/event reads acknowledge a specific message ID so a newer message is not accidentally marked read. Mobile clients must use the same read endpoint when opening chat.
+- Emails and WhatsApp contain a chat link, not private message contents. The destination still requires sign-in and membership. Web group/event reads acknowledge a specific message ID so a newer message is not accidentally marked read. The existing community read endpoint also updates the alert cursor for older mobile clients. New mobile/event clients should use the precise read endpoint when opening chat.
 
 ## Deploy with MySQL
 
