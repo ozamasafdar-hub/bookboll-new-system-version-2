@@ -231,6 +231,7 @@ export async function deleteGroupMessage(key, id) {
 
 export async function markCommunityChatRead(communityId, customerId) {
   if (!communityId) return
+  if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
   await apiFetch(`/customer/communities/${encodeURIComponent(communityId)}/chat/read`, { method: 'POST' })
 }
 

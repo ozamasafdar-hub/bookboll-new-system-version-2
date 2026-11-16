@@ -69,6 +69,7 @@ export async function sendMessage(meId, otherId, body) {
 
 export async function markThreadRead(meId, otherId) {
   if (!otherId) return
+  if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
   await apiFetch('/customer/messages/read', { method: 'POST', body: { peer_id: otherId } })
 }
 
