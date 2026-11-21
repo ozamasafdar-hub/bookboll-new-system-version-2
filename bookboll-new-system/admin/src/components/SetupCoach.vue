@@ -208,7 +208,8 @@ function openSite() {
 </template>
 
 <style scoped>
-.sc { position: fixed; right: 18px; bottom: 18px; z-index: 900; }
+/* Keep setup help below modal backdrops (50), including owner invitations. */
+.sc { position: fixed; right: 18px; bottom: 18px; z-index: 45; }
 
 /* pill */
 .sc-pill {
