@@ -508,6 +508,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
             // capability probe the dashboard checks before offering that form.
             Route::get('businesses/capabilities', [BusinessController::class, 'capabilities'])->name('businesses.capabilities');
             Route::post('businesses', [BusinessController::class, 'adminStore'])->name('businesses.store');
+            Route::put('businesses/{id}/contact', [BusinessController::class, 'updateContact'])->name('businesses.contact');
             Route::post('businesses/{id}/invitations', [BusinessController::class, 'inviteMember'])->name('businesses.invitations');
             Route::get('businesses/{id}/invitation-options', [BusinessController::class, 'invitationOptions']);
             // Moving an account into a business is reviewed, not a single click:

@@ -26,6 +26,8 @@ import { adminBrand, adminLogoSquareStyle } from '../lib/adminBrand.js'
 import MultiSelect from '../components/MultiSelect.vue'
 import { BUSINESS_TYPES } from '../lib/businessTypes.js'
 import { adminLoginUrl } from '../lib/crossApp.js'
+import BusinessPhoneInput from '../components/BusinessPhoneInput.vue'
+import { businessPhoneError, normalizeBusinessPhone } from '../lib/businessPhone.js'
 
 const accountPanel = ref(1)
 const attempted = ref(false)
@@ -37,6 +39,8 @@ const step = ref(1)   // 1 = business · 2 = website · 3 = done
 // ── Step 1: business details ──────────────────────────────────────────────────
 const fullName     = ref('')
 const businessName = ref('')
+const businessPhone = ref('')
+const phoneCountryIso = computed(() => countries.value.find(c => String(c.id) === String(countryId.value))?.iso_code || countries.value.find(c => String(c.id) === String(countryId.value))?.iso2 || '')
 const email        = ref('')
 const password     = ref('')
 const countryId    = ref('')
@@ -178,6 +182,7 @@ async function checkUsername() {
 const fieldErrors = computed(() => ({
   fullName: fullName.value.trim() ? '' : 'Enter your full name.',
   businessName: businessName.value.trim() ? '' : 'Enter your business name.',
+  businessPhone: businessPhoneError(businessPhone.value),
   username: !username.value.trim() ? 'Choose a web address.' : userStatus.value === 'taken' ? 'This address is taken. Try another.' : userStatus.value === 'invalid' ? 'Use letters, numbers and hyphens, with a letter or number at each end.' : '',
   businessTypes: businessTypes.value.length ? '' : 'Choose at least one business type.',
   email: emailLooksValid.value ? '' : 'Enter a valid email address.',
@@ -192,7 +197,7 @@ async function focusInvalid() {
 }
 function continueBusiness() {
   attempted.value = true
-  if (['businessName','username','businessTypes'].some(key => fieldErrors.value[key])) { focusInvalid(); return }
+  if (['businessName','businessPhone','username','businessTypes'].some(key => fieldErrors.value[key])) { focusInvalid(); return }
   if (userStatus.value === 'checking') { err1.value = 'Checking your web address. Please try again in a moment.'; return }
   err1.value = ''; attempted.value = false; accountPanel.value = 2
   nextTick(() => formElement.value?.querySelector('input')?.focus())
@@ -217,6 +222,7 @@ async function createAccount() {
   const res = await registerBusiness({
     name: fullName.value.trim(),
     business_name: businessName.value.trim(),
+    phone: normalizeBusinessPhone(businessPhone.value),
     username: username.value.trim(),
     business_types: [...businessTypes.value],
     email: email.value.trim(),
@@ -358,6 +364,7 @@ async function goDashboard() {
             <div class="auth-field"><label for="signup-username" class="auth-label">Your booking website address</label><div class="ob-sub" :class="{ invalid: invalid('username') }"><input id="signup-username" v-model="username" @input="normUser" class="auth-input ob-sub-in" placeholder="yourclub" spellcheck="false" autocomplete="off" required :aria-invalid="invalid('username')" aria-describedby="signup-address-help" /><span class="ob-sub-suffix">.bookboll.com</span></div><div id="signup-address-help" class="ob-sub-status" aria-live="polite"><span v-if="invalid('username')" class="ob-bad">{{ fieldErrors.username }}</span><span v-else-if="userStatus === 'checking'" class="ob-muted">Checking availability…</span><span v-else-if="userStatus === 'ok'" class="ob-ok"><Check :size="13" /> Available</span><span v-else-if="userStatus === 'taken'" class="ob-bad">Already taken. Try another address.</span><span v-else class="ob-muted">Choose carefully. This address cannot be changed later.</span></div></div>
             <fieldset class="ob-type-field"><legend class="auth-label">What kind of business do you run?</legend><p>Select all that apply.</p><div class="ob-type-options"><label v-for="t in typeOptions" :key="t.value" :class="{ selected: businessTypes.includes(t.value) }"><input type="checkbox" v-model="businessTypes" :value="t.value" :aria-invalid="invalid('businessTypes')" :aria-describedby="invalid('businessTypes') ? 'error-businessTypes' : undefined" />{{ t.label }}</label></div><span v-if="invalid('businessTypes')" id="error-businessTypes" class="ob-field-error">{{ fieldErrors.businessTypes }}</span></fieldset>
             <div class="auth-field"><label for="signup-country" class="auth-label">Country <span class="auth-opt">(optional)</span></label><select id="signup-country" v-model="countryId" class="auth-input auth-select"><option value="">Select your country</option><option v-for="c in countries" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
+            <div class="auth-field"><label for="signup-business-phone" class="auth-label">Business phone number *</label><BusinessPhoneInput v-model="businessPhone" input-id="signup-business-phone" :default-iso="phoneCountryIso" :invalid="invalid('businessPhone')" described-by="signup-phone-help" /><span id="signup-phone-help" class="ob-muted">Your business’s main contact number, including country code.</span><span v-if="invalid('businessPhone')" class="ob-field-error" role="alert">{{ fieldErrors.businessPhone }}</span></div>
           </template>
           <template v-else>
             <div class="ob-business-summary"><span><strong>{{ businessName }}</strong><small>{{ username }}.bookboll.com</small></span><button type="button" @click="accountPanel = 1; attempted = false; err1 = ''">Edit</button></div>

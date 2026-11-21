@@ -1,4 +1,5 @@
 import { apiFetch } from './api.js'
+import { normalizeBusinessPhone } from './businessPhone.js'
 
 // Settings → Business Profile / My Account / Notifications.
 //
@@ -76,7 +77,7 @@ export async function loadProviderSettings() {
 export async function saveBusinessProfile(form) {
   const body = {
     name: String(form?.name ?? '').trim(),
-    phone: String(form?.phone ?? '').trim(),
+    phone: normalizeBusinessPhone(form?.phone),
     description: String(form?.description ?? '').trim(),
   }
   const res = await apiFetch('/business/settings/profile', { method: 'PUT', body })

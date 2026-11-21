@@ -169,7 +169,7 @@ it('saves the business profile and returns what was persisted', function () {
     ])->assertOk()->json('data.business');
 
     expect($business['name'])->toBe('North Sports Club');
-    expect($business['phone'])->toBe('+971 50 000 0000');
+    expect($business['phone'])->toBe('+971500000000');
 
     // Read back from the database, not from the response that reported success.
     $saved = $this->business->fresh();

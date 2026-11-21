@@ -1,3 +1,7 @@
+## Business phone contacts — Batch 1, 21 November 2026
+
+[Business phone contract and required checks](docs/BUSINESS_PHONE_CONTACTS.md): signup and superadmin business creation require a business number. Use `businesses.phone`, never an owner's personal phone. Superadmin business cards offer Call, WhatsApp, Copy and Add/Edit phone; owners edit their business contact from Settings. Existing missing numbers are flagged, not fabricated. MySQL is unchanged; new validation, isolation and frontend checks are mandatory in CI. Multiple owners and support login remain queued.
+
 ## Business lifecycle audit — 21 November 2026
 
 [Audit fixes and required checks](docs/BUSINESS_LIFECYCLE_QA.md) cover business signup, manager/team access, provider directory isolation, venue assignment, account transfer and preserved customer history on team removal. Run `BusinessLifecycleTest.php` and the existing assignment/setup/account/venue-transfer suites on MySQL. No new database migration is required for these fixes. [Follow-up batches](docs/BUSINESS_MANAGEMENT_BATCHES.md) keep business phone collection, multiple owners and superadmin support login separate from this audit.

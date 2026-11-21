@@ -26,6 +26,11 @@ class BusinessController extends Controller
         return $this->identity->store($request);
     }
 
+    public function updateContact(Request $request, $id)
+    {
+        return $this->identity->updateContact($request, (int) $id);
+    }
+
     public function inviteMember(Request $request, $id)
     {
         return app(\App\Services\BusinessTeamInviteService::class)->invite($request, (int) $id);

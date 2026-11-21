@@ -57,11 +57,12 @@ class ProviderSettingsService
                 : sendError('No business found for this account.', [], 404);
         }
 
+        \App\Support\BusinessPhone::prepare($request);
         $data = $request->validate([
             'name'        => 'required|string|max:150',
-            'phone'       => 'nullable|string|max:32',
+            'phone'       => \App\Support\BusinessPhone::rules(false),
             'description' => 'nullable|string|max:2000',
-        ]);
+        ], \App\Support\BusinessPhone::messages());
 
         $business->update([
             'name'        => trim($data['name']),

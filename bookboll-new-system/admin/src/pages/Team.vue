@@ -3,6 +3,9 @@ import AccountSecurity from '../components/AccountSecurity.vue'
 import BusinessPlanManagement from '../components/BusinessPlanManagement.vue'
 import '../styles/management.css'
 import BusinessSetup from '../components/BusinessSetup.vue'
+import BusinessContact from '../components/BusinessContact.vue'
+import BusinessPhoneInput from '../components/BusinessPhoneInput.vue'
+import { businessContactLinks, normalizeBusinessPhone } from '../lib/businessPhone.js'
 import BusinessInvite from '../components/BusinessInvite.vue'
 import { brandPreviewUrl, wildcardDnsAvailable } from '../lib/brand.js'
 import BusinessAssignment from '../components/BusinessAssignment.vue'
@@ -16,7 +19,7 @@ import { askConfirm } from '../lib/confirm.js'
 import { pushToast } from '../lib/toast.js'
 import { markDirty, clearDirty, confirmDiscardIfDirty } from '../lib/unsavedGuard.js'
 import { useCurrentUser } from '../lib/currentUser.js'
-import { KeyRound, RefreshCw, ExternalLink, Plus, Search, Trash2, Pencil as Edit2, X, Shield, UserCog, User, MapPin, Building2, AtSign, Users, UsersRound, ChevronDown, Info, Crown, CircleArrowDown } from 'lucide-vue-next'
+import { Phone, MessageCircle, Copy, KeyRound, RefreshCw, ExternalLink, Plus, Search, Trash2, Pencil as Edit2, X, Shield, UserCog, User, MapPin, Building2, AtSign, Users, UsersRound, ChevronDown, Info, Crown, CircleArrowDown } from 'lucide-vue-next'
 import PaginationBar from '../components/PaginationBar.vue'
 import FilterBar from '../components/FilterBar.vue'
 import { idIn } from '../lib/geoFilter.js'
@@ -141,6 +144,9 @@ async function allPages(path, key, query = {}) {
  return { ...result, data: { ...result.data, [key]: rows } }
 }
 const assignmentBusiness = ref(null)
+const contactBusiness = ref(null)
+async function copyBusinessPhone(phone) { try { await navigator.clipboard.writeText(normalizeBusinessPhone(phone)); pushToast('Business phone copied.', 'success') } catch { pushToast('Select and copy the displayed number.', 'info') } }
+function contactCountryIso(business) { return countries.value.find(c => String(c.id) === String(business?.country_id))?.iso_code || countries.value.find(c => String(c.id) === String(business?.country_id))?.iso2 || '' }
 const businessApiReady = ref(false)
 const businessCapabilityLoading = ref(false)
 let businessRequestKey = newRequestKey()
@@ -395,7 +401,7 @@ async function saveAdmin() {
   if (newBusiness.value) {
     if(!businessReview.value || !businessApiReady.value) { formError.value='Review the business and connect the updated business backend before creating it.'; return }
     saving.value=true
-    const result=await financeRequest('/admin/businesses', {method:'POST',body:{business_name:adminForm.value.business_name.trim(),username:adminForm.value.username.trim(),business_types:normalizeBusinessTypes(adminForm.value.business_types),country_id:adminForm.value.country_id || null,status:adminForm.value.status,owner_user_id:null,idempotency_key:businessRequestKey}})
+    const result=await financeRequest('/admin/businesses', {method:'POST',body:{business_name:adminForm.value.business_name.trim(),phone:normalizeBusinessPhone(adminForm.value.phone),username:adminForm.value.username.trim(),business_types:normalizeBusinessTypes(adminForm.value.business_types),country_id:adminForm.value.country_id || null,status:adminForm.value.status,owner_user_id:null,idempotency_key:businessRequestKey}})
     saving.value=false
     if(!result.ok || !result.data?.business?.id) {formError.value=result.message || 'The server did not confirm the business. Your draft is still here.';return}
     const createdId = result.data.business.id
@@ -733,6 +739,8 @@ const providerGroups = computed(() => {
         email: ownerRow?.email || b.email,
         username: b.username,
         business_name: b.business_name || b.name,
+        phone: b.phone || '',
+        contact: businessContactLinks(b.phone),
         business_types: b.business_types || [],
         business_status: b.business_status || b.status,
         business_id: b.id,
@@ -804,6 +812,7 @@ const filteredProviderGroups = computed(() => {
     if (!q) return true
     const provMatch =
       (g.provider.business_name || '').toLowerCase().includes(q) ||
+      (g.provider.phone || '').includes(q.replace(/[\s().-]/g, '')) ||
       (g.provider.full_name || '').toLowerCase().includes(q) ||
       (g.provider.email || '').toLowerCase().includes(q) ||
       (g.provider.username || '').toLowerCase().includes(q)
@@ -1033,6 +1042,17 @@ function avatarColor(id) {
             <div class="biz-chevron" :class="{ open: expandedBusinesses.has(g.provider.business_id) }"><ChevronDown :size="16" /></div>
           </div>
 
+          <div class="biz-contact">
+            <span class="biz-contact-label">Business phone</span>
+            <template v-if="g.provider.contact">
+              <strong class="biz-contact-number" dir="ltr">{{ g.provider.contact.phone }}</strong>
+              <a class="btn btn-sm btn-secondary" :href="g.provider.contact.call" :aria-label="'Call ' + g.provider.business_name"><Phone :size="14" />Call</a>
+              <a class="btn btn-sm btn-secondary" :href="g.provider.contact.whatsapp" target="_blank" rel="noopener noreferrer" :aria-label="'WhatsApp ' + g.provider.business_name"><MessageCircle :size="14" />WhatsApp</a>
+              <button class="btn btn-sm btn-secondary" :aria-label="'Copy phone for ' + g.provider.business_name" @click="copyBusinessPhone(g.provider.phone)"><Copy :size="14" />Copy</button>
+            </template>
+            <span v-else class="biz-contact-missing">{{ g.provider.phone ? 'Check phone format: ' + g.provider.phone : 'Phone missing' }}</span>
+            <button v-if="isSuperAdmin" class="btn btn-sm btn-secondary biz-contact-edit" @click="contactBusiness=g.provider"><Edit2 :size="13" />{{ g.provider.phone ? 'Edit phone' : 'Add phone' }}</button>
+          </div>
           <!-- Staff list (expanded) -->
           <div v-if="expandedBusinesses.has(g.provider.business_id)" class="staff-section"><div class="staff-section-heading"><strong>Business team</strong><span>{{ g.staff.length }} members · access limited to this business</span></div>
             <div class="table-wrap"><table class="staff-table">
@@ -1076,6 +1096,7 @@ function avatarColor(id) {
 
       <AccountSecurity v-if="securityAccount && isSuperAdmin" :account="securityAccount" @close="securityAccount=null" @saved="load" />
       <BusinessPlanManagement v-if="planBusiness && isSuperAdmin" :business="planBusiness" @close="planBusiness=null" @saved="load" />
+      <BusinessContact v-if="contactBusiness && isSuperAdmin" :business="contactBusiness" :default-iso="contactCountryIso(contactBusiness)" @close="contactBusiness=null" @saved="load" />
       <BusinessSetup v-if="showBusinessSetup" :countries="countries.filter(c => !jurisdictionCountryIds || jurisdictionCountryIds.has(c.id) || jurisdictionCountryIds.has(String(c.id)))" @close="showBusinessSetup=false" @created="createdBusiness" @invite="inviteBusiness=$event" @assign="assignNewBusiness" />
       <BusinessInvite v-if="inviteBusiness" :business="inviteBusiness" @close="inviteBusiness=null" @saved="load" />
       <BusinessAssignment v-if="assignmentBusiness" :business="assignmentBusiness" @close="assignmentBusiness=null" @assigned="assignmentSaved"/>
@@ -1119,6 +1140,7 @@ function avatarColor(id) {
             <div v-if="adminForm.role === 'provider_admin'" class="inline-business">
               <div class="inline-business-header"><Building2 :size="14" />Business details</div>
               <div class="form-group"><label for="team-business" class="form-label">Business name *</label><input id="team-business" v-model="adminForm.business_name" :aria-invalid="triedSave && !!businessErrors.business_name" /><small v-if="triedSave && businessErrors.business_name" class="form-error">{{ businessErrors.business_name }}</small></div>
+              <div class="form-group"><label class="form-label" for="legacy-business-phone">Business phone number *</label><BusinessPhoneInput v-model="adminForm.phone" input-id="legacy-business-phone" :invalid="triedSave && !!businessErrors.phone" /></div>
               <fieldset class="business-type-picker"><legend>Business type *</legend><label v-for="t in BUSINESS_TYPES" :key="t.key"><input type="checkbox" v-model="adminForm.business_types" :value="t.key" />{{ t.label }}</label><small v-if="triedSave && businessErrors.business_types" class="form-error">{{ businessErrors.business_types }}</small></fieldset>
               <div class="form-group">
                 <label class="form-label">Company Login Username <span class="required">*</span></label>
@@ -1470,6 +1492,7 @@ function avatarColor(id) {
   margin-bottom: 10px; overflow: hidden; transition: box-shadow 0.15s;
 }
 .biz-group:hover { box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+.biz-contact{display:flex;align-items:center;flex-wrap:wrap;gap:9px;padding:12px 18px;border-top:1px solid var(--border);font-size:13px}.biz-contact-label,.biz-contact-missing{color:var(--text-muted)}.biz-contact-number{font-variant-numeric:tabular-nums;user-select:text;margin-right:8px}.biz-contact-edit{margin-left:auto}@media(max-width:600px){.biz-contact{padding:12px}.biz-contact-edit{margin-left:0}.biz-contact-label{flex-basis:100%}}
 
 .biz-header {
   display: flex; align-items: center; gap: 12px;

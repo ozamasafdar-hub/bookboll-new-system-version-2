@@ -35,6 +35,7 @@ function createPayload(array $overrides = []): array
 {
     return array_merge([
         'business_name'   => 'Doha Padel Club',
+        'phone' => '+97455500001',
         'username'        => 'doha-padel-'.uniqid(),
         'business_types'  => ['venue'],
         'country_id'      => null,

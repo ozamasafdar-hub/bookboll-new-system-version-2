@@ -1,4 +1,5 @@
 import test from 'node:test'
+import { normalizeBusinessPhone } from '../src/lib/businessPhone.js'
 import assert from 'node:assert/strict'
 
 /* Settings → Business Profile / My Account / Notifications were switched off
@@ -21,7 +22,7 @@ function withApi(apiFetch) {
       code = code.slice(0, node.start) + code.slice(node.start + 'export '.length, node.end) + code.slice(node.end)
     }
   }
-  return new Function('apiFetch', `${code}; return { EMPTY_SETTINGS, loadProviderSettings, saveBusinessProfile, saveAccountDetails, saveNotificationPreferences }`)(apiFetch)
+  return new Function('apiFetch', 'normalizeBusinessPhone', `${code}; return { EMPTY_SETTINGS, loadProviderSettings, saveBusinessProfile, saveAccountDetails, saveNotificationPreferences }`)(apiFetch, normalizeBusinessPhone)
 }
 
 test('a write response alone cannot confirm a saved business profile', async () => {

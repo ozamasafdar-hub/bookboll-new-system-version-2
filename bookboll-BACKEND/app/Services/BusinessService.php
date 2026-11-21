@@ -128,7 +128,9 @@ class BusinessService
 
     public function register(Request $request)
     {
+        \App\Support\BusinessPhone::prepare($request);
         $data = $request->validate([
+            'phone' => \App\Support\BusinessPhone::rules(),
             'name'                  => 'required|string|max:100',
             'business_name'         => 'required|string|max:150',
             'username'              => 'required|string|min:3|max:30',
@@ -145,7 +147,7 @@ class BusinessService
             // Proof that the signer can read the address they typed, issued by
             // EmailVerificationService::verifyOtp() before this endpoint is called.
             'email_verification_token' => 'required|string|max:128',
-        ]);
+        ], \App\Support\BusinessPhone::messages());
 
         $username = self::normalizeUsername($data['username']);
 
@@ -244,6 +246,7 @@ class BusinessService
             $business = $this->business::create([
                 'owner_id'        => $user->id,
                 'name'            => $data['business_name'],
+                'phone'           => $data['phone'],
                 'username'        => $username,
                 'business_types'  => array_values($data['business_types']),
                 'country_id'      => $data['country_id'] ?? null,
@@ -343,6 +346,7 @@ class BusinessService
             ->when($search, function ($query) use ($search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('name', 'LIKE', "%{$search}%")
+                        ->orWhere('phone', 'LIKE', "%{$search}%")
                         ->orWhere('username', 'LIKE', "%{$search}%")
                         ->orWhereHas('owner', function ($oq) use ($search) {
                             $oq->where('email', 'LIKE', "%{$search}%")
@@ -409,7 +413,7 @@ class BusinessService
                 'owner_user_id'   => $owner?->id,
                 'email'           => $owner?->email,
                 'full_name'       => $owner?->name,
-                'phone'           => $owner?->phone,
+                'phone'           => $b->phone,
                 'staff_count'     => $staffCount,
                 // The real plan now — Stripe decides it, so the Team page's Free /
                 // Premium chip reflects what the provider is actually paying for.

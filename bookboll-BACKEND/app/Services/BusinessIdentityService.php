@@ -59,7 +59,9 @@ class BusinessIdentityService
             return sendError('You do not have access to business administration.', [], 403);
         }
 
+        \App\Support\BusinessPhone::prepare($request);
         $data = $request->validate([
+            'phone' => \App\Support\BusinessPhone::rules(),
             'business_name'   => 'required|string|max:160',
             'username'        => 'required|string|regex:/^[a-z0-9][a-z0-9-]{2,29}$/',
             'business_types'  => 'nullable|array',
@@ -71,9 +73,9 @@ class BusinessIdentityService
             // owner is attached through the assignment flow, which audits it.
             'owner_user_id'   => 'nullable|in:',
             'idempotency_key' => 'required|string|max:120',
-        ], [
+        ], array_merge(\App\Support\BusinessPhone::messages(), [
             'owner_user_id.in' => 'This endpoint creates businesses without an owner. Assign one afterwards.',
-        ]);
+        ]));
 
         $slug = BusinessService::normalizeUsername($data['username']);
         if ($slug === '' || BusinessService::isReservedUsername($slug)) {
@@ -108,6 +110,7 @@ class BusinessIdentityService
             return Business::create([
                 'owner_id'        => null,
                 'name'            => trim($data['business_name']),
+                'phone'           => $data['phone'],
                 'username'        => $slug,
                 'brand_subdomain' => $slug,
                 'brand_name'      => trim($data['business_name']),
@@ -127,12 +130,24 @@ class BusinessIdentityService
         ]);
     }
 
+    /** Update the business contact without changing an owner's personal profile. */
+    public function updateContact(Request $request, int $id)
+    {
+        abort_unless($request->user()?->hasRole('super_admin') && !AccessScope::isProviderScoped($request->user()), 403);
+        $business = Business::findOrFail($id);
+        \App\Support\BusinessPhone::prepare($request);
+        $data = $request->validate(['phone' => \App\Support\BusinessPhone::rules()], \App\Support\BusinessPhone::messages());
+        $business->update(['phone' => $data['phone']]);
+        return sendSuccess('Business phone updated', ['business' => $this->map($business->fresh())]);
+    }
+
     /** The row shape the dashboard groups by business id. */
     protected function map(Business $b): array
     {
         return [
             'id'             => $b->id,
             'name'           => $b->name,
+            'phone'          => $b->phone,
             'business_name'  => $b->name,
             'username'       => $b->username,
             'brand_enabled'  => (bool) $b->brand_enabled,

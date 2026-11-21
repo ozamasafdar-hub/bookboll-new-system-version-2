@@ -6,11 +6,15 @@ import { apiFetch } from '../lib/api.js'
 import { BUSINESS_TYPES } from '../lib/businessTypes.js'
 import { businessFormErrors } from '../lib/businessTeam.js'
 import { brandPreviewUrl } from '../lib/brand.js'
+import BusinessPhoneInput from './BusinessPhoneInput.vue'
+import { normalizeBusinessPhone } from '../lib/businessPhone.js'
 const props = defineProps({ countries: { type: Array, default: () => [] } })
 const emit = defineEmits(['close', 'created', 'invite', 'assign'])
 const step = ref(1), busy = ref(false), error = ref(''), created = ref(null)
 const teamChoice = ref('later')
-const form = ref({ business_name: '', username: '', business_types: [], country_id: '', publish_website: false })
+const form = ref({ business_name: '', phone: '', username: '', business_types: [], country_id: '', publish_website: false })
+const attempted = ref(false)
+const phoneIso = computed(() => props.countries.find(c => String(c.id) === String(form.value.country_id))?.iso_code || props.countries.find(c => String(c.id) === String(form.value.country_id))?.iso2 || '')
 const key = crypto.randomUUID()
 pushDirtyScope()
 onBeforeUnmount(popDirtyScope)
@@ -20,6 +24,7 @@ const siteUrl = computed(() => brandPreviewUrl(form.value.username, { preview: !
 function next() {
   error.value = ''
   if (step.value === 1) {
+    attempted.value = true
     const errors = businessFormErrors(form.value)
     if (Object.keys(errors).length) { error.value = Object.values(errors).join(' '); return }
   }
@@ -27,8 +32,10 @@ function next() {
 }
 async function create() {
   if (busy.value) return
+  const validation = businessFormErrors(form.value)
+  if (Object.keys(validation).length) { step.value = 1; attempted.value = true; error.value = Object.values(validation).join(' '); return }
   busy.value = true; error.value = ''
-  const r = await apiFetch('/admin/businesses', { method: 'POST', body: { ...form.value, country_id: form.value.country_id || null, status: 'active', owner_user_id: null, idempotency_key: key } })
+  const r = await apiFetch('/admin/businesses', { method: 'POST', body: { ...form.value, phone: normalizeBusinessPhone(form.value.phone), country_id: form.value.country_id || null, status: 'active', owner_user_id: null, idempotency_key: key } })
   busy.value = false
   if (!r.success || !r.data?.business?.id) { error.value = r.message || 'Could not create business. Your details are still here.'; return }
   created.value = r.data.business
@@ -56,6 +63,7 @@ function continueTeam() { emit(teamChoice.value === 'assign' ? 'assign' : 'invit
             <div class="form-group"><label for="setup-slug" class="form-label">Website address *</label><div class="setup-address"><input id="setup-slug" v-model="form.username" maxlength="30" @input="form.username = form.username.toLowerCase().replace(/\s/g, '')" placeholder="dohapadel" /><span>.bookboll.com</span></div><small>3–30 lowercase letters, numbers or hyphens. This is the public business web address.</small></div>
             <fieldset><legend>Business type *</legend><div class="setup-types"><label v-for="t in BUSINESS_TYPES" :key="t.key"><input type="checkbox" v-model="form.business_types" :value="t.key" />{{ t.label }}</label></div></fieldset>
             <div class="form-group"><label class="form-label" for="setup-country">Home country</label><select id="setup-country" v-model="form.country_id"><option value="">Set later</option><option v-for="c in countries" :key="c.id" :value="c.id">{{ c.name }}</option></select><small>Each venue uses its own country’s currency and payment settings.</small></div>
+            <div class="form-group"><label class="form-label" for="setup-phone">Business phone number *</label><BusinessPhoneInput v-model="form.phone" input-id="setup-phone" :default-iso="phoneIso" :invalid="attempted && !!businessFormErrors(form).phone" described-by="setup-phone-help" /><small id="setup-phone-help">The business’s main contact number. Use a WhatsApp-enabled number if available.</small></div>
           </div>
           <div v-else-if="step === 2" class="setup-choices">
             <h3>Who will manage this business?</h3>
@@ -64,6 +72,7 @@ function continueTeam() { emit(teamChoice.value === 'assign' ? 'assign' : 'invit
           </div>
           <div v-else class="setup-review">
             <Building2 :size="26" /><h3>{{ form.business_name }}</h3><p>{{ form.username }}.bookboll.com</p>
+            <p><strong>Business phone:</strong> {{ normalizeBusinessPhone(form.phone) }}</p>
             <dl><dt>Plan</dt><dd>Free</dd><dt>Country</dt><dd>{{ countries.find(c => String(c.id) === String(form.country_id))?.name || 'Set later' }}</dd><dt>Team access</dt><dd>{{ teamChoice === 'later' ? 'Assign later' : teamChoice === 'invite' ? 'Invite after creation' : 'Review assignment after creation' }}</dd></dl>
             <label class="setup-publish"><input type="checkbox" v-model="form.publish_website" /><span><strong>Publish its website now</strong><small>Leave off to prepare the website as a draft first.</small></span></label>
           </div>

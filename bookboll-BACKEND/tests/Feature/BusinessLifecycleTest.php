@@ -27,7 +27,7 @@ function lifecycleSignup(User $u) {
     test()->postJson('/api/business/email/send-otp',['email'=>$u->email])->assertOk();
     $code=null; Mail::assertSent(BusinessEmailOtpEmail::class,function ($m) use(&$code,$u){if($m->email!==$u->email)return false;$code=$m->otp;return true;});
     $proof=test()->postJson('/api/business/email/verify-otp',['email'=>$u->email,'otp'=>$code])->assertOk()->json('data.email_verification_token');
-    return test()->postJson('/api/business/register',['name'=>$u->name,'business_name'=>'QA Signup','username'=>'signup-'.uniqid(),'business_types'=>['sports_facility'],'email'=>$u->email,'password'=>'QA-lifecycle-12345','password_confirmation'=>'QA-lifecycle-12345','email_verification_token'=>$proof]);
+    return test()->postJson('/api/business/register',['phone'=>'+97455500001','name'=>$u->name,'business_name'=>'QA Signup','username'=>'signup-'.uniqid(),'business_types'=>['sports_facility'],'email'=>$u->email,'password'=>'QA-lifecycle-12345','password_confirmation'=>'QA-lifecycle-12345','email_verification_token'=>$proof]);
 }
 
 it('refuses business signup by an inactive account or an existing team account',function ($type) {
@@ -134,7 +134,7 @@ it('transfers owned venues and reconciles receipts into businesses from both cre
     if($path==='self_signup') {
         $owner=lifecycleUser('customer'); $id=lifecycleSignup($owner)->assertSuccessful()->json('data.business.id');
     } else {
-        $id=$this->actingAs($actor)->postJson('/api/admin/businesses',[
+        $id=$this->actingAs($actor)->postJson('/api/admin/businesses', ['phone'=>'+97455500001',
             'business_name'=>'QA admin business','username'=>'qa-admin-lifecycle','business_types'=>['sports_facility'],
             'publish_website'=>false,'idempotency_key'=>'qa-admin-lifecycle',
         ])->assertOk()->json('data.business.id');

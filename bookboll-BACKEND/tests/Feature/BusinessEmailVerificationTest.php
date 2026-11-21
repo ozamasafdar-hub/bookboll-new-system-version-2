@@ -54,6 +54,7 @@ function signupPayload(array $over = []): array
     return array_merge([
         'name'                  => 'Alamgir Khan',
         'business_name'         => 'Lahore Sports Club',
+        'phone' => '+923001234567',
         'username'              => 'lahoresports',
         'business_types'        => ['sports_facility'],
         'email'                 => SIGNUP_EMAIL,

@@ -7,6 +7,7 @@ import * as vue from 'vue'
 import * as permissions from '../src/lib/permissions.js'
 import * as types from '../src/lib/businessTypes.js'
 import * as team from '../src/lib/businessTeam.js'
+import * as phone from '../src/lib/businessPhone.js'
 import { usePagination } from '../src/lib/usePagination.js'
 import * as finance from '../src/lib/finance.js'
 
@@ -22,6 +23,7 @@ function mount(t, { role = 'super_admin', fail = false, supported = true } = {})
   const imports = new Proxy({
     vue: { ...vue, onMounted: noop },
     '../lib/businessTeam.js': team,
+    '../lib/businessPhone.js': phone,
     '../lib/businessTypes.js': types,
     '../lib/permissions.js': permissions,
     '../lib/usePagination.js': { usePagination },
@@ -43,10 +45,10 @@ function mount(t, { role = 'super_admin', fail = false, supported = true } = {})
   return { state, requests }
 }
 
-const example = { business_name: 'Example Club', full_name: 'Example Owner', email: 'owner@example.test', username: 'example-club', business_types: ['sports_facility'], country_id: 1 }
+const example = { phone: '+97455500001', business_name: 'Example Club', full_name: 'Example Owner', email: 'owner@example.test', username: 'example-club', business_types: ['sports_facility'], country_id: 1 }
 test('business creation submits a business without creating an owner account', async t => {
   const { state: s, requests } = mount(t)
-  s.openBusinessNew(); await s.reviewBusiness()
+  s.openBusinessNew(); s.adminForm.value.role='provider_admin'; s.showModal.value=true; await s.reviewBusiness()
   assert.equal(s.businessReview.value, false)
   assert.equal(requests.length, 0)
   Object.assign(s.adminForm.value, example,{full_name:'',email:''})
@@ -61,6 +63,7 @@ test('business creation submits a business without creating an owner account', a
   assert.equal('name' in writes[0].body, false)
   assert.equal('email' in writes[0].body, false)
   assert.equal(writes[0].body.business_name, 'Example Club')
+  assert.equal(writes[0].body.phone, '+97455500001')
   assert.deepEqual(writes[0].body.business_types, ['sports_facility'])
   assert.equal(writes[0].body.owner_user_id, null)
   assert.equal('assigned_location_ids' in writes[0].body, false)
@@ -68,7 +71,7 @@ test('business creation submits a business without creating an owner account', a
 })
 test('server validation errors retain the business draft', async t => {
   const { state: s } = mount(t, { fail: true })
-  s.openBusinessNew(); Object.assign(s.adminForm.value, example); await s.reviewBusiness()
+  s.openBusinessNew(); s.adminForm.value.role='provider_admin'; s.showModal.value=true; Object.assign(s.adminForm.value, example); await s.reviewBusiness()
   await s.saveAdmin()
   assert.equal(s.showModal.value, true)
   assert.match(s.formError.value, /Username already exists/)
@@ -77,13 +80,13 @@ test('server validation errors retain the business draft', async t => {
 })
 test('old backend cannot fall back to creating a fake owner',async t=>{
   const {state:s,requests}=mount(t,{supported:false})
-  s.openBusinessNew();Object.assign(s.adminForm.value,example);await s.reviewBusiness();await s.saveAdmin()
+  s.openBusinessNew(); s.adminForm.value.role='provider_admin'; s.showModal.value=true;Object.assign(s.adminForm.value,example);await s.reviewBusiness();await s.saveAdmin()
   assert.equal(s.showModal.value,true)
   assert.equal(requests.filter(r=>r.method==='POST').length,0)
 })
 test('a provider staff role cannot create a business owner', async t => {
   const { state: s, requests } = mount(t, { role: 'staff' })
-  s.openBusinessNew(); Object.assign(s.adminForm.value, example); await s.saveAdmin()
+  s.openBusinessNew(); s.adminForm.value.role='provider_admin'; s.showModal.value=true; Object.assign(s.adminForm.value, example); await s.saveAdmin()
   assert.equal(requests.length, 0)
   assert.match(s.formError.value, /permission/)
 })

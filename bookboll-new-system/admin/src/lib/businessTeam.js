@@ -1,4 +1,5 @@
 import { normalizeBusinessTypes } from './businessTypes.js'
+import { businessPhoneError } from './businessPhone.js'
 
 // An owner belongs to their own team, even though their owner_user_id is null.
 export function businessTeam(owner, users = []) {
@@ -21,7 +22,8 @@ export function businessTeam(owner, users = []) {
 export function businessFormErrors(form) {
   const errors = {}
   if (!form.business_name?.trim()) errors.business_name = 'Enter the business name.'
-  if (!/^[a-z0-9][a-z0-9-]{2,29}$/.test(form.username || '')) errors.username = 'Use 3–40 lowercase letters, numbers or hyphens; start with a letter or number.'
+  if (businessPhoneError(form.phone)) errors.phone = businessPhoneError(form.phone)
+  if (!/^[a-z0-9][a-z0-9-]{2,29}$/.test(form.username || '')) errors.username = 'Use 3–30 lowercase letters, numbers or hyphens; start with a letter or number.'
   if (!normalizeBusinessTypes(form.business_types).length) errors.business_types = 'Choose at least one business type.'
   return errors
 }

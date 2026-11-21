@@ -38,7 +38,7 @@ function setupBusiness() {
 }
 it('creates a draft site and invites an owner and manager with isolated dashboard access',function () {
     $admin=setupActor();
-    $id=$this->actingAs($admin)->postJson('/api/admin/businesses',[
+    $id=$this->actingAs($admin)->postJson('/api/admin/businesses', ['phone'=>'+97455500001',
         'business_name'=>'QA academy','username'=>'qa-academy','business_types'=>['venue'],'publish_website'=>false,'idempotency_key'=>'qa-create',
     ])->assertOk()->json('data.business.id');
     $b=Business::findOrFail($id);

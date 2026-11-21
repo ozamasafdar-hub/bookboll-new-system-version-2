@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { parse, compileScript } from '@vue/compiler-sfc'
 import { parse as parseJs } from '@babel/parser'
 import * as vue from 'vue'
+import * as businessPhone from '../../business/src/lib/businessPhone.js'
 
 let code = compileScript(parse(readFileSync(new URL('../../business/src/pages/Signup.vue',import.meta.url),'utf8')).descriptor,{id:'signup'}).content
 for (const node of parseJs(code,{sourceType:'module'}).program.body.slice().reverse()) {
@@ -15,6 +16,7 @@ function signup(t,api={}) {
   const noop=()=>{}
   const imports=new Proxy({
     vue:{...vue,onMounted:noop,onBeforeUnmount:fn=>cleanups.push(fn)},
+    '../lib/businessPhone.js': businessPhone,
     '../lib/businessTypes.js':{BUSINESS_TYPES:[{key:'gym',label:'Gym'}]},
     '../lib/businessAuth.js':{
       checkUsername:async()=>({success:true,data:{available:true}}),
@@ -32,7 +34,7 @@ test('business details validate before account panel; registration still require
   s.continueBusiness()
   assert.equal(s.accountPanel.value,1)
   assert.equal(s.invalid('businessName'),true)
-  s.businessName.value='Example Club';s.username.value='example-club';s.businessTypes.value=['gym']
+  s.businessPhone.value='+974 5550 0001';s.businessName.value='Example Club';s.username.value='example-club';s.businessTypes.value=['gym']
   await vue.nextTick();s.userStatus.value='ok';s.continueBusiness()
   assert.equal(s.accountPanel.value,2)
   assert.equal(calls.length,0)
@@ -44,6 +46,7 @@ test('business details validate before account panel; registration still require
   assert.equal(calls.length,1)
   assert.equal(calls[0].email_verification_token,'test-proof')
   assert.equal(calls[0].business_name,'Example Club')
+  assert.equal(calls[0].phone,'+97455500001')
   assert.equal(s.step.value,2)
 })
 test('email verification and username checks ignore responses for an edited value',async t=>{

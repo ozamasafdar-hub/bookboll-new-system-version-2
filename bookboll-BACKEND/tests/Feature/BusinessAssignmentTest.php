@@ -333,7 +333,7 @@ it('still refuses an owner at creation, so the move stays audited', function () 
     $actor = admin();
     $free  = User::factory()->create(['status' => User::ACTIVE]);
 
-    $this->actingAs($actor)->postJson('/api/admin/businesses', [
+    $this->actingAs($actor)->postJson('/api/admin/businesses', ['phone'=>'+97455500001',
         'business_name'   => 'Owned At Birth',
         'username'        => 'owned-at-birth',
         'owner_user_id'   => $free->id,

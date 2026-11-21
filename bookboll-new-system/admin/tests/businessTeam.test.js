@@ -19,8 +19,8 @@ test('owner is included exactly once with real identity and mixed ID types', () 
 })
 
 test('business creation validates business details without requiring an owner', () => {
-  assert.equal(Object.keys(businessFormErrors({})).length, 3)
-  const form = { full_name: 'Alex Owner', email: 'alex@example.test', business_name: 'Example Club', username: 'example-club', business_types: ['sports_facility'] }
+  assert.equal(Object.keys(businessFormErrors({})).length, 4)
+  const form = { phone: '+97455500001', full_name: 'Alex Owner', email: 'alex@example.test', business_name: 'Example Club', username: 'example-club', business_types: ['sports_facility'] }
   assert.deepEqual(businessFormErrors(form), {})
   assert.ok(businessFormErrors({ ...form, username: '../admin' }).username)
   assert.ok(businessFormErrors({ ...form, business_types: ['unknown'] }).business_types)

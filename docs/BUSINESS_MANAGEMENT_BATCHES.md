@@ -11,6 +11,8 @@ The user asked to finish the current lifecycle audit first and keep these new re
 
 ## Batch 1: business phone and contact actions
 
+Authorized 21 November 2026. Implementation and required checks are documented in [BUSINESS_PHONE_CONTACTS.md](BUSINESS_PHONE_CONTACTS.md). Batches 2 and 3 remain queued.
+
 - Collect a business phone number with a country calling-code selector in self-signup and superadmin creation. Store it on the business separately from staff personal numbers.
 - Allow the business and authorized superadmin to edit it. Require valid contact details for newly completed onboarding; flag missing numbers on existing accounts for follow-up rather than fabricating data.
 - Show the number in business directory/detail views with Copy, Call and WhatsApp actions. Generate normalized `tel:` and WhatsApp links.

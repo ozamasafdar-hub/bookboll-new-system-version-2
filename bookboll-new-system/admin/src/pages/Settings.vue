@@ -7,6 +7,7 @@ import { changeOwnPassword, authError } from '../lib/auth.js'
 import { fetchSettings, updateSettings, asBool, asNumber } from '../lib/settings.js'
 import { useRouter } from 'vue-router'
 import FeatureSearch from '../components/FeatureSearch.vue'
+import BusinessPhoneInput from '../components/BusinessPhoneInput.vue'
 import { askConfirm } from '../lib/confirm.js'
 import { hasPaidWebsiteDiscount } from '../lib/listingPayments.js'
 import { loadProviderSettings, saveBusinessProfile, saveAccountDetails, saveNotificationPreferences } from '../lib/providerSettings.js'
@@ -542,8 +543,9 @@ async function changePassword() {
               <p v-if="providerFieldErrors.name" id="pv-biz-name-error" class="field-error-text" role="alert">{{ providerFieldErrors.name }}</p>
             </div>
             <div class="form-group">
-              <label class="form-label" for="pv-biz-phone">Phone Number</label>
-              <input id="pv-biz-phone" :readonly="!canEditBusiness" aria-label="Phone number" v-model="providerForm.phone" placeholder="+971 50 000 0000" :aria-invalid="!!providerFieldErrors.phone" :aria-describedby="providerFieldErrors.phone ? 'pv-biz-phone-error' : undefined" />
+              <label class="form-label" for="pv-biz-phone">Business phone number</label>
+              <BusinessPhoneInput input-id="pv-biz-phone" :disabled="!canEditBusiness" v-model="providerForm.phone" :invalid="!!providerFieldErrors.phone" :described-by="providerFieldErrors.phone ? 'pv-biz-phone-error' : undefined" />
+              <p class="field-help">Your business’s main contact number, separate from your personal account number.</p>
               <p v-if="providerFieldErrors.phone" id="pv-biz-phone-error" class="field-error-text" role="alert">{{ providerFieldErrors.phone }}</p>
             </div>
             <div class="form-group">
