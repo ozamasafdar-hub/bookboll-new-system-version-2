@@ -17,7 +17,7 @@ async function load() {
   const r = await apiFetch(`${endpoint}/invitation-options`)
   loading.value = false
   if(!r.success) { error.value = r.message || 'Could not load business access settings.'; return }
-  options.value = r.data; role.value = r.data.roles?.[0] || ''
+  options.value = r.data; role.value = r.data.has_owner && r.data.roles?.includes('facility_admin') ? 'facility_admin' : r.data.roles?.[0] || ''
 }
 async function save() {
   if(busy.value || !options.value) return
@@ -39,7 +39,7 @@ load()
         <label class="form-group"><span class="form-label">Email *</span><input type="email" required v-model="email" autocomplete="email" /></label>
       </div><p class="team-help">They choose their password through Forgot password on the sign-in page.</p></section>
       <section class="team-form-section"><h3>2. Role & account status</h3>
-        <p v-if="options.has_owner" class="team-help">This business already has an owner. Adding a team member keeps that owner in place.</p>
+        <p v-if="options.has_owner" class="team-help">Add another owner or a team member. Existing owners keep their access.</p>
         <p v-else class="team-help">Add the first owner to give this business someone who can manage its team and website.</p>
         <RoleSelect v-model="role" :roles="options.roles" inline />
         <label class="form-group team-status"><span class="form-label">Sign-in access</span><select v-model="status"><option value="active">Active — can sign in</option><option value="inactive">Inactive — sign-in disabled</option></select></label>
@@ -48,7 +48,7 @@ load()
         <p v-if="!options.all_venues_allowed" class="team-help">Choose specific venues within your own access.</p>
         <PermissionScopeEditor :role="role" v-model:permissions="permissions" v-model:location-ids="locations" :available-locations="options.venues" :editable-capabilities="options.capabilities" :allow-whole-business="options.all_venues_allowed" />
       </section>
-      <p v-else class="team-help">The owner has access to every venue in this business.</p>
+      <p v-else class="team-help">Owners have full access to this business, including its team, website and payments. Keep at least one active owner.</p>
     </fieldset>
     <p v-if="error" role="alert" class="form-error">{{ error }}</p>
   </div>

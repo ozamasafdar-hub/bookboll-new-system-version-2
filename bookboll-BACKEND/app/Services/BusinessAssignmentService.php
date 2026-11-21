@@ -45,11 +45,7 @@ class BusinessAssignmentService
 
         $roles = BusinessMembership::ASSIGNABLE_ROLES;
 
-        // The owner seat is not assignable while it is taken. Offering it would
-        // promise something the one-active-owner constraint will refuse.
-        if ($this->hasOwner($business)) {
-            $roles = array_values(array_diff($roles, ['provider_admin']));
-        }
+        $roles = array_values(array_filter($roles, fn ($role) => RoleGrantGuard::mayGrant($actor, $role)));
 
         return sendSuccess('Assignment options', [
             'contract_version' => self::CONTRACT_VERSION,
@@ -136,7 +132,7 @@ class BusinessAssignmentService
     /** @return array<int, array{id:string,name:string}> */
     protected function assignableVenues(Business $business): array
     {
-        $ownerId = $business->owner_id;
+        $ownerId = \App\Support\BusinessMembershipSync::ownerUserIdForBusiness($business->id);
 
         // Both links, for the same reason AccessScope reads both: a business
         // created through BusinessIdentityService has owner_id null and owns its
@@ -220,7 +216,6 @@ class BusinessAssignmentService
         $blockers = [];
 
         if ($data['role'] === 'provider_admin') {
-            if ($this->hasOwner($business)) $blockers[] = 'This business already has an owner. Choose a staff role; this move cannot replace the owner.';
             if ($data['scope'] !== 'all') $blockers[] = 'The business owner must have access to the whole business.';
         }
 
@@ -436,7 +431,7 @@ class BusinessAssignmentService
             $target->syncRoles([$preview->role]);
             $target->syncPermissions([]);
             $target->forceFill([
-                'owner_user_id'         => $preview->role === 'provider_admin' ? null : $business->owner_id,
+                'owner_user_id'         => $preview->role === 'provider_admin' ? null : \App\Support\BusinessMembershipSync::ownerUserIdForBusiness($business->id),
                 'assigned_country_ids'  => null,
                 'assigned_location_ids' => null,
                 'assigned_listing_ids'  => null,
@@ -455,7 +450,7 @@ class BusinessAssignmentService
                 'version'      => 1,
                 'created_by'   => $actor->id,
             ]);
-            if ($preview->role === 'provider_admin') $business->update(['owner_id' => $target->id]);
+            if ($preview->role === 'provider_admin') \App\Support\BusinessOwnership::initialize($business, $target);
 
             // Stale tokens would otherwise keep the old platform privileges
             // alive until they expired.

@@ -55,13 +55,13 @@ it('creates a draft site and invites an owner and manager with isolated dashboar
     $this->actingAs($manager)->getJson('/api/admin/bookings/calendar-dashboard?from='.now()->toDateString().'&to='.now()->toDateString())->assertOk();
     $this->actingAs($owner)->postJson("/api/admin/businesses/{$other->business_id}/invitations",['name'=>'Intruder','email'=>'intruder@example.test','role'=>'staff'])->assertForbidden();
 });
-it('rejects platform roles and a second owner through business invitations',function () {
+it('rejects platform roles while allowing additional business owners',function () {
     $b=setupBusiness(); $this->actingAs(setupActor());
     foreach(['super_admin','admin','platform_staff','country_admin'] as $role) {
         $this->postJson("/api/admin/businesses/{$b->id}/invitations",['name'=>'QA','email'=>"$role@example.test",'role'=>$role])->assertUnprocessable();
     }
     $this->postJson("/api/admin/businesses/{$b->id}/invitations",['name'=>'QA','email'=>'qa@example.test','role'=>'provider_admin'])->assertOk();
-    $this->postJson("/api/admin/businesses/{$b->id}/invitations",['name'=>'QA2','email'=>'qa2@example.test','role'=>'provider_admin'])->assertUnprocessable();
+    $this->postJson("/api/admin/businesses/{$b->id}/invitations",['name'=>'QA2','email'=>'qa2@example.test','role'=>'provider_admin'])->assertOk();
 });
 it('keeps an ownerless business website scoped to its own venues',function () {
     $a=setupBusiness(); $b=setupBusiness();

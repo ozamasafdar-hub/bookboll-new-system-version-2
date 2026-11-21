@@ -40,12 +40,12 @@ class PreparePaymentsPreview extends Command
                     $venue->forceFill(['operator_type'=>'bookboll','business_id'=>null,'owner_user_id'=>null])->saveQuietly();
                 } else {
                     $business = $venue->business_id ? Business::find($venue->business_id) : null;
-                    $business ??= $venue->owner_user_id ? Business::where('owner_id',$venue->owner_user_id)->first() : null;
+                    $business ??= $venue->owner_user_id ? Business::forOwnerId($venue->owner_user_id) : null;
                     if (!$business) $business = Business::firstOrCreate(['username'=>'venue-'.$venue->id.'-operator'],[
                         'name'=>$venue->name, 'owner_id'=>null, 'country_id'=>$venue->country_id,
                         'status'=>Business::STATUS_ACTIVE, 'business_types'=>['sports_facility'], 'plan'=>'free',
                     ]);
-                    $venue->forceFill(['operator_type'=>'provider','business_id'=>$business->id,'owner_user_id'=>$business->owner_id])->saveQuietly();
+                    $venue->forceFill(['operator_type'=>'provider','business_id'=>$business->id,'owner_user_id'=>\App\Support\BusinessMembershipSync::ownerUserIdForBusiness($business->id)])->saveQuietly();
                 }
                 if ($before !== $venue->getAttributes()) $this->audit('venue',$venue->id,$before,$venue->getAttributes(),'Owner-confirmed mapping, 10 Nov 2026');
             }

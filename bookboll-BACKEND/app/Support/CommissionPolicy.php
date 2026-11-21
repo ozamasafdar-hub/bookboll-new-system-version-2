@@ -99,7 +99,7 @@ class CommissionPolicy
         $ownerId = $listing?->venue?->owner_user_id;
 
         return $ownerId
-            ? Business::with('currentSubscription')->where('owner_id', $ownerId)->first()
+            ? Business::forOwnerId($ownerId)?->load('currentSubscription')
             : null;
     }
 

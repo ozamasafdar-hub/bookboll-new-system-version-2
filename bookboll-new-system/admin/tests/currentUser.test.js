@@ -47,3 +47,11 @@ test('row fallback retains all scope types and effective grants when no envelope
   assert.equal(can('manage_team'), true)
   clearLaravelUser()
 })
+
+
+test('co-owners use the canonical business key for owner-scoped pages',async()=>{
+  const {currentOwnerUserId,currentUsername}=await import('../src/lib/currentUser.js')
+  applyLaravelUser({id:42,active_business_membership:{scope:'all',business:{id:7,username:'shared-club'}}},['provider_admin'],{owner_user_id:5,assigned_location_ids:[]})
+  assert.equal(currentOwnerUserId.value,'5');assert.equal(currentUsername.value,'shared-club')
+  clearLaravelUser()
+})

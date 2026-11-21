@@ -18,7 +18,7 @@ final class PaymentFinancialContext
         $venue = $program->venue;
         $ownerId = $program->mapped_owner_user_id ?: (is_numeric($program->owner_user_id) ? $program->owner_user_id : null);
         $business = $venue?->business_id ? Business::find($venue->business_id)
-            : ($ownerId ? Business::where('owner_id', $ownerId)->first() : null);
+            : ($ownerId ? Business::forOwnerId($ownerId) : null);
         return [
             'version' => 1, 'operator' => $venue?->operator_type ?: ($business ? 'provider' : 'unknown'),
             'business_id' => $business?->id, 'business_name' => $business?->name,
@@ -34,7 +34,7 @@ final class PaymentFinancialContext
     {
         $venue = Venue::find($booking->venue_id);
         $business = $venue?->business_id ? Business::find($venue->business_id)
-            : ($venue?->owner_user_id ? Business::where('owner_id', $venue->owner_user_id)->first() : null);
+            : ($venue?->owner_user_id ? Business::forOwnerId($venue->owner_user_id) : null);
         $operator = $venue?->operator_type;
         // A business assignment is authoritative even before an owner is assigned.
         if (!$operator && ($business || $venue?->business_id)) $operator = 'provider';

@@ -45,7 +45,7 @@ class AccountAdministration
         if ($target->hasRole('super_admin') && (($request->filled('role') && $request->role !== 'super_admin') || ($request->filled('status') && $request->status !== User::ACTIVE))) {
             abort_unless(User::role('super_admin')->where('status', User::ACTIVE)->where('id', '!=', $target->id)->exists(), 422, 'Keep at least one active superadmin.');
         }
-        if (($request->filled('role') && ($target->hasRole('provider_admin') !== ($request->role === 'provider_admin')))
+        if (($request->filled('role') && !AccessScope::businessId($target) && ($target->hasRole('provider_admin') !== ($request->role === 'provider_admin')))
             || ($request->has('owner_user_id') && (int) $request->owner_user_id !== (int) $target->owner_user_id)
             || (AccessScope::businessId($target) && in_array($request->role, config('roles.platform_team_roles'), true))) {
             abort(422, 'Business ownership and account moves require the reviewed business assignment flow.');

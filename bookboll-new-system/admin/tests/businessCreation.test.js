@@ -96,3 +96,35 @@ test('ordinary user editor cannot move a platform account into a business withou
   s.adminForm.value.owner_user_id=9;s.adminForm.value.role='staff'
   await s.saveAdmin();assert.equal(requests.length,0);assert.match(s.formError.value,/reviewed assignment/)
 })
+
+
+test('provider owners can invite co-owners, managers cannot choose Owner',async t=>{
+  const {state:s,requests}=mount(t,{role:'provider_admin'})
+  s.openTeamNew();Object.assign(s.teamForm.value,{full_name:'QA Co-owner',email:'co@example.test',role:'provider_admin'})
+  await vue.nextTick();await s.saveTeam()
+  const write=requests.find(r=>r.method==='POST')
+  assert.equal(write.path,'/business/team');assert.equal(write.body.role,'provider_admin')
+  assert.equal('assigned_location_ids' in write.body,false)
+  assert.ok(s.assignableRoles.value.includes('provider_admin'))
+  const manager=mount(t,{role:'facility_admin'}).state
+  assert.equal(manager.assignableRoles.value.includes('provider_admin'),false)
+})
+
+test('superadmin can promote existing business staff without sending an account move',async t=>{
+  const {state:s,requests}=mount(t)
+  s.openAdminEdit({id:7,business_id:44,owner_user_id:5,role:'staff',full_name:'QA Member',email:'member@example.test'})
+  assert.ok(s.inviteRoles.value.includes('provider_admin'))
+  s.adminForm.value.role='provider_admin';await vue.nextTick();await s.saveAdmin()
+  const write=requests.find(r=>r.method==='PUT')
+  assert.equal(write.path,'/admin/users/7');assert.equal(write.body.role,'provider_admin')
+  assert.equal('owner_user_id' in write.body,false)
+})
+
+test('promoting a provider team member clears the old staff restrictions',async t=>{
+  const {state:s,requests}=mount(t,{role:'provider_admin'})
+  s.openTeamEdit({id:8,role:'facility_admin',full_name:'QA Manager',email:'manager@example.test',assigned_location_ids:[4],custom_permissions:{revoke:['manage_team'],grant:[]}})
+  s.teamForm.value.role='provider_admin';await vue.nextTick();await s.saveTeam()
+  const write=requests.find(r=>r.method==='PUT')
+  assert.equal(write.path,'/business/team/8');assert.deepEqual(write.body.custom_permissions,{grant:[],revoke:[]})
+  assert.equal('assigned_location_ids' in write.body,false)
+})

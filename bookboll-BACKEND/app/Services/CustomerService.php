@@ -126,6 +126,7 @@ class CustomerService
         $customer = $this->scopedCustomerQuery($request)->findOrFail($id);
 
         $request->validate(['status' => 'required|in:active,blocked']);
+        abort_if($customer->hasAnyRole(\App\Support\Capabilities::providerRoles()) || $customer->hasAnyRole(\App\Support\Capabilities::platformRoles()),422,'Manage team account access from My Team, not customer status.');
 
         $customer->update(['status' => $request->input('status')]);
 
@@ -861,6 +862,7 @@ class CustomerService
     {
         $user = $this->scopedCustomerQuery($request)->findOrFail($id);
         $data = $this->validateDashboard($request, $user->id, true);
+        abort_if(array_key_exists('status',$data) && ($user->hasAnyRole(\App\Support\Capabilities::providerRoles()) || $user->hasAnyRole(\App\Support\Capabilities::platformRoles())),422,'Manage team account access from My Team, not customer status.');
 
         try {
             DB::beginTransaction();

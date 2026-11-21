@@ -22,17 +22,17 @@ use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
 
-it('refuses a second owner even when the request bypasses the role picker', function () {
+it('allows a reviewed platform account move to add a co-owner without replacing the primary', function () {
     $actor=admin(); $b=ownedBusiness(); $owner=admin('provider_admin'); $target=admin('platform_staff');
     $b->update(['owner_id'=>$owner->id]);
     $this->actingAs($actor)->getJson("/api/admin/businesses/{$b->id}/assignment-options")->assertOk()
         ->assertJsonPath('data.has_owner',true);
     $options=$this->getJson("/api/admin/businesses/{$b->id}/assignment-options")->json('data.roles');
-    expect($options)->not->toContain('provider_admin');
+    expect($options)->toContain('provider_admin');
     $review=previewMove($actor,$b,$target,['role'=>'provider_admin']);
-    expect($review['blockers'])->not->toBeEmpty();
-    $this->postJson("/api/admin/businesses/{$b->id}/assignments",['preview_token'=>$review['preview_token'],'idempotency_key'=>'second-owner'])->assertStatus(409);
-    expect($b->fresh()->owner_id)->toBe($owner->id)->and($target->fresh()->hasRole('platform_staff'))->toBeTrue();
+    expect($review['blockers'])->toBeEmpty();
+    $this->postJson("/api/admin/businesses/{$b->id}/assignments",['preview_token'=>$review['preview_token'],'idempotency_key'=>'second-owner'])->assertOk();
+    expect($b->fresh()->owner_id)->toBe($owner->id)->and($target->fresh()->hasRole('provider_admin'))->toBeTrue()->and($b->activeMemberships()->where('role','owner')->count())->toBe(2);
 });
 
 it('invalidates an owner review when another owner is assigned before commit', function () {

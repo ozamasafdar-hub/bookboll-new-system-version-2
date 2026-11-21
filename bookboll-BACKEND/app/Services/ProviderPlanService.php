@@ -931,7 +931,7 @@ class ProviderPlanService
             return [null, null, sendError('No business found for this account.', [], 404)];
         }
 
-        $owner = User::find($ownerId);
+        $owner = User::find($business->owner_id ?: $ownerId);
         if (! $owner) {
             return [null, null, sendError('No business owner found for this account.', [], 404)];
         }

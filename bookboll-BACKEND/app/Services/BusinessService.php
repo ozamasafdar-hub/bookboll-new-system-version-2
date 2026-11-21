@@ -192,7 +192,7 @@ class BusinessService
 
                 return sendError($msg, ['email' => [$msg]], 422);
             }
-            if ($this->business::where('owner_id', $existing->id)->exists()) {
+            if ($this->business::where('owner_id', $existing->id)->orWhere('legacy_owner_id',$existing->id)->exists()) {
                 return sendError('This account already has a business.', [
                     'email' => ['This account already has a business.'],
                 ], 422);
@@ -245,6 +245,7 @@ class BusinessService
 
             $business = $this->business::create([
                 'owner_id'        => $user->id,
+                'legacy_owner_id' => $user->id,
                 'name'            => $data['business_name'],
                 'phone'           => $data['phone'],
                 'username'        => $username,
@@ -390,14 +391,17 @@ class BusinessService
              */
             $managing = $b->activeMemberships
                 ->first(fn (BusinessMembership $m) => in_array($m->role, BusinessMembership::MANAGING_ROLES, true));
-            $owner = $managing?->user ?: $b->owner;
+            $owner = $b->owner ?: $managing?->user;
+            $ownerRows = $b->activeMemberships->filter(fn ($m) => in_array($m->role,BusinessMembership::MANAGING_ROLES,true))->map(fn ($m) => $m->user)->filter();
+            if ($owner && !$ownerRows->contains('id',$owner->id)) $ownerRows->push($owner);
 
             // Union, not either/or: a legacy business counts staff by
             // users.owner_user_id, a current one by its memberships, and one
             // that has been through both must not count anybody twice.
             $memberIds = $b->activeMemberships->pluck('user_id');
-            $legacyIds = $b->owner_id
-                ? $this->user::where('owner_user_id', $b->owner_id)->pluck('id')
+            $legacyOwner = \App\Support\BusinessMembershipSync::ownerUserIdForBusiness($b->id);
+            $legacyIds = $legacyOwner
+                ? $this->user::where('owner_user_id', $legacyOwner)->whereDoesntHave('businessMemberships')->pluck('id')
                 : collect();
             $staffCount = $memberIds->merge($legacyIds)->unique()->count();
 
@@ -411,6 +415,10 @@ class BusinessService
                 'business_status' => $b->status,
                 'country_id'      => $b->country_id,
                 'owner_user_id'   => $owner?->id,
+                'scope_owner_user_id' => $legacyOwner,
+                'owner_count' => $ownerRows->count(),
+                'active_owner_count' => $ownerRows->where('status','active')->count(),
+                'owners' => $ownerRows->map(fn ($u) => ['id'=>$u->id,'name'=>$u->name,'email'=>$u->email,'status'=>$u->status,'is_primary_owner'=>$u->id === $b->owner_id])->values(),
                 'email'           => $owner?->email,
                 'full_name'       => $owner?->name,
                 'phone'           => $b->phone,
@@ -440,7 +448,6 @@ class BusinessService
         $business = $this->teamBusiness($request);
 
         $members = \App\Support\TeamDirectory::forBusiness($this->user::query(), $business)
-            ->where('users.id', '!=', $business->owner_id ?: 0)
             ->latest()
             ->get()
             ->map(fn(User $u) => $this->userService->formatTeamUser($u))
@@ -465,10 +472,14 @@ class BusinessService
         $business = $this->teamBusiness($request);
 
         $request->merge([
-            'owner_user_id' => $business->owner_id ?: $business->activeMemberships()->whereIn('role', BusinessMembership::MANAGING_ROLES)->value('user_id'),
+            'owner_user_id' => \App\Support\BusinessMembershipSync::ownerUserIdForBusiness($business->id),
             'status'        => $request->input('status', User::ACTIVE),
         ]);
 
+        if ($request->input('role') === 'provider_admin') {
+            $request->merge(['permissions'=>$request->input('custom_permissions',$request->input('permissions',[])), 'location_ids'=>$request->input('assigned_location_ids',$request->input('location_ids',[]))]);
+            return app(BusinessTeamInviteService::class)->invite($request, $business->id);
+        }
         $allowed = config('roles.provider_team_roles', []);
         if (! in_array($request->input('role'), $allowed, true)) {
             return sendError('Invalid team role.', [
@@ -489,7 +500,7 @@ class BusinessService
         }
 
         if ($request->filled('role')) {
-            $allowed = config('roles.provider_team_roles', []);
+            $allowed = array_merge(config('roles.provider_team_roles', []), ['provider_admin']);
             if (! in_array($request->input('role'), $allowed, true)) {
                 return sendError('Invalid team role.', [
                     'role' => ['Choose a role below Owner.'],
@@ -509,7 +520,6 @@ class BusinessService
             return sendError('Team member not found.', [], 404);
         }
 
-        abort_if($member->id === $business->owner_id, 422, 'The business owner cannot be removed from its team.');
         return $this->userService->deleteUser($member->id);
     }
 

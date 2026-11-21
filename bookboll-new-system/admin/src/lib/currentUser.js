@@ -164,8 +164,7 @@ export const isProviderScoped = computed(() =>
 export const currentOwnerUserId = computed(() => {
   const u = currentUser.value
   if (!u) return null
-  if (u.role === 'provider_admin') return u.id
-  return u.owner_user_id || null
+  return u.owner_user_id || (u.role === 'provider_admin' ? u.id : null)
 })
 export const currentCountryId = computed(() => currentUser.value?.country_id || null)
 export const allBusinessOwners = computed(() =>

@@ -1082,7 +1082,7 @@ class VenueService
 
         $owner = \App\Models\User::with('ownedBusiness')->find($v->owner_user_id);
 
-        return $owner?->ownedBusiness?->name ?: ($owner?->name ?: null);
+        return \App\Models\Business::forOwnerId($v->owner_user_id)?->name ?: ($owner?->name ?: null);
     }
 
     protected function mapDashboardVenue(Venue $v): array

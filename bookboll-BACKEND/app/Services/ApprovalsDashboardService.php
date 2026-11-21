@@ -524,14 +524,14 @@ class ApprovalsDashboardService
             return sendError('Unknown business.', [], 404);
         }
 
-        $user = User::query()->with('ownedBusiness')->find((int) $ownerUserId);
+        $user = User::find((int) $ownerUserId);
         if (! $user) {
             return sendError('Unknown business.', [], 404);
         }
 
         $user->forceFill(['business_status' => $suspend ? 'suspended' : 'approved'])->save();
 
-        $business = $user->ownedBusiness;
+        $business = Business::forOwnerId((int) $ownerUserId);
         if ($business) {
             $business->update([
                 'status' => $suspend ? Business::STATUS_SUSPENDED : Business::STATUS_ACTIVE,
@@ -606,15 +606,16 @@ class ApprovalsDashboardService
                 continue;
             }
 
-            $u = User::query()->with('ownedBusiness')->find((int) $id);
-            $b = $u?->ownedBusiness;
+            $u = User::find((int) $id);
+            $b = Business::forOwnerId((int) $id);
+            $contact = $b?->owner ?: $u;
 
             $out[] = [
                 'id'            => (string) $id,
-                'full_name'     => $u?->name,
+                'full_name'     => $contact?->name,
                 'business_name' => $b?->name ?: $u?->name,
-                'email'         => $u?->email,
-                'phone'         => $u?->phone,
+                'email'         => $contact?->email,
+                'phone'         => $b?->phone ?: $contact?->phone,
                 'username'      => $b?->username,
                 'country_id'    => $u?->country_id,
                 'role'          => 'provider_admin',

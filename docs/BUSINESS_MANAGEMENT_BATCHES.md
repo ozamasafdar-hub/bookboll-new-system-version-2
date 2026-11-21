@@ -11,7 +11,7 @@ The user asked to finish the current lifecycle audit first and keep these new re
 
 ## Batch 1: business phone and contact actions
 
-Authorized 21 November 2026. Implementation and required checks are documented in [BUSINESS_PHONE_CONTACTS.md](BUSINESS_PHONE_CONTACTS.md). Batches 2 and 3 remain queued.
+Authorized 21 November 2026. Implementation and required checks are documented in [BUSINESS_PHONE_CONTACTS.md](BUSINESS_PHONE_CONTACTS.md). Batch 1 is deployed. Batch 2 is now authorized; Batch 3 remains queued.
 
 - Collect a business phone number with a country calling-code selector in self-signup and superadmin creation. Store it on the business separately from staff personal numbers.
 - Allow the business and authorized superadmin to edit it. Require valid contact details for newly completed onboarding; flag missing numbers on existing accounts for follow-up rather than fabricating data.
@@ -19,6 +19,8 @@ Authorized 21 November 2026. Implementation and required checks are documented i
 - Test both creation paths, validation, edits, existing missing values, mobile/desktop actions and cross-business permissions. Opening WhatsApp must not automatically send a message.
 
 ## Batch 2: multiple business owners
+
+Authorized 21 November 2026. Implementation and required checks: [MULTIPLE_BUSINESS_OWNERS.md](MULTIPLE_BUSINESS_OWNERS.md).
 
 - Replace the current single-owner restriction deliberately; update the MySQL unique-owner constraint, invitations, role editing, staff transfers and provider-side team management together.
 - Keep business ID as the data boundary. Adding another owner must not create another business, move venue revenue or change the payment recipient.

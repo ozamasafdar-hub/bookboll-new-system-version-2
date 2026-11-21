@@ -187,9 +187,7 @@ class AdminAnalyticsService
 
     protected function providers(User $user, ?int $ownerId, bool $isPlatform)
     {
-        $query = User::query()
-            ->whereHas('roles', fn ($q) => $q->where('name', 'provider_admin'))
-            ->with('ownedBusiness:id,owner_id,name,status');
+        $query = \App\Support\BusinessMembershipSync::providerAccounts();
 
         if (! $isPlatform) {
             $query->where('id', $ownerId ?: 0);
@@ -197,13 +195,14 @@ class AdminAnalyticsService
 
         return $query->get(['id', 'name', 'email', 'country_id', 'status', 'business_status'])
             ->map(function (User $u) {
-                $b = $u->ownedBusiness;
+                $b = \App\Models\Business::forOwnerId($u->id);
+                $contact = $b?->owner ?: $u;
 
                 return [
                     'id'              => (string) $u->id,
-                    'full_name'       => $u->name,
+                    'full_name'       => $contact->name,
                     'business_name'   => $b?->name ?: $u->name,
-                    'email'           => $u->email,
+                    'email'           => $contact->email,
                     'country_id'      => $u->country_id,
                     'role'            => 'provider_admin',
                     'status'          => $u->status,

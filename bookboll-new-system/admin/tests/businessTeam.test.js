@@ -37,3 +37,10 @@ test('ownerless businesses group by business ID and never pull in unrelated plat
 test('business membership takes precedence over stale owner linkage',()=>{
   assert.deepEqual(businessTeam({id:4,business_id:10},[{id:8,business_id:11,owner_user_id:4}]).map(p=>p.id),[4])
 })
+
+
+test('groups every co-owner once with staff under the same business',()=>{
+  const rows=businessTeam({id:4,business_id:7},[{id:4,business_id:7,role:'provider_admin',is_primary_owner:true},{id:9,business_id:'7',role:'provider_admin'},{id:8,business_id:7,role:'staff'},{id:10,business_id:99,role:'provider_admin'}])
+  assert.deepEqual(rows.map(x=>x.id),[4,9,8]);assert.equal(rows.filter(x=>x.isBusinessOwner).length,2)
+  assert.equal(rows[0].is_primary_owner,true)
+})

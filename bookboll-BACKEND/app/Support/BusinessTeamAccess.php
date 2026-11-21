@@ -20,9 +20,10 @@ final class BusinessTeamAccess
         }
         $owner = $business->owner_id ?: $business->activeMemberships()->whereIn('role', BusinessMembership::MANAGING_ROLES)->value('user_id');
         $roles = array_values(array_filter(BusinessMembership::ASSIGNABLE_ROLES, fn ($role) =>
-            RoleGrantGuard::mayGrant($actor, $role) && ($owner ? $role !== 'provider_admin' : $role === 'provider_admin')));
+            RoleGrantGuard::mayGrant($actor, $role) && ($owner || $role === 'provider_admin')));
+        $scopeOwner = BusinessMembershipSync::ownerUserIdForBusiness($business->id);
         $venues = Venue::where(fn ($q) => $q->where('business_id', $business->id)
-            ->when($owner, fn ($q) => $q->orWhere(fn ($legacy) => $legacy->whereNull('business_id')->where('owner_user_id', $owner))));
+            ->when($scopeOwner, fn ($q) => $q->orWhere(fn ($legacy) => $legacy->whereNull('business_id')->where('owner_user_id', $scopeOwner))));
         $allowed = AccessScope::allowedVenueIds($actor);
         if ($allowed !== null) $venues->whereIn('id', $allowed);
         return [
@@ -36,6 +37,7 @@ final class BusinessTeamAccess
     public static function validate(Request $request, array $options): array
     {
         $data = $request->validate([
+            'phone' => 'nullable|string|max:30',
             'name' => 'required|string|max:100', 'email' => 'required|email|max:255|unique:users,email',
             'role' => ['required', Rule::in($options['roles'])],
             'status' => ['sometimes', Rule::in([User::ACTIVE, User::INACTIVE])],
@@ -49,6 +51,7 @@ final class BusinessTeamAccess
         abort_if(!$options['all_venues_allowed'] && !$data['location_ids'], 422, 'Select the venues this person may access. Your account cannot grant whole-business access.');
         abort_if($data['role'] === 'provider_admin' && $data['location_ids'], 422, 'The owner must have whole-business access.');
         $data['permissions'] = $data['permissions'] ?? ['grant'=>[], 'revoke'=>[]];
+        abort_if($data['role'] === 'provider_admin' && (array_filter($data['permissions']) || ($data['status'] ?? User::ACTIVE) !== User::ACTIVE),422,'New owners must be active and have full business access.');
         return $data;
     }
 }

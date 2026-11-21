@@ -83,7 +83,7 @@ class AccessScope
         if (! $user) {
             return null;
         }
-        if ($user->ownedBusiness) {
+        if ($user->ownedBusiness && BusinessOwnership::owns($user, $user->ownedBusiness)) {
             return $user->ownedBusiness;
         }
 
@@ -102,7 +102,8 @@ class AccessScope
         if (! $user) {
             return null;
         }
-        if ($user->hasRole('provider_admin')) {
+        if ($memberOwner = BusinessMembershipSync::ownerUserIdForMember($user)) return $memberOwner;
+        if ($user->hasRole('provider_admin') && !$user->businessMemberships()->exists()) {
             return (int) $user->id;
         }
         if ($user->owner_user_id) {

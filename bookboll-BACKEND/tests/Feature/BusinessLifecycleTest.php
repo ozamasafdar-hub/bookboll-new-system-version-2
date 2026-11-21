@@ -55,7 +55,8 @@ it('scopes team business and venue catalogues on the server for providers',funct
         expect(collect($r->json('data.venues'))->pluck('id')->all())->not->toContain($other->id);
     }
     $r=$this->getJson('/api/admin/businesses')->assertOk();expect(collect($r->json('data.businesses.data'))->pluck('id')->all())->toBe([$a->id]);
-    $this->getJson('/api/admin/users/required-data')->assertOk()->assertJsonMissing(['id'=>$other->id,'name'=>'Other venue']);
+    $required=$this->getJson('/api/admin/users/required-data')->assertOk();
+    expect(collect($required->json('data.venues'))->pluck('id')->all())->not->toContain($other->id);
     $r=$this->getJson('/api/business/team')->assertOk();expect(collect($r->json('data.users'))->pluck('id')->all())->toContain($member->id);
     $this->actingAs($member)->getJson('/api/business/team')->assertOk();
 });

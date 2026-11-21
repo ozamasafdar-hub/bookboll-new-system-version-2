@@ -148,6 +148,6 @@ it('keeps provider account editors inside their own business on the shared admin
     $a=managementBusiness();$b=managementBusiness();$staff=managementUser('staff');$staff->update(['owner_user_id'=>$b->owner_id]);
     $this->actingAs($a->owner)->putJson("/api/admin/users/$staff->id",['name'=>'Unauthorized change'])->assertForbidden();
     $this->postJson('/api/admin/users',['name'=>'Outside staff','email'=>'outside@example.test','role'=>'staff','status'=>'active','owner_user_id'=>$b->owner_id])->assertForbidden();
-    $this->postJson('/api/admin/users',['name'=>'Extra owner','email'=>'extra-owner@example.test','role'=>'provider_admin','status'=>'active'])->assertForbidden();
+    $this->postJson('/api/admin/users',['name'=>'Extra owner','email'=>'extra-owner@example.test','role'=>'provider_admin','status'=>'active'])->assertUnprocessable();
     expect($staff->fresh()->name)->not->toBe('Unauthorized change');
 });

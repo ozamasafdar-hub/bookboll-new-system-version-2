@@ -1,3 +1,7 @@
+## Batch 2: multiple business owners — 21 November 2026
+
+See [the multi-owner contract, MySQL migration and required tests](docs/MULTIPLE_BUSINESS_OWNERS.md). Superadmins and owners can add co-owners. Preserve the last active owner and the stable legacy business data key; do not restore the old one-owner index. Batch 3 remains queued.
+
 ## Business phone contacts — Batch 1, 21 November 2026
 
 [Business phone contract and required checks](docs/BUSINESS_PHONE_CONTACTS.md): signup and superadmin business creation require a business number. Use `businesses.phone`, never an owner's personal phone. Superadmin business cards offer Call, WhatsApp, Copy and Add/Edit phone; owners edit their business contact from Settings. Existing missing numbers are flagged, not fabricated. MySQL is unchanged; new validation, isolation and frontend checks are mandatory in CI. Multiple owners and support login remain queued.

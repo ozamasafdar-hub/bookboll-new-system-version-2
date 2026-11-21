@@ -49,8 +49,7 @@ class BusinessMembership extends Model
         'revoked_at'   => 'datetime',
     ];
 
-    /** The generated column that enforces one active owner — never written to. */
-    protected $guarded = ['active_owner_business_id'];
+    // Multiple active owners are supported; the business row serializes changes.
 
     public function business(): BelongsTo
     {

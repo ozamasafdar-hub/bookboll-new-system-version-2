@@ -947,7 +947,7 @@ class UserService
          * business and the page cannot group them.
          */
         $membership = $user->activeBusinessMembership;
-        $business   = $user->ownedBusiness ?: $membership?->business;
+        $business   = $membership?->business ?: $user->ownedBusiness;
         $role       = $role ?: $membership?->role;
 
         return [
@@ -970,6 +970,7 @@ class UserService
             'business_types'        => $business?->business_types ?? [],
             'business_status'       => $business?->status,
             'business_id'           => $business?->id,
+            'is_primary_owner'      => $business && $business->owner_id === $user->id && $role === 'provider_admin',
             'custom_permissions'    => $user->custom_permissions ?? ['grant'=>[], 'revoke'=>[]],
             // The venues this person is pinned to. Was hardcoded [], so the
             // dashboard's scope picker always opened empty and every existing
@@ -993,6 +994,7 @@ class UserService
             return RoleGrantGuard::denied('create a user with that role');
         }
 
+        abort_if($request->input('role') === 'provider_admin',422,'Create the business first, then add owners through its team invitation form.');
         $providerTeamRoles = config('roles.provider_team_roles', []);
         $platformRoles     = array_merge(
             config('roles.platform_team_roles', []),
@@ -1032,7 +1034,7 @@ class UserService
 
         if (! empty($formData['owner_user_id'])) {
             $owner = $this->userModel->find($formData['owner_user_id']);
-            if (! $owner || ! $owner->hasRole('provider_admin')) {
+            if (! $owner || ! \App\Support\BusinessMembershipSync::businessIdForOwner($owner->id)) {
                 return sendError('owner_user_id must be a provider_admin.', [
                     'owner_user_id' => ['Invalid business owner.'],
                 ], 422);
@@ -1335,11 +1337,19 @@ class UserService
             'business_name'          => 'nullable|string|max:150',
         ]);
 
-        $formData += $this->validatedPermissionOverrides($request, $formData['role'] ?? $user->getRoleNames()->first() ?? 'staff');
+        $formData += $this->validatedPermissionOverrides($request, $formData['role'] ?? ($user->hasRole('provider_admin') ? 'provider_admin' : $user->getRoleNames()->first() ?? 'staff'));
         \App\Support\TeamDirectory::validateVenueGrant($request, $user);
 
         try {
             DB::beginTransaction();
+            $memberBusiness = AccessScope::business($user);
+            if ($memberBusiness) {
+                $memberBusiness = Business::whereKey($memberBusiness->id)->lockForUpdate()->firstOrFail();
+                $user = $this->userModel->whereKey($user->id)->lockForUpdate()->firstOrFail();
+                \App\Support\BusinessOwnership::guardChange($request,$memberBusiness,$user,$formData['role'] ?? \App\Support\BusinessOwnership::roleOf($user),$formData['status'] ?? $user->status);
+                // Freeze the old data key before any primary-contact change.
+                if (!$memberBusiness->legacy_owner_id) $memberBusiness->forceFill(['legacy_owner_id'=>\App\Support\BusinessMembershipSync::ownerUserIdForBusiness($memberBusiness->id)])->save();
+            }
 
             $updateData = array_filter([
                 'name'   => $formData['name'] ?? null,
@@ -1419,12 +1429,15 @@ class UserService
             // Role or owner may have changed above; the membership has to follow
             // (moved to another business, or left for a platform role), or
             // AccessScope keeps reading the business they no longer belong to.
-            if (isset($formData['role']) || array_key_exists('owner_user_id', $formData)) {
+            if ($memberBusiness) {
+                \App\Support\BusinessOwnership::syncEdited($memberBusiness,$user->fresh(),$formData['role'] ?? \App\Support\BusinessOwnership::roleOf($user),auth()->id());
+            } elseif (isset($formData['role']) || array_key_exists('owner_user_id', $formData)) {
                 \App\Support\BusinessMembershipSync::syncForStaff($user->fresh(), $user->fresh()->owner_user_id, auth()->id());
             }
 
             \App\Support\AccountAdministration::revokeSessions($user);
             \App\Support\AccountAdministration::audit($request, 'account.access_updated', 'user', $user->id, [
+                'business_id'=>$memberBusiness?->id, 'primary_owner_id'=>$memberBusiness?->owner_id,
                 'role' => $user->getRoleNames()->all(), 'status' => $user->status,
                 'location_ids' => $user->assigned_location_ids, 'country_ids' => $user->assigned_country_ids,
             ]);
@@ -1441,6 +1454,7 @@ class UserService
 
         } catch (Exception $e) {
             DB::rollBack();
+            if ($e instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface || $e instanceof \Illuminate\Validation\ValidationException) throw $e;
             Log::error('User update error: ' . $e->getMessage(), ['user_id' => $id, 'Exception' => $e]);
 
             return sendError('Something went wrong: ' . $e->getMessage());
@@ -1454,7 +1468,7 @@ class UserService
             return sendError('User not found');
         }
         if ($user->id == auth()->id() || $user->id == 1) {
-            return sendError('This user cannot be deleted');
+            return sendError('You cannot remove your own account access.', [], 422);
         }
         // A junior could delete an administrator here — rank now decides.
         if (! RoleGrantGuard::mayTouch(auth()->user(), $user)) {
@@ -1463,15 +1477,19 @@ class UserService
 
         // Removing an employee must not delete their customer bookings or identity.
         if ($business = \App\Support\AccessScope::business($user)) {
-            if ($business->owner_id == $user->id || $user->businessMemberships()->where('business_id', $business->id)->where('status', 'active')->whereIn('role', \App\Models\BusinessMembership::MANAGING_ROLES)->exists()) {
-                return sendError('Transfer business ownership before removing its owner.', [], 422);
-            }
             DB::transaction(function () use ($user, $business) {
+                $business = Business::whereKey($business->id)->lockForUpdate()->firstOrFail();
+                $user = $this->userModel->whereKey($user->id)->lockForUpdate()->firstOrFail();
+                \App\Support\BusinessOwnership::guardChange(request(),$business,$user,'customer',$user->status,true);
+                if (!$business->legacy_owner_id) $business->forceFill(['legacy_owner_id'=>\App\Support\BusinessMembershipSync::ownerUserIdForBusiness($business->id)])->save();
+                // A legacy owner may not have a membership yet. Record revocation explicitly.
+                \App\Models\BusinessMembership::firstOrCreate(['business_id'=>$business->id,'user_id'=>$user->id],['role'=>$user->hasRole('provider_admin')?'owner':'staff','scope'=>'all','status'=>'active']);
                 $user->businessMemberships()->where('business_id', $business->id)->where('status', 'active')->update(['status' => 'revoked', 'revoked_at' => now()]);
                 $user->forceFill(['owner_user_id' => null, 'assigned_location_ids' => [], 'assigned_listing_ids'=>[], 'assigned_program_ids'=>[], 'assigned_country_ids' => [], 'custom_permissions' => null])->save();
                 $user->venues()->detach();
                 $user->syncRoles(['customer']);
                 $user->syncPermissions([]);
+                \App\Support\BusinessOwnership::refreshPrimary($business);
                 \App\Support\AccountAdministration::revokeSessions($user);
                 activity('account_administration')->causedBy(auth()->user())->performedOn($user)->withProperties(['business_id' => $business->id])->log('business_team_access_removed');
             });

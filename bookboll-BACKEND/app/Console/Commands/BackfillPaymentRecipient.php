@@ -67,7 +67,7 @@ class BackfillPaymentRecipient extends Command
         // businesses.owner_id is the user; venues.owner_user_id is the same
         // person seen from the venue. Different spellings, one relationship.
         $byOwner = Business::whereIn('owner_id', $rows->pluck('owner_user_id')->filter()->unique())
-            ->get()->keyBy('owner_id');
+            ->orWhereIn('legacy_owner_id',$rows->pluck('owner_user_id')->filter()->unique())->get()->keyBy(fn ($b) => $b->legacy_owner_id ?: $b->owner_id);
 
         $updates = [];
         $skipped = [];

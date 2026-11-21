@@ -54,7 +54,10 @@ class BusinessMembershipSync
             return null;
         }
 
-        $owned = DB::table('businesses')->where('owner_id', $ownerUserId)->value('id');
+        // Historical data keys win even if that person later joins another business.
+        $owned = \Illuminate\Support\Facades\Schema::hasColumn('businesses','legacy_owner_id')
+            ? DB::table('businesses')->where('legacy_owner_id',$ownerUserId)->value('id') : null;
+        $owned ??= DB::table('businesses')->where('owner_id', $ownerUserId)->value('id');
         if ($owned) {
             return (int) $owned;
         }
@@ -97,6 +100,15 @@ class BusinessMembershipSync
         return self::ownerUserIdForBusiness($businessId ? (int) $businessId : null);
     }
 
+    /** One stable account key per business for legacy provider selectors, never one per co-owner. */
+    public static function providerAccounts()
+    {
+        return User::query()->where(function ($q) {
+            $q->whereIn('id', DB::table('businesses')->selectRaw('COALESCE(legacy_owner_id, owner_id)'))
+                ->orWhere(fn ($legacy) => $legacy->whereHas('roles',fn ($r)=>$r->where('name','provider_admin'))->whereDoesntHave('businessMemberships'));
+        });
+    }
+
     /**
      * The owner-side user id a BUSINESS's records are written under.
      *
@@ -111,7 +123,8 @@ class BusinessMembershipSync
             return null;
         }
 
-        $ownerId = DB::table('businesses')->where('id', $businessId)->value('owner_id');
+        $business = DB::table('businesses')->where('id', $businessId)->first();
+        $ownerId = ($business->legacy_owner_id ?? null) ?: $business?->owner_id;
         if ($ownerId) {
             return (int) $ownerId;
         }

@@ -588,8 +588,7 @@ class VenueTransferService
     /** Older admin-created businesses attach their owner through membership. */
     protected function destinationOwnerId(Business $business): ?int
     {
-        $owner = $business->owner_id ?: $business->activeMemberships
-            ->whereIn('role', BusinessMembership::MANAGING_ROLES)->first()?->user_id;
+        $owner = \App\Support\BusinessMembershipSync::ownerUserIdForBusiness($business->id);
 
         return $owner ? (int) $owner : null;
     }

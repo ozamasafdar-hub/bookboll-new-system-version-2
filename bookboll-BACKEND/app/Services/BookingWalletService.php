@@ -291,7 +291,7 @@ class BookingWalletService
         $userId = $args['userId'] ?? Booking::whereKey($bookingId)->value('user_id');
 
         $owner = User::find($ownerUserId);
-        $business = $owner?->ownedBusiness;
+        $business = \App\Models\Business::forOwnerId($ownerUserId);
         // One authority for the label, shared with the venue-transfer
         // reconciliation so the same business is not spelled two ways.
         $providerRecipient = PaymentRecipient::forBusiness($business, $owner);

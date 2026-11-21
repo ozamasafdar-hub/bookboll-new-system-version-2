@@ -48,10 +48,10 @@ class AdminReferenceDataService
         $venues = $venueQuery->get();
         $businesses = Business::with('currentSubscription')->where(function ($q) use ($venues) {
             $q->whereIn('id', $venues->pluck('business_id')->filter())
-                ->orWhereIn('owner_id', $venues->pluck('owner_user_id')->filter());
+                ->orWhereIn('owner_id', $venues->pluck('owner_user_id')->filter())->orWhereIn('legacy_owner_id',$venues->pluck('owner_user_id')->filter());
         })->get();
         $byId = $businesses->keyBy('id');
-        $byOwner = $businesses->keyBy('owner_id');
+        $byOwner = $businesses->keyBy(fn ($b) => $b->legacy_owner_id ?: $b->owner_id);
         foreach ($venues as $venue) {
             $business = $venue->business_id ? $byId->get($venue->business_id) : $byOwner->get($venue->owner_user_id);
             $venue->setAttribute('business_plan', ['own_site_commission_discount_eligible' => \App\Support\CommissionPolicy::paidPlanEligible($business)]);
@@ -91,9 +91,7 @@ class AdminReferenceDataService
      */
     protected function providers(User $user, ?int $ownerId)
     {
-        $query = User::query()
-            ->whereHas('roles', fn ($q) => $q->where('name', 'provider_admin'))
-            ->with(['ownedBusiness:id,owner_id,name,username,status,brand_enabled,brand_subdomain'])
+        $query = \App\Support\BusinessMembershipSync::providerAccounts()
             ->select(['id', 'uuid', 'name', 'email', 'phone', 'country_id', 'status', 'business_status', 'owner_user_id', 'created_at']);
 
         if (AccessScope::isProviderScoped($user)) {
@@ -114,14 +112,15 @@ class AdminReferenceDataService
         }
 
         return $query->orderBy('name')->get()->map(function (User $u) {
-            $b = $u->ownedBusiness;
+            $b = Business::forOwnerId($u->id);
+            $contact = $b?->owner ?: $u;
 
             return [
                 'id'              => (string) $u->id,
                 'uuid'            => $u->uuid,
-                'full_name'       => $u->name,
-                'email'           => $u->email,
-                'phone'           => $u->phone,
+                'full_name'       => $contact->name,
+                'email'           => $contact->email,
+                'phone'           => $b?->phone ?: $contact->phone,
                 'role'            => 'provider_admin',
                 'country_id'      => $u->country_id,
                 'status'          => $u->status,

@@ -72,7 +72,8 @@ const providerVenueLimited = computed(() => !isPlatformSide.value && actorRole.v
 // Staff & providers → provider roles only.
 const assignableRoles = computed(() => {
   if (isSuperAdmin.value) return [...PLATFORM_ROLES, ...PROVIDER_ROLES]
-  if (isCountryAdmin.value) return ['platform_staff', ...PROVIDER_ROLES]
+  if (isCountryAdmin.value) return ['platform_staff', ...ASSIGNABLE_TEAM_ROLES]
+  if (actorRole.value === 'provider_admin') return [...PROVIDER_ROLES]
   return [...ASSIGNABLE_TEAM_ROLES]   // platform_staff + provider admins → provider roles only
 })
 
@@ -231,8 +232,7 @@ const showBusinessSetup = ref(false)
 const inviteBusiness = ref(null)
 const inviteRoles = computed(() => {
   const inBusiness = adminForm.value.owner_user_id || editing.value?.business_id || editing.value?.role === 'provider_admin'
-  if (editing.value?.role === 'provider_admin') return ['provider_admin']
-  return assignableRoles.value.filter(r => inBusiness ? PROVIDER_ROLES.includes(r) && r !== 'provider_admin' : PLATFORM_ROLES.includes(r) || (editing.value && r === editing.value.role))
+  return assignableRoles.value.filter(r => inBusiness ? PROVIDER_ROLES.includes(r) : PLATFORM_ROLES.includes(r) || (editing.value && r === editing.value.role))
 })
 function openBusinessNew() { showBusinessSetup.value = true }
 function createdBusiness(b) { teamView.value = 'businesses'; search.value = b.username; load() }
@@ -356,7 +356,7 @@ async function persistAdminUser(payload) {
     phone: payload.phone || null,
     country_id: payload.country_id || null,
     ...(payload.assigned_country_ids !== undefined ? { assigned_country_ids: payload.assigned_country_ids } : {}),
-    owner_user_id: payload.owner_user_id || null,
+    ...(!editing.value?.business_id ? {owner_user_id: payload.owner_user_id || null} : {}),
     custom_permissions: payload.custom_permissions || { grant:[], revoke:[] },
     // Which venues this person may manage. Scoped roles only: for an owner or a
     // platform role the picker is hidden, and sending [] would strip their access.
@@ -387,7 +387,6 @@ async function saveAdmin() {
   if (saving.value) return
   if (editing.value && (
     String(adminForm.value.owner_user_id || '') !== String(editing.value.owner_user_id || '') ||
-    (adminForm.value.role === 'provider_admin') !== (editing.value.role === 'provider_admin') ||
     ((editing.value.business_id || editing.value.owner_user_id) && PLATFORM_ROLES.includes(adminForm.value.role))
   )) {
     formError.value='Business ownership and account moves require a reviewed assignment. Open the destination business and choose Assign platform account.'
@@ -510,9 +509,11 @@ const team        = ref([])
 const filterRole  = ref('')
 const filterLoc   = ref('')
 const teamForm    = ref(defaultTeamForm())
+watch(() => teamForm.value.role, role => { if (role === 'provider_admin') { teamForm.value.assigned_location_ids=[]; teamForm.value.custom_permissions={grant:[],revoke:[]} } })
+watch(() => adminForm.value.role, role => { if (role === 'provider_admin' && editing.value) { adminForm.value.assigned_location_ids=[]; adminForm.value.custom_permissions={grant:[],revoke:[]} } })
 
 // Provider staff tiers (everything below Owner) — drives the overview count cards.
-const TEAM_ROLES = ASSIGNABLE_TEAM_ROLES.map(v => ({
+const TEAM_ROLES = PROVIDER_ROLES.map(v => ({
   value: v, label: ROLE_INFO[v].label, desc: ROLE_INFO[v].tagline, color: ROLE_INFO[v].color, bg: ROLE_INFO[v].bg,
 }))
 
@@ -666,6 +667,7 @@ async function load() {
       full_name: b.owner?.full_name || b.owner?.name || b.full_name || b.business_name || b.name,
       email: b.owner?.email || b.email,
       role: 'provider_admin',
+      is_primary_owner: true,
       status: b.owner?.status || b.owner_status || 'active',
       country_id: b.country_id,
       username: b.username,
@@ -734,6 +736,8 @@ const providerGroups = computed(() => {
       const ownerRow = allUsers.value.find(u => String(u.id) === String(b.owner_user_id))
       const provider = {
         id: b.owner_user_id,
+        owner_count: b.owner_count || 0, active_owner_count: b.active_owner_count || 0,
+        scope_owner_user_id: b.scope_owner_user_id,
         role: 'provider_admin',
         full_name: ownerRow?.full_name || b.full_name || b.business_name || b.name,
         email: ownerRow?.email || b.email,
@@ -936,7 +940,7 @@ function avatarColor(id) {
       <details class="team-role-guide"><summary>Understand roles &amp; access</summary>
         <p>{{ teamView === 'platform' ? 'Platform accounts work for Bookboll. Country and venue assignments limit where they work.' : 'Business roles only work within their assigned business and venues. They never gain platform access.' }}</p>
         <dl v-if="teamView === 'platform'"><dt>Superadmin</dt><dd>Full platform control, account security and complimentary plans.</dd><dt>Country admin</dt><dd>Administration within assigned countries.</dd><dt>Platform staff</dt><dd>Day-to-day operations with assigned venues and permissions.</dd></dl>
-        <dl v-else><dt>Owner</dt><dd>Runs the business and its team. Each business has one owner.</dd><dt>Manager / Supervisor</dt><dd>Manage operations within assigned venues; use Edit access to inspect exact permissions.</dd><dt>Staff / Viewer</dt><dd>Staff handle bookings and collections. Viewers can view permitted records.</dd></dl>
+        <dl v-else><dt>Owner</dt><dd>Runs the business and its team. A business can have several owners. They share full access; at least one must stay active.</dd><dt>Manager / Supervisor</dt><dd>Manage operations within assigned venues; use Edit access to inspect exact permissions.</dd><dt>Staff / Viewer</dt><dd>Staff handle bookings and collections. Viewers can view permitted records.</dd></dl>
         <p>Use Edit access for venue assignments and advanced permissions. Deactivate an account to stop sign-in without deleting its history.</p>
       </details>
       <!-- Search -->
@@ -1017,7 +1021,7 @@ function avatarColor(id) {
               <div class="biz-name">{{ g.provider.business_name || g.provider.full_name }}</div>
               <div v-if="g.provider.username" class="biz-username">@{{ g.provider.username }}</div>
             </div>
-            <div class="biz-owner-email">{{ g.provider.id ? g.provider.email : 'Owner not assigned' }}</div>
+            <div class="biz-owner-email">{{ g.provider.id ? g.provider.email : 'Owner not assigned' }}<span v-if="g.provider.owner_count"> · {{ g.provider.owner_count }} {{ g.provider.owner_count === 1 ? 'owner' : 'owners' }}</span></div>
             <div class="biz-badges">
               <span class="biz-plan-chip" :class="{ premium: isPremiumPlan(g.provider) }" :title="isPremiumPlan(g.provider) ? 'On the Premium plan' : 'On the Free plan'">
                 <Crown v-if="isPremiumPlan(g.provider)" :size="11" />{{ isPremiumPlan(g.provider) ? 'Premium' : 'Free' }}{{ g.provider.plan_override==='premium' ? ' · complimentary' : '' }}
@@ -1072,11 +1076,11 @@ function avatarColor(id) {
                       </div>
                     </div>
                   </td>
-                  <td><span class="badge" :class="roleBadge(m.role)">{{ m.isBusinessOwner ? 'Business owner' : roleLabel(m.role) }}</span></td>
+                  <td><span class="badge" :class="roleBadge(m.role)">{{ m.isBusinessOwner ? 'Business owner' : roleLabel(m.role) }}</span><small v-if="m.is_primary_owner" class="primary-owner-label">Primary contact</small></td>
                   <td style="font-size:13px;color:var(--text-muted);">{{ scopeSummary(m) }}</td>
                   <td><span class="badge" :class="m.status==='active'?'badge-success':'badge-neutral'">{{ m.status }}</span></td>
                   <td style="font-size:12px;color:var(--text-muted);">{{ timeAgo(m.last_login) }}</td>
-                  <td><div class="row-actions"><button class="btn btn-sm btn-secondary" :aria-label="'Edit access for ' + m.full_name" @click="openAdminEdit(m)"><Edit2 :size="14" />Edit access</button><button v-if="isSuperAdmin && String(m.id)!==String(currentUser?.id)" class="btn btn-sm btn-secondary" @click="securityAccount=m"><KeyRound :size="14" />Account security</button><button v-if="!m.isBusinessOwner" class="btn-icon danger" @click="removeAdmin(m)" aria-label="Remove team member"><Trash2 :size="15" /></button></div></td>
+                  <td><div class="row-actions"><button class="btn btn-sm btn-secondary" :aria-label="'Edit access for ' + m.full_name" @click="openAdminEdit(m)"><Edit2 :size="14" />Edit access</button><button v-if="isSuperAdmin && String(m.id)!==String(currentUser?.id)" class="btn btn-sm btn-secondary" @click="securityAccount=m"><KeyRound :size="14" />Account security</button><button v-if="String(m.id)!==String(currentUser?.id) && (!m.isBusinessOwner || isSuperAdmin)" class="btn-icon danger" @click="removeAdmin(m)" aria-label="Remove team member"><Trash2 :size="15" /></button></div></td>
                 </tr>
                 <tr v-if="!g.staff.length">
                   <td colspan="6" class="empty-staff">No team members yet. Invite an owner or staff member, or assign an existing platform account.</td>
@@ -1086,7 +1090,7 @@ function avatarColor(id) {
             <div class="staff-add-row">
               <button v-if="g.provider.id" class="btn btn-sm btn-secondary" @click="assignmentBusiness=g.provider"><UsersRound :size="13"/>Assign platform account</button>
               <button class="btn btn-sm btn-secondary" @click="inviteBusiness=g.provider">
-                <Plus :size="13" />Add staff member
+                <Plus :size="13" />Add owner or staff
               </button>
             </div>
           </div>
@@ -1251,7 +1255,7 @@ function avatarColor(id) {
       <div class="page-header">
         <div>
           <h1 class="page-title">My Team</h1>
-          <div class="page-subtitle">Choose who can manage bookings, customers and your business.</div>
+          <div class="page-subtitle">Owners share full business access. Managers and staff work within their assigned permissions.</div>
         </div>
         <button class="btn btn-primary" @click="openTeamNew"><Plus :size="15" />Invite Member</button>
       </div>
@@ -1303,7 +1307,7 @@ function avatarColor(id) {
       <div v-if="!team.length" class="team-empty">
         <Users :size="36" style="opacity:0.25" />
         <div class="team-empty-title">No team members yet</div>
-        <div class="team-empty-sub">Invite managers, supervisors or staff and choose what each person can access.</div>
+        <div class="team-empty-sub">Invite co-owners, managers or staff and choose what each person can access.</div>
         <button class="btn btn-primary" @click="openTeamNew"><Plus :size="14" />Invite your first member</button>
       </div>
 
@@ -1317,8 +1321,8 @@ function avatarColor(id) {
                 <div class="team-email">{{ u.email }}</div>
               </div>
               <div class="team-card-menu">
-                <button class="btn-icon" @click="openTeamEdit(u)" title="Edit"><Edit2 :size="15" /></button>
-                <button class="btn-icon danger" @click="removeTeam(u)" title="Remove"><Trash2 :size="15" /></button>
+                <button v-if="u.role !== 'provider_admin' || actorRole === 'provider_admin'" class="btn-icon" @click="openTeamEdit(u)" :aria-label="'Edit access for ' + u.full_name" title="Edit"><Edit2 :size="15" /></button>
+                <button v-if="String(u.id)!==String(currentUser?.id) && (u.role !== 'provider_admin' || actorRole === 'provider_admin')" class="btn-icon danger" @click="removeTeam(u)" :aria-label="'Remove access for ' + u.full_name" title="Remove"><Trash2 :size="15" /></button>
               </div>
             </div>
             <div class="team-card-body">
@@ -1328,7 +1332,7 @@ function avatarColor(id) {
                 <User v-else :size="11" />
                 {{ roleInfo(u.role).label }}
               </span>
-              <span v-if="u.status !== 'active'" class="status-pill status-inactive">Inactive</span>
+              <span v-if="u.is_primary_owner" class="primary-owner-label">Primary contact</span><span v-if="u.status !== 'active'" class="status-pill status-inactive">Inactive</span>
             </div>
             <div class="team-card-footer">
               <div class="team-meta"><MapPin :size="12" /><span>{{ scopeSummary(u) }}</span></div>
@@ -1350,7 +1354,7 @@ function avatarColor(id) {
           <div class="modal-body">
             <div class="form-group" style="margin-bottom:20px;">
               <label class="form-label">Role</label>
-              <RoleSelect v-model="teamForm.role" :roles="ASSIGNABLE_TEAM_ROLES" inline />
+              <RoleSelect v-model="teamForm.role" :roles="assignableRoles" inline />
             </div>
             <div class="form-row">
               <div class="form-group"><label class="form-label">Full name <span class="required">*</span></label><input aria-label="Full name" v-model="teamForm.full_name" :class="{ 'input-invalid': triedSave && !teamForm.full_name }" placeholder="Jane Smith" /></div>
@@ -1363,7 +1367,8 @@ function avatarColor(id) {
               </div>
             </div>
             <!-- Per-user permissions + location/listing/program scope -->
-            <PermissionScopeEditor
+            <p v-if="teamForm.role === 'provider_admin'" class="team-help">Owners have full access to all venues, website settings, payments and the team. At least one owner must stay active.</p>
+            <PermissionScopeEditor v-else
               :role="teamForm.role"
               :allow-whole-business="!providerVenueLimited"
               v-model:permissions="teamForm.custom_permissions"
@@ -1387,6 +1392,7 @@ function avatarColor(id) {
 </template>
 
 <style scoped>
+.primary-owner-label{display:block;font-size:11px;color:var(--text-muted);margin-top:5px}
 .team-role-guide{margin:16px 0;border-bottom:1px solid var(--border);padding-bottom:16px;font-size:13px;color:var(--text-muted)}.team-role-guide summary{color:var(--text);cursor:pointer;font-weight:600}.team-role-guide dl{display:grid;grid-template-columns:160px 1fr;gap:12px;max-width:850px}.team-role-guide dt{font-weight:600;color:var(--text)}.team-role-guide dd{margin:0}.team-role-guide p{line-height:1.6;max-width:850px}.biz-actions{flex-wrap:wrap}.row-actions{flex-wrap:wrap}
 
 .biz-assign-btn { white-space: nowrap; margin-right: 4px; }

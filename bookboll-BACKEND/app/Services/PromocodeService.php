@@ -692,7 +692,7 @@ class PromocodeService
         }
 
         if ($actor->hasRole('provider_admin') || $actor->owner_user_id) {
-            $ownerId = $actor->hasRole('provider_admin') ? $actor->id : (int) $actor->owner_user_id;
+            $ownerId = \App\Support\AccessScope::ownerUserId($actor);
             $query->where(function ($q) use ($ownerId) {
                 $q->where('owner_user_id', $ownerId)
                     ->orWhereJsonContains('owner_user_ids', $ownerId)

@@ -61,7 +61,10 @@ class RoleGrantGuard
             return $isGlobal && !AccessScope::businessId($actor);
         }
 
-        if ($role === 'provider_admin' && AccessScope::businessId($actor)) return false;
+        if ($role === 'provider_admin') {
+            $business = AccessScope::business($actor);
+            return AccountAdministration::isSuperAdmin($actor) || ($business && BusinessOwnership::mayManage($actor, $business));
+        }
         if (in_array($role, Capabilities::providerRoles(), true)) {
             // A provider manager may staff their own business; never above themselves.
             return $isGlobal || self::rankOf($actor) >= self::rank($role);

@@ -37,6 +37,7 @@ class Business extends Model
         'description',
         'status',
         'owner_id',
+        'legacy_owner_id',
         'username',
         'country_id',
         'brand_name',
@@ -220,6 +221,7 @@ class Business extends Model
     {
         return [
             'owner_id',
+        'legacy_owner_id',
             'name',
             'username',
             'business_types',

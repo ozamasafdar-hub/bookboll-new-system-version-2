@@ -518,7 +518,7 @@ class WhatsappService
             return '';
         }
 
-        return User::find($ownerId)?->phone ?: '';
+        return $this->ownerContact($ownerId)['phone'];
     }
 
     /**
@@ -529,9 +529,9 @@ class WhatsappService
      */
     public function ownerContact($ownerId): array
     {
-        $user = $ownerId ? User::find($ownerId) : null;
-
-        return ['phone' => $user?->phone ?: '', 'email' => $user?->email ?: ''];
+        $business = $ownerId ? \App\Models\Business::forOwnerId($ownerId) : null;
+        $user = $business ? $business->owner : ($ownerId ? User::find($ownerId) : null);
+        return ['phone' => $business?->phone ?: ($user?->phone ?: ''), 'email' => $user?->email ?: ''];
     }
 
     /* ───────────────────────────── Outbound log ───────────────────────────── */

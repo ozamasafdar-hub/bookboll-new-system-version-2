@@ -12,10 +12,10 @@ final class TeamDirectory
 {
     public static function forBusiness(Builder $query, Business $business): Builder
     {
-        $ownerId = $business->owner_id ?: $business->activeMemberships()->whereIn('role', \App\Models\BusinessMembership::MANAGING_ROLES)->value('user_id');
+        $ownerId = BusinessMembershipSync::ownerUserIdForBusiness($business->id);
         return $query->where(function ($q) use ($business, $ownerId) {
             $q->whereHas('businessMemberships', fn ($m) => $m->where('business_id', $business->id)->where('status', 'active'));
-            if ($ownerId) $q->orWhere('users.id', $ownerId)->orWhere('owner_user_id', $ownerId);
+            if ($ownerId) $q->orWhere(fn ($legacy) => $legacy->whereDoesntHave('businessMemberships')->where(fn ($l) => $l->where('users.id',$ownerId)->orWhere('owner_user_id',$ownerId)));
         });
     }
 
@@ -45,7 +45,7 @@ final class TeamDirectory
         if (!$business && $request->filled('owner_user_id')) $business = Business::forOwnerId((int) $request->owner_user_id);
         $allowed = self::venues($actor);
         if ($business) {
-            $owner = $business->owner_id;
+            $owner = BusinessMembershipSync::ownerUserIdForBusiness($business->id);
             $allowed->where(fn ($q) => $q->where('business_id', $business->id)->when($owner, fn ($q) => $q->orWhere(fn ($l) => $l->whereNull('business_id')->where('owner_user_id', $owner))));
         }
         if ($field) {
