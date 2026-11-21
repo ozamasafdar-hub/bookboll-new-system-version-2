@@ -62,6 +62,7 @@ const isPlatformSide = computed(() =>
   || actorRole.value === 'platform_staff'
   || actorRole.value === 'admin'
 )
+const providerVenueLimited = computed(() => !isPlatformSide.value && actorRole.value !== 'provider_admin' && assignedLocationIds.value.length > 0)
 
 // Roles the CURRENT user may assign — you can never grant a role at or above your
 // own authority. Super → all; Country Admin → Platform Staff + provider; Platform
@@ -576,6 +577,7 @@ const countByRole = computed(() => {
 function openTeamNew() {
   editing.value = null
   teamForm.value = defaultTeamForm()
+  if (providerVenueLimited.value) teamForm.value.assigned_location_ids = editorLocations.value.map(v => v.id)
   triedSave.value = false
   clearDirty()
   showModal.value = true
@@ -598,6 +600,9 @@ async function saveTeam() {
   triedSave.value = true
   if (!teamForm.value.full_name || !teamForm.value.email || !teamForm.value.role) {
     pushToast('Please fill in the name, email and role.', 'error'); return
+  }
+  if (providerVenueLimited.value && !teamForm.value.assigned_location_ids.length) {
+    pushToast('Choose at least one venue within your access.', 'error'); return
   }
   saving.value = true
   const body = {
@@ -798,6 +803,7 @@ const filteredProviderGroups = computed(() => {
     if (filterPlan.value && (filterPlan.value === 'premium') !== isPremiumPlan(g.provider)) return false
     if (!q) return true
     const provMatch =
+      (g.provider.business_name || '').toLowerCase().includes(q) ||
       (g.provider.full_name || '').toLowerCase().includes(q) ||
       (g.provider.email || '').toLowerCase().includes(q) ||
       (g.provider.username || '').toLowerCase().includes(q)
@@ -1337,6 +1343,7 @@ function avatarColor(id) {
             <!-- Per-user permissions + location/listing/program scope -->
             <PermissionScopeEditor
               :role="teamForm.role"
+              :allow-whole-business="!providerVenueLimited"
               v-model:permissions="teamForm.custom_permissions"
               v-model:locationIds="teamForm.assigned_location_ids"
               v-model:listingIds="teamForm.assigned_listing_ids"
