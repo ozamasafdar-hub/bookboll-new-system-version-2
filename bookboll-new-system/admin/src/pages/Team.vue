@@ -107,7 +107,7 @@ function businessInJurisdiction(ownerId) {
   if (isSuperAdmin.value) return true
   // Platform Staff pinned to specific venues → only businesses that own one of them.
   if (actorRole.value === 'platform_staff' && jurisdictionLocationSet.value.size) {
-    return locations.value.some(l => l.owner_user_id === ownerId && jurisdictionLocationSet.value.has(l.id))
+    return locations.value.some(l => l.owner_user_id === ownerId && jurisdictionLocationSet.value.has(Number(l.id)))
   }
   const j = jurisdictionCountryIds.value
   if (!j) return true                 // unrestricted (super, or global platform staff)
@@ -577,7 +577,7 @@ const countByRole = computed(() => {
 function openTeamNew() {
   editing.value = null
   teamForm.value = defaultTeamForm()
-  if (providerVenueLimited.value) teamForm.value.assigned_location_ids = editorLocations.value.map(v => v.id)
+  if (providerVenueLimited.value) teamForm.value.assigned_location_ids = [...assignedLocationIds.value]
   triedSave.value = false
   clearDirty()
   showModal.value = true

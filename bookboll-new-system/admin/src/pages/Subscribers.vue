@@ -210,7 +210,7 @@ const providerOwnPrograms = computed(() => {
   else list = programs.value.filter(p => p.owner_user_id === currentOwnerUserId.value)
   // Per-user scope: Managers/Staff pinned to specific locations / programs.
   const locIds = assignedLocationIds.value
-  if (locIds.length) { const set = new Set(locIds); list = list.filter(p => set.has(p.location_id)) }
+  if (locIds.length) { const set = new Set(locIds); list = list.filter(p => set.has(Number(p.location_id))) }
   return scopePrograms(list)
 })
 const myProgramIds = computed(() => new Set(providerOwnPrograms.value.map(p => p.id)))

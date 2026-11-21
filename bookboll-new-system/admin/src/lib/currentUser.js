@@ -47,7 +47,7 @@ export function pickPrimaryRole(roles = []) {
  * Map a Laravel User + Spatie roles into the shape App.vue / permissions expect
  * (previously an admin_users row from Supabase).
  */
-export function mapLaravelUserToAdmin(user, roles = [], scope = null) {
+export function mapLaravelUserToAdmin(user, roles = [], scope = null, overrides = undefined) {
   if (!user) return null
   const role = pickPrimaryRole(roles)
   // The server resolves the owner a member stands under (through their business
@@ -60,6 +60,14 @@ export function mapLaravelUserToAdmin(user, roles = [], scope = null) {
   // Without the second read, invited staff saw no business name in the shell.
   const membership = user.active_business_membership || user.activeBusinessMembership || null
   const business = user.owned_business || user.ownedBusiness || membership?.business || null
+  const ids = values => [...new Set((Array.isArray(values) ? values : []).map(Number).filter(id => Number.isSafeInteger(id) && id > 0))]
+  // /login and /me carry the canonical server scope, including membership and
+  // legacy pivot pins. An explicit empty scope must not revive stale row pins.
+  const venuePins = scope?.assigned_location_ids ?? [
+    ...(user.assigned_location_ids || []),
+    ...(user.venues || []).map(v => v.id),
+    ...(membership?.scope !== 'all' ? membership?.location_ids || [] : []),
+  ]
   return {
     id: String(user.id),
     source: 'laravel',
@@ -86,19 +94,17 @@ export function mapLaravelUserToAdmin(user, roles = [], scope = null) {
     // so a country_admin / platform_staff saw nothing at all.
     country_id: user.country_id ?? null,
     owner_user_id: ownerUserId != null ? String(ownerUserId) : null,
-    custom_permissions: null,
-    assigned_country_ids: Array.isArray(user.assigned_country_ids)
-      ? user.assigned_country_ids.map(Number).filter(Number.isFinite)
-      : [],
-    assigned_location_ids: [],
-    assigned_listing_ids: [],
-    assigned_program_ids: [],
+    custom_permissions: overrides === undefined ? user.custom_permissions || null : overrides,
+    assigned_country_ids: ids(scope?.assigned_country_ids ?? user.assigned_country_ids),
+    assigned_location_ids: ids(venuePins),
+    assigned_listing_ids: ids(scope?.assigned_listing_ids ?? user.assigned_listing_ids),
+    assigned_program_ids: ids(scope?.assigned_program_ids ?? user.assigned_program_ids),
   }
 }
 
 /** Apply a Laravel session user into currentUser / allUsers for the shell. */
-export function applyLaravelUser(user, roles = [], scope = null) {
-  const mapped = mapLaravelUserToAdmin(user, roles, scope)
+export function applyLaravelUser(user, roles = [], scope = null, overrides = undefined) {
+  const mapped = mapLaravelUserToAdmin(user, roles, scope, overrides)
   if (!mapped) {
     clearLaravelUser()
     return null
@@ -180,22 +186,22 @@ export function scopeLocations(locs) {
   if (!scopeNarrows()) return locs
   const ids = assignedLocationIds.value
   if (!ids.length) return locs
-  const set = new Set(ids)
-  return locs.filter(l => set.has(l.id))
+  const set = new Set(ids.map(String))
+  return locs.filter(l => set.has(String(l.id)))
 }
 export function scopeListings(items) {
   if (!scopeNarrows()) return items
   const ids = assignedListingIds.value
   if (!ids.length) return items
-  const set = new Set(ids)
-  return items.filter(i => set.has(i.id))
+  const set = new Set(ids.map(String))
+  return items.filter(i => set.has(String(i.id)))
 }
 export function scopePrograms(items) {
   if (!scopeNarrows()) return items
   const ids = assignedProgramIds.value
   if (!ids.length) return items
-  const set = new Set(ids)
-  return items.filter(i => set.has(i.id))
+  const set = new Set(ids.map(String))
+  return items.filter(i => set.has(String(i.id)))
 }
 
 export const currentOverrides = computed(() => currentUser.value?.custom_permissions || null)

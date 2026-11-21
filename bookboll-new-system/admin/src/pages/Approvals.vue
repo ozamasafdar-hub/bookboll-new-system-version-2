@@ -121,7 +121,7 @@ function countryOfItem(item) {
 function inJurisdiction(item) {
   if (isSuperAdmin.value) return true
   if (actorRole.value === 'platform_staff' && (assignedLocationIds.value || []).length) {
-    return assignedLocationIds.value.includes(item.location_id)
+    return assignedLocationIds.value.includes(Number(item.location_id))
   }
   const set = jurisdictionCountryIds.value
   if (!set) return true
@@ -214,7 +214,7 @@ const previewTab = ref('details')
 function withdrawalInJurisdiction(w) {
   if (isSuperAdmin.value) return true
   if (actorRole.value === 'platform_staff' && (assignedLocationIds.value || []).length) {
-    const owners = new Set(allLocations.value.filter(l => assignedLocationIds.value.includes(l.id)).map(l => l.owner_user_id))
+    const owners = new Set(allLocations.value.filter(l => assignedLocationIds.value.includes(Number(l.id))).map(l => l.owner_user_id))
     return owners.has(w.owner_user_id)
   }
   const set = jurisdictionCountryIds.value
@@ -233,7 +233,7 @@ const canApprovePayouts = computed(() => can(CAP.APPROVE_PAYOUTS))
 function walletInJurisdiction(w) {
   if (isSuperAdmin.value) return true
   if (actorRole.value === 'platform_staff' && (assignedLocationIds.value || []).length) {
-    const owners = new Set(allLocations.value.filter(l => assignedLocationIds.value.includes(l.id)).map(l => l.owner_user_id))
+    const owners = new Set(allLocations.value.filter(l => assignedLocationIds.value.includes(Number(l.id))).map(l => l.owner_user_id))
     return owners.has(w.owner_user_id)
   }
   const set = jurisdictionCountryIds.value

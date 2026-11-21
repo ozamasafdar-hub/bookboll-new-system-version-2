@@ -12,12 +12,13 @@ Started 17 November 2026; resumed 21 November after the user's usage reset. This
 - Staff transfers left direct platform permissions and remembered sessions behind. Transfer now clears permissions, tokens and remembered/database sessions, checks role rank and existing ownership, and invalidates stale reviews when access changes.
 - Removing business staff deleted the customer's account. Removal now revokes business membership/access and sessions while preserving their account/history. Owners require the ownership workflow.
 - Directory search omitted the business display name when it differed from the owner's name. It now includes that name. Restricted managers' invitation forms now default to their allowed venues and explain that at least one venue must remain selected.
+- The signed-in dashboard discarded venue/listing/program assignments and custom permission overrides. Login and session refresh now retain the canonical server scope; membership and legacy venue pins are included. Numeric/string catalogue IDs compare consistently, and invitation defaults no longer depend on the venue catalogue finishing its load first.
 
 ## Automated checks
 
 `BusinessLifecycleTest.php` covers signup rejection/success, directory isolation, venue grant restrictions, owner/rank transfer protection, direct-permission/session cleanup, safe team removal, existing-customer invitations, four provider staff roles, and both creation-to-venue-transfer paths.
 
-The broader focused suite passed 128 tests / 687 assertions before the final existing-customer invitation case was added. The final affected suites then passed 52 tests / 307 assertions. Admin UI tests passed 17/17 and the production build passed. All database tests use a disposable MySQL database; no PostgreSQL dependency or migration is introduced. These lifecycle and email-verification tests are included in the mandatory GitHub workflow.
+The broader focused suite passed 128 tests / 687 assertions before the final invitation and session-scope cases were added. The final affected suites then passed 53 tests / 313 assertions. Admin UI tests passed 21/21 and the production build passed. All database tests use a disposable MySQL database; no PostgreSQL dependency or migration is introduced. Lifecycle, email-verification and frontend session-scope tests are included in the mandatory GitHub workflow.
 
 ## Railway fixtures and observed results
 

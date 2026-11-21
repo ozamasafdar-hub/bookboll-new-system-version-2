@@ -59,7 +59,9 @@ export function useJurisdiction({ locations, cities, providers } = {}) {
   // scope applies.
   const allowedLocationIds = computed(() => {
     if (isSuperAdmin.value || !isPlatformRole.value) return null
-    if (role.value === 'platform_staff' && (assignedLocationIds.value || []).length) return new Set(assignedLocationIds.value)
+    if (role.value === 'platform_staff' && (assignedLocationIds.value || []).length) {
+      return new Set(locList.value.filter(l => assignedLocationIds.value.includes(Number(l.id))).map(l => l.id))
+    }
     const set = jurisdictionCountryIds.value
     if (!set) return null
     return new Set(locList.value.filter(l => set.has(locCountry(l.id))).map(l => l.id))

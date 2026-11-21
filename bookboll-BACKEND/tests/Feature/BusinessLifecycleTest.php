@@ -68,6 +68,21 @@ it('does not let a venue-restricted manager widen staff access while editing',fu
     $this->putJson('/api/admin/users/'.$staff->id,['assigned_location_ids'=>[]])->assertUnprocessable();
 });
 
+it('returns canonical membership and legacy venue pins on login and session refresh', function () {
+    $b=lifecycleBusiness(lifecycleUser('provider_admin')); $member=lifecycleMember($b);
+    $one=Venue::forceCreate(['name'=>'Membership venue','business_id'=>$b->id]);
+    $two=Venue::forceCreate(['name'=>'Legacy venue','business_id'=>$b->id]);
+    BusinessMembership::where('user_id',$member->id)->update(['scope'=>'selected','location_ids'=>json_encode([$one->id])]);
+    $member->venues()->attach($two->id);
+    $member->update(['custom_permissions'=>['grant'=>[], 'revoke'=>['manage_team']]]);
+    $login=$this->postJson('/api/login',['email'=>$member->email,'password'=>'QA-lifecycle-12345'])->assertOk();
+    $refresh=$this->actingAs($member)->getJson('/api/me')->assertOk();
+    foreach ([$login,$refresh] as $response) {
+        expect($response->json('data.scope.assigned_location_ids'))->toEqualCanonicalizing([$one->id,$two->id]);
+        $response->assertJsonPath('data.custom_permissions.revoke',['manage_team']);
+    }
+});
+
 it('refuses to move a legacy business owner or a higher ranked platform account',function () {
     $actor=lifecycleUser();$legacy=lifecycleUser('provider_admin');$source=lifecycleBusiness($legacy);$dest=lifecycleBusiness();
     $r=$this->actingAs($actor)->postJson('/api/admin/businesses/'.$dest->id.'/assignment-preview',['user_id'=>$legacy->id,'role'=>'staff','scope'=>'all'])->assertOk();

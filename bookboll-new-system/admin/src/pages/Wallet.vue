@@ -778,7 +778,7 @@ const jurisdictionOwnerIds = computed(() => {
   const ids = (assignedLocationIds.value || []).filter(Boolean)
   if (!ids.length) return null                            // fall back to country scope
   const set = new Set()
-  for (const l of locationsData.value) if (ids.includes(l.id) && l.owner_user_id) set.add(l.owner_user_id)
+  for (const l of locationsData.value) if (ids.includes(Number(l.id)) && l.owner_user_id) set.add(l.owner_user_id)
   return set
 })
 // True if a wallet/transaction/withdrawal row (has owner_user_id + country_id) falls

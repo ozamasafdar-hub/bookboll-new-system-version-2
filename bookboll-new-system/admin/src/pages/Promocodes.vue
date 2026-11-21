@@ -214,8 +214,8 @@ function codeCountryId(c) {
 function codeInJurisdiction(c) {
   if (isSuperAdmin.value) return true
   if (actorRole.value === 'platform_staff' && (assignedLocationIds.value || []).length) {
-    const owners = new Set(locations.value.filter(l => assignedLocationIds.value.includes(l.id)).map(l => l.owner_user_id))
-    return (c.location_id && assignedLocationIds.value.includes(c.location_id)) ||
+    const owners = new Set(locations.value.filter(l => assignedLocationIds.value.includes(Number(l.id))).map(l => l.owner_user_id))
+    return (c.location_id && assignedLocationIds.value.includes(Number(c.location_id))) ||
            (c.owner_user_id && owners.has(c.owner_user_id)) || !codeCountryId(c)
   }
   const set = jurisdictionCountryIds.value
@@ -231,7 +231,7 @@ const myLocations = computed(() => {
   if (isSuperAdmin.value) return locations.value
   if (isPlatformAdmin.value) {
     if (actorRole.value === 'platform_staff' && (assignedLocationIds.value || []).length) {
-      return locations.value.filter(l => assignedLocationIds.value.includes(l.id))
+      return locations.value.filter(l => assignedLocationIds.value.includes(Number(l.id)))
     }
     const set = jurisdictionCountryIds.value
     if (!set) return locations.value
@@ -254,7 +254,7 @@ const scopableOwners = computed(() => {
   let list = businessOwners.value
   if (set) list = list.filter(o => set.has(o.country_id) || set.has(String(o.country_id)) || set.has(Number(o.country_id)))
   if (actorRole.value === 'platform_staff' && (assignedLocationIds.value || []).length) {
-    const owners = new Set(locations.value.filter(l => assignedLocationIds.value.includes(l.id)).map(l => l.owner_user_id))
+    const owners = new Set(locations.value.filter(l => assignedLocationIds.value.includes(Number(l.id))).map(l => l.owner_user_id))
     list = businessOwners.value.filter(o => owners.has(o.id) || owners.has(String(o.id)) || owners.has(Number(o.id)))
   }
   return list
