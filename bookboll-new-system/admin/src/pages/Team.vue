@@ -861,6 +861,7 @@ const roleInfo   = (r) => TEAM_ROLES.find(x => x.value === r) || { label: r, col
 const locName    = (id) => locations.value.find(l => l.id === id)?.name || '—'
 // Human summary of a user's location scope (assigned_location_ids; empty = all).
 function scopeSummary(u) {
+  if (u?.role === 'provider_admin') return 'All venues · full business access'
   const ids = u?.assigned_location_ids || []
   if (!ids.length) return u?.location_id ? locName(u.location_id) : 'All locations'
   if (ids.length === 1) return locName(ids[0])
