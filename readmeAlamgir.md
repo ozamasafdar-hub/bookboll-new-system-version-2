@@ -1,3 +1,7 @@
+## Business lifecycle audit — 21 November 2026
+
+[Audit fixes and required checks](docs/BUSINESS_LIFECYCLE_QA.md) cover business signup, manager/team access, provider directory isolation, venue assignment, account transfer and preserved customer history on team removal. Run `BusinessLifecycleTest.php` and the existing assignment/setup/account/venue-transfer suites on MySQL. No new database migration is required for these fixes. [Follow-up batches](docs/BUSINESS_MANAGEMENT_BATCHES.md) keep business phone collection, multiple owners and superadmin support login separate from this audit.
+
 ## Superadmin account and plan management — 16 November 2026
 
 [Required deployment and account-management checks](docs/ACCOUNT_MANAGEMENT.md). My Team now includes Account security, complimentary Premium/Free management, website links and copies, account filters and country/venue access controls. Superadmin-only APIs enforce security and plan actions; logs retain actor and reason without passwords. Apply MySQL migration `2026_11_16_000002_add_business_plan_overrides`; `AccountManagementTest.php` is mandatory in CI. Complimentary Premium includes the configured Premium website booking rate, creates no payment record, and survives Stripe sync. Resolve active Stripe billing before manually overriding a plan. New team accounts have no shared default password. Access changes revoke sessions and custom permissions now round-trip correctly.

@@ -793,6 +793,8 @@ class UserService
     {
         $roles = Role::select(['id', 'name'])
             ->get()
+            ->filter(fn ($role) => RoleGrantGuard::mayGrant(auth()->user(), $role->name))
+            ->values()
             ->map(function ($role) {
                 \Log::info("Original role name: " . $role->name);
                 $transformedName = ucwords(str_replace('_', ' ', $role->name));
@@ -804,7 +806,7 @@ class UserService
                 ];
             });
 
-        $venues = Venue::select(['id', 'name'])->get();
+        $venues = \App\Support\TeamDirectory::venues(auth()->user())->get(['id', 'name']);
 
         $response = [
             'roles'  => $roles,
@@ -902,16 +904,17 @@ class UserService
             }
         }
 
-        $paginated = $users->paginate($records_per_page);
+        \App\Support\TeamDirectory::scope($users, $actor);
+        $paginated = $users->paginate(min(200, max(1, (int) $records_per_page)));
 
         $paginated->getCollection()->transform(fn (User $u) => $this->formatTeamUser($u));
 
-        $roles  = Role::get(['id', 'name']);
+        $roles  = Role::get(['id', 'name'])->filter(fn ($role) => RoleGrantGuard::mayGrant($actor, $role->name))->values();
         // owner_user_id is what the dashboard filters the scope picker by: it only
         // offers venues belonging to the business the member is being added to.
         // Selecting just id+name meant that filter matched nothing and the picker
         // always read "No locations yet".
-        $venues = Venue::orderBy('name')->get(['id', 'name', 'owner_user_id', 'business_id', 'country_id', 'city_id']);
+        $venues = \App\Support\TeamDirectory::venues($actor)->orderBy('name')->get(['id', 'name', 'owner_user_id', 'business_id', 'country_id', 'city_id']);
 
         return sendSuccess('Users fetched successfully', [
             'users'  => $paginated,
@@ -1019,6 +1022,7 @@ class UserService
         ]);
 
         $formData += $this->validatedPermissionOverrides($request, $formData['role']);
+        \App\Support\TeamDirectory::validateVenueGrant($request);
 
         if (in_array($formData['role'], $providerTeamRoles, true) && empty($formData['owner_user_id'])) {
             return sendError('Provider staff require an owner_user_id.', [
@@ -1168,6 +1172,9 @@ class UserService
      */
     private function createUserWhenEmailExists(User $existing, array $formData)
     {
+        if ($existing->status !== User::ACTIVE || $existing->owner_user_id || $existing->activeBusinessMembership()->exists() || $existing->ownedBusiness()->exists()) {
+            return sendError('This account is inactive or already belongs to a business. Ask a superadmin to review its assignment.', [], 422);
+        }
         $staffRoleNames = array_values(array_unique(array_merge(
             config('roles.staff_roles', []),
             config('roles.provider_roles', []),
@@ -1232,10 +1239,9 @@ class UserService
                 $existing->assignRole($formData['role']);
             }
 
-            $venues = $formData['venues'] ?? [];
-            if (! empty($venues)) {
-                $existing->venues()->sync($venues);
-            }
+            $venues = array_values(array_unique(array_map('intval', $formData['assigned_location_ids'] ?? $formData['venues'] ?? [])));
+            $existing->venues()->sync($venues);
+            $existing->forceFill(['assigned_location_ids'=>$venues, 'custom_permissions'=>$formData['custom_permissions'] ?? null])->save();
 
             // Same bridge as createUser(): a customer promoted to business staff
             // must be a member of that business, not only pointed at its owner.
@@ -1330,6 +1336,7 @@ class UserService
         ]);
 
         $formData += $this->validatedPermissionOverrides($request, $formData['role'] ?? $user->getRoleNames()->first() ?? 'staff');
+        \App\Support\TeamDirectory::validateVenueGrant($request, $user);
 
         try {
             DB::beginTransaction();
@@ -1452,6 +1459,23 @@ class UserService
         // A junior could delete an administrator here — rank now decides.
         if (! RoleGrantGuard::mayTouch(auth()->user(), $user)) {
             return RoleGrantGuard::denied('delete that user');
+        }
+
+        // Removing an employee must not delete their customer bookings or identity.
+        if ($business = \App\Support\AccessScope::business($user)) {
+            if ($business->owner_id == $user->id || $user->businessMemberships()->where('business_id', $business->id)->where('status', 'active')->whereIn('role', \App\Models\BusinessMembership::MANAGING_ROLES)->exists()) {
+                return sendError('Transfer business ownership before removing its owner.', [], 422);
+            }
+            DB::transaction(function () use ($user, $business) {
+                $user->businessMemberships()->where('business_id', $business->id)->where('status', 'active')->update(['status' => 'revoked', 'revoked_at' => now()]);
+                $user->forceFill(['owner_user_id' => null, 'assigned_location_ids' => [], 'assigned_listing_ids'=>[], 'assigned_program_ids'=>[], 'assigned_country_ids' => [], 'custom_permissions' => null])->save();
+                $user->venues()->detach();
+                $user->syncRoles(['customer']);
+                $user->syncPermissions([]);
+                \App\Support\AccountAdministration::revokeSessions($user);
+                activity('account_administration')->causedBy(auth()->user())->performedOn($user)->withProperties(['business_id' => $business->id])->log('business_team_access_removed');
+            });
+            return sendSuccess('Team access removed. The customer account and history are preserved.');
         }
 
         if ($user->hasRole('super_admin') && !User::role('super_admin')->where('status', User::ACTIVE)->where('id', '!=', $user->id)->exists()) return sendError('Keep at least one active superadmin.', [], 422);

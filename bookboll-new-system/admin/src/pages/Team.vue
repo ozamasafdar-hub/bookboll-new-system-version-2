@@ -486,14 +486,15 @@ async function removeAdmin(user) {
     pushToast("You don't have the authority to delete this user.", 'error')
     return
   }
+  const isBusinessMember = !!user.business_id || !!user.owner_user_id
   if (!(await askConfirm({
-    title: 'Delete user?',
-    message: 'This user will be removed. If they own a business, related data may be removed too. This cannot be undone.',
-    confirmText: 'Delete',
+    title: isBusinessMember ? 'Remove team access?' : 'Delete user?',
+    message: isBusinessMember ? 'They will lose business access and be signed out. Their customer account and booking history will stay.' : 'This account will be permanently deleted. This cannot be undone.',
+    confirmText: isBusinessMember ? 'Remove access' : 'Delete',
   }))) return
   const res = await apiFetch(`/admin/users/${user.id}`, { method: 'DELETE' })
   if (!res.success) { pushToast(apiErr(res, 'Could not delete user.'), 'error'); return }
-  pushToast('User deleted', 'success')
+  pushToast(isBusinessMember ? 'Team access removed' : 'User deleted', 'success')
   load()
 }
 
@@ -687,6 +688,7 @@ async function load() {
     const ownerId = currentOwnerUserId.value
     if (!ownerId) return
     const teamRes = await apiFetch('/business/team')
+    if (!teamRes.success) throw new Error(apiErr(teamRes, 'Could not load this business team.'))
     team.value = teamRes.data?.users || []
     // The owner's venues, for the scope picker.
     locations.value = (teamRes.data?.venues || [])

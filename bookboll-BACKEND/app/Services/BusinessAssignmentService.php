@@ -8,6 +8,7 @@ use App\Models\BusinessMembership;
 use App\Models\User;
 use App\Models\Venue;
 use App\Support\AccessScope;
+use App\Support\{RoleGrantGuard, AccountAdministration};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -88,6 +89,7 @@ class BusinessAssignmentService
             ->with('roles:id,name')
             ->where('status', User::ACTIVE)
             ->where('id', '!=', $actor->id)
+            ->whereNull('owner_user_id')->whereDoesntHave('ownedBusiness')
             ->whereDoesntHave('businessMemberships', function ($q) {
                 $q->where('status', BusinessMembership::STATUS_ACTIVE);
             })
@@ -112,6 +114,7 @@ class BusinessAssignmentService
 
         return $query->orderBy('name')->limit(200)
             ->get(['id', 'name', 'email', 'country_id', 'last_login_at'])
+            ->filter(fn (User $u) => RoleGrantGuard::mayTouch($actor, $u))
             ->map(function (User $u) {
                 $roles = $u->roles->pluck('name')->all();
 
@@ -127,7 +130,7 @@ class BusinessAssignmentService
                     'venues'     => count(AccessScope::pinnedVenueIds($u)),
                     'last_login' => $u->last_login_at?->toIso8601String(),
                 ];
-            })->all();
+            })->values()->all();
     }
 
     /** @return array<int, array{id:string,name:string}> */
@@ -234,6 +237,15 @@ class BusinessAssignmentService
         if ($target->status !== User::ACTIVE) {
             $blockers[] = 'That account is not active.';
         }
+        if (!RoleGrantGuard::mayTouch($actor, $target) || !RoleGrantGuard::mayGrant($actor, $data['role'])) {
+            $blockers[] = 'You do not have permission to move this account or grant the selected role.';
+        }
+        if ($target->owner_user_id || $target->ownedBusiness()->exists()) {
+            $blockers[] = 'This account already belongs to a business. Its existing ownership or team assignment must be resolved first.';
+        }
+        if (!AccessScope::isGlobal($actor) && !in_array((int) $target->country_id, AccessScope::jurisdictionCountryIds($actor) ?? [], true)) {
+            $blockers[] = 'That account is outside your country access.';
+        }
 
         $existing = BusinessMembership::where('user_id', $target->id)
             ->where('status', BusinessMembership::STATUS_ACTIVE)->first();
@@ -287,6 +299,7 @@ class BusinessAssignmentService
         if (! empty($target->custom_permissions)) {
             $warnings[] = 'Custom platform permissions will be removed.';
         }
+        if ($target->permissions()->exists()) $warnings[] = 'Direct platform permissions will be removed.';
         $warnings[] = 'Active sessions will be signed out so the new access takes effect.';
 
         return ['warnings' => array_values($warnings), 'blockers' => array_values($blockers)];
@@ -327,6 +340,13 @@ class BusinessAssignmentService
             'target'     => $target->id,
             'status'     => $target->status,
             'roles'      => $target->getRoleNames()->sort()->values()->all(),
+            'owner_user_id' => $target->owner_user_id,
+            'owned_business' => $target->ownedBusiness()->value('id'),
+            'direct_permissions' => $target->permissions()->orderBy('id')->pluck('id')->all(),
+            'country_ids' => $target->assigned_country_ids,
+            'country_id' => $target->country_id,
+            'venue_ids' => AccessScope::pinnedVenueIds($target),
+            'custom_permissions' => $target->custom_permissions,
             'membership' => BusinessMembership::where('user_id', $target->id)
                 ->where('status', BusinessMembership::STATUS_ACTIVE)->value('business_id'),
         ]));
@@ -414,6 +434,7 @@ class BusinessAssignmentService
             // instead left the account with NO role, which the dashboard's own
             // role gate then turned away after the password had verified.
             $target->syncRoles([$preview->role]);
+            $target->syncPermissions([]);
             $target->forceFill([
                 'owner_user_id'         => $preview->role === 'provider_admin' ? null : $business->owner_id,
                 'assigned_country_ids'  => null,
@@ -438,7 +459,7 @@ class BusinessAssignmentService
 
             // Stale tokens would otherwise keep the old platform privileges
             // alive until they expired.
-            $target->tokens()->delete();
+            AccountAdministration::revokeSessions($target);
 
             $preview->forceFill([
                 'consumed_at'     => now(),
@@ -563,7 +584,7 @@ class BusinessAssignmentService
         // A country admin may only touch businesses in their jurisdiction.
         if (! AccessScope::isGlobal($actor)) {
             $countries = AccessScope::jurisdictionCountryIds($actor);
-            if (is_array($countries) && $business->country_id && ! in_array((int) $business->country_id, $countries, true)) {
+            if (! in_array((int) $business->country_id, $countries ?? [], true)) {
                 return [null, null, sendError('That business is outside your jurisdiction.', [], 403)];
             }
         }

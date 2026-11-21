@@ -195,6 +195,11 @@ class BusinessService
                     'email' => ['This account already has a business.'],
                 ], 422);
             }
+            if ($existing->status !== User::ACTIVE || $existing->owner_user_id
+                || $existing->activeBusinessMembership()->exists()
+                || $existing->hasAnyRole(array_merge(config('roles.staff_roles'), config('roles.provider_roles')))) {
+                return sendError('This account already has team access or is inactive. Use a separate account for a new business, or ask a superadmin to review the account assignment.', [], 422);
+            }
         }
 
         try {
@@ -245,6 +250,11 @@ class BusinessService
                 'status'          => $this->business::STATUS_PENDING,
                 'brand_subdomain' => $username,
             ]);
+
+            BusinessMembership::create(['business_id' => $business->id, 'user_id' => $user->id,
+                'role' => BusinessMembership::ROLE_OWNER, 'scope' => 'all', 'status' => BusinessMembership::STATUS_ACTIVE,
+                'version' => 1, 'created_by' => $user->id]);
+            if ($existing) \App\Support\AccountAdministration::revokeSessions($user);
 
             DB::commit();
         } catch (\Throwable $e) {
@@ -347,15 +357,17 @@ class BusinessService
                 $query->where('status', $status);
             });
 
-        if ($actor && $actor->hasRole('country_admin') && ! $actor->hasRole('super_admin')) {
+        if ($businessId = \App\Support\AccessScope::businessId($actor)) {
+            $query->whereKey($businessId);
+        } elseif (\App\Support\AccessScope::isProviderScoped($actor)) {
+            $query->whereRaw('1 = 0');
+        } elseif ($actor && !\App\Support\AccessScope::isGlobal($actor)) {
             $allowed = collect($actor->assigned_country_ids ?? [])->filter()->map(fn($id) => (int) $id)->all();
             if ($actor->country_id) {
                 $allowed[] = (int) $actor->country_id;
             }
             $allowed = array_values(array_unique($allowed));
-            if ($allowed) {
-                $query->whereIn('country_id', $allowed);
-            }
+            $query->whereIn('country_id', $allowed);
         }
 
         $paginated = $query->paginate($recordsPerPage);
@@ -421,11 +433,10 @@ class BusinessService
     public function teamIndex(Request $request)
     {
         $owner = $request->user();
-        if (! $owner->hasRole('provider_admin')) {
-            return sendError('Only business owners can manage their team.', [], 403);
-        }
+        $business = $this->teamBusiness($request);
 
-        $members = $this->user::where('owner_user_id', $owner->id)
+        $members = \App\Support\TeamDirectory::forBusiness($this->user::query(), $business)
+            ->where('users.id', '!=', $business->owner_id ?: 0)
             ->latest()
             ->get()
             ->map(fn(User $u) => $this->userService->formatTeamUser($u))
@@ -434,9 +445,9 @@ class BusinessService
         // The owner's own venues, so the dashboard's scope picker has something to
         // offer. Without this the provider side rendered an empty list and no
         // member could be pinned to a venue.
-        $venues = \App\Models\Venue::ownedBy((int) $owner->id)
+        $venues = \App\Support\TeamDirectory::venues($owner)
             ->orderBy('name')
-            ->get(['id', 'name', 'owner_user_id']);
+            ->get(['id', 'name', 'owner_user_id', 'business_id']);
 
         return sendSuccess('Team fetched successfully', [
             'users'  => $members,
@@ -447,12 +458,10 @@ class BusinessService
     public function teamStore(Request $request)
     {
         $owner = $request->user();
-        if (! $owner->hasRole('provider_admin')) {
-            return sendError('Only business owners can manage their team.', [], 403);
-        }
+        $business = $this->teamBusiness($request);
 
         $request->merge([
-            'owner_user_id' => $owner->id,
+            'owner_user_id' => $business->owner_id ?: $business->activeMemberships()->whereIn('role', BusinessMembership::MANAGING_ROLES)->value('user_id'),
             'status'        => $request->input('status', User::ACTIVE),
         ]);
 
@@ -468,12 +477,9 @@ class BusinessService
 
     public function teamUpdate(Request $request, $userId)
     {
-        $owner = $request->user();
-        if (! $owner->hasRole('provider_admin')) {
-            return sendError('Only business owners can manage their team.', [], 403);
-        }
+        $business = $this->teamBusiness($request);
 
-        $member = $this->user::where('id', $userId)->where('owner_user_id', $owner->id)->first();
+        $member = \App\Support\TeamDirectory::forBusiness($this->user::query(), $business)->whereKey($userId)->first();
         if (! $member) {
             return sendError('Team member not found.', [], 404);
         }
@@ -487,25 +493,26 @@ class BusinessService
             }
         }
 
-        $request->merge(['owner_user_id' => $owner->id]);
-
         return $this->userService->updateUser($request, $member->id);
     }
 
     public function teamDestroy(Request $request, $userId)
     {
-        $owner = $request->user();
-        if (! $owner->hasRole('provider_admin')) {
-            return sendError('Only business owners can manage their team.', [], 403);
-        }
+        $business = $this->teamBusiness($request);
 
-        $member = $this->user::where('id', $userId)->where('owner_user_id', $owner->id)->first();
+        $member = \App\Support\TeamDirectory::forBusiness($this->user::query(), $business)->whereKey($userId)->first();
         if (! $member) {
             return sendError('Team member not found.', [], 404);
         }
 
-        $member->delete();
+        abort_if($member->id === $business->owner_id, 422, 'The business owner cannot be removed from its team.');
+        return $this->userService->deleteUser($member->id);
+    }
 
-        return sendSuccess('Team member deleted successfully');
+    private function teamBusiness(Request $request): Business
+    {
+        $business = \App\Support\AccessScope::business($request->user());
+        abort_unless($business && $request->user()->hasCapability('manage_team'), 403, 'You do not have permission to manage this business team.');
+        return $business;
     }
 }
