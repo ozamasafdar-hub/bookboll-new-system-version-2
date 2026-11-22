@@ -12,6 +12,7 @@ const props = defineProps({
   modelValue: { type: String, default: '' },
   roles:      { type: Array,  default: () => [] },   // ordered role keys to offer
   inline:     { type: Boolean, default: false },
+  disabled: { type: Boolean, default: false },
 })
 const emit = defineEmits(['update:modelValue'])
 
@@ -19,9 +20,10 @@ const open = ref(false)
 const root = ref(null)
 const current = computed(() => ROLE_INFO[props.modelValue] || { label: props.modelValue || 'Select a role', tagline: '' })
 
-function pick(role) { emit('update:modelValue', role); open.value = false }
+function pick(role) { if (!props.disabled) emit('update:modelValue', role); open.value = false }
 function onDocClick(e) { if (root.value && !root.value.contains(e.target)) open.value = false }
 function toggle() {
+  if (props.disabled) return
   open.value = !open.value
   if (open.value) document.addEventListener('mousedown', onDocClick)
   else document.removeEventListener('mousedown', onDocClick)
@@ -31,7 +33,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick))
 
 <template>
   <div class="rs" :class="{ 'rs-inline': inline }" ref="root" @keydown.esc.stop="open = false">
-    <button type="button" class="rs-trigger" :aria-expanded="open" :class="{ open }" @click="toggle">
+    <button type="button" class="rs-trigger" :disabled="disabled" :aria-expanded="open && !disabled" :class="{ open }" @click="toggle">
       <span class="rs-dot" :style="{ background: current.color || '#94a3b8' }"></span>
       <span class="rs-trigger-text">
         <span class="rs-trigger-label">{{ current.label }}</span>
@@ -40,7 +42,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick))
       <ChevronDown :size="17" class="rs-chev" :class="{ rot: open }" />
     </button>
 
-    <div v-if="open" class="rs-menu">
+    <div v-if="open && !disabled" class="rs-menu">
       <button
         v-for="r in roles" :key="r" type="button"
         class="rs-opt" :class="{ active: r === modelValue }"
@@ -67,6 +69,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick))
 .rs-inline .rs-menu { position: static; margin-top: 8px; max-height: none; box-shadow: none; }
 .rs-trigger { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 10px; background: var(--surface, #ffffff); cursor: pointer; font: inherit; text-align: left; }
 .rs-trigger:hover { border-color: var(--primary); }
+.rs-trigger:disabled { cursor: not-allowed; opacity: .75; }
 .rs-trigger.open { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent); }
 .rs-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 .rs-trigger-text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; flex: 1; }

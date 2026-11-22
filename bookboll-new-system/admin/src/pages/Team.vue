@@ -7,12 +7,13 @@ import BusinessContact from '../components/BusinessContact.vue'
 import BusinessPhoneInput from '../components/BusinessPhoneInput.vue'
 import { businessContactLinks, normalizeBusinessPhone } from '../lib/businessPhone.js'
 import BusinessInvite from '../components/BusinessInvite.vue'
+import BusinessTeamCard from '../components/BusinessTeamCard.vue'
 import { brandPreviewUrl, wildcardDnsAvailable } from '../lib/brand.js'
 import BusinessAssignment from '../components/BusinessAssignment.vue'
 import AccountPicker from '../components/AccountPicker.vue'
 import { financeRequest } from '../lib/financeApi.js'
 import { newRequestKey } from '../lib/finance.js'
-import { businessTeam, businessFormErrors } from '../lib/businessTeam.js'
+import { businessTeam, businessFormErrors, orderBusinessTeam, ownerAccessWarning } from '../lib/businessTeam.js'
 import { ref, onMounted, computed, watch } from 'vue'
 import { apiFetch } from '../lib/api.js'
 import { askConfirm } from '../lib/confirm.js'
@@ -133,7 +134,8 @@ const teamView = ref('businesses')
 const businessReview = ref(false)
 const securityAccount = ref(null), planBusiness = ref(null)
 const directoryStatus = ref(''), directoryRole = ref(''), directoryLogin = ref('')
-const loadError = ref(''), loadingDirectory = ref(false)
+const loadError = ref(''), loadingDirectory = ref(true)
+const businessQuickFilter = ref('all'), businessSort = ref('name')
 const directoryRoles = computed(() => teamView.value === 'platform' ? [...new Set([...PLATFORM_ROLES, ...platformTeam.value.map(u => u.role)])] : PROVIDER_ROLES)
 function accountMatch(u) { return (!directoryStatus.value || u.status === directoryStatus.value) && (!directoryRole.value || u.role === directoryRole.value) && (!directoryLogin.value || (directoryLogin.value === 'never' ? !u.last_login : !!u.last_login)) }
 watch(teamView, () => { directoryRole.value = ''; directoryStatus.value = ''; directoryLogin.value = '' })
@@ -509,7 +511,7 @@ const team        = ref([])
 const filterRole  = ref('')
 const filterLoc   = ref('')
 const teamForm    = ref(defaultTeamForm())
-watch(() => teamForm.value.role, role => { if (role === 'provider_admin') { teamForm.value.assigned_location_ids=[]; teamForm.value.custom_permissions={grant:[],revoke:[]} } })
+watch(() => teamForm.value.role, role => { if (role === 'provider_admin') { teamForm.value.assigned_location_ids=[]; teamForm.value.custom_permissions={grant:[],revoke:[]}; if (!editing.value) teamForm.value.status='active' } })
 watch(() => adminForm.value.role, role => { if (role === 'provider_admin' && editing.value) { adminForm.value.assigned_location_ids=[]; adminForm.value.custom_permissions={grant:[],revoke:[]} } })
 
 // Provider staff tiers (everything below Owner) — drives the overview count cards.
@@ -542,7 +544,8 @@ const editorLocations = computed(() => {
   const owner = editorOwnerId.value
   const businessId = editing.value?.business_id
   if (businessId) {
-    const businessOwner = businesses.value.find(b => String(b.id) === String(businessId))?.owner_user_id
+    const business = businesses.value.find(b => String(b.id) === String(businessId))
+    const businessOwner = business?.scope_owner_user_id || business?.owner_user_id
     return locations.value.filter(l => String(l.business_id || '') === String(businessId) || (!l.business_id && businessOwner && String(l.owner_user_id) === String(businessOwner)))
   }
   if (!owner) return locations.value
@@ -560,9 +563,10 @@ const filteredTeam = computed(() => {
   // assigned_location_ids (the Access Scope picker), legacy members via the old
   // single location_id, and members with NO scope at all (= whole business).
   if (filterLoc.value)  list = list.filter(u => {
+    if (u.role === 'provider_admin') return true
     const ids = u.assigned_location_ids || []
-    if (ids.length) return ids.includes(filterLoc.value)
-    if (u.location_id) return u.location_id === filterLoc.value
+    if (ids.length) return ids.some(id => String(id) === String(filterLoc.value))
+    if (u.location_id) return String(u.location_id) === String(filterLoc.value)
     return true   // unscoped = access to every location, this one included
   })
   if (filterCountry.value.length || filterCity.value.length) list = list.filter(memberGeoMatch)
@@ -571,7 +575,7 @@ const filteredTeam = computed(() => {
     (u.full_name || '').toLowerCase().includes(q) ||
     (u.email || '').toLowerCase().includes(q)
   )
-  return list
+  return orderBusinessTeam(list)
 })
 const { page: teamPage, perPage: teamPerPage, totalPages: teamTotalPages, paginated: paginatedTeam, visiblePages: teamVisiblePages, goTo: teamGoTo } = usePagination(filteredTeam)
 
@@ -582,6 +586,7 @@ const countByRole = computed(() => {
 })
 
 function openTeamNew() {
+  formError.value = ''
   editing.value = null
   teamForm.value = defaultTeamForm()
   if (providerVenueLimited.value) teamForm.value.assigned_location_ids = [...assignedLocationIds.value]
@@ -590,6 +595,7 @@ function openTeamNew() {
   showModal.value = true
 }
 function openTeamEdit(u) {
+  formError.value = ''
   editing.value = u
   teamForm.value = {
     full_name: u.full_name || '', email: u.email || '', role: u.role || 'staff',
@@ -605,11 +611,12 @@ function openTeamEdit(u) {
 }
 async function saveTeam() {
   triedSave.value = true
-  if (!teamForm.value.full_name || !teamForm.value.email || !teamForm.value.role) {
-    pushToast('Please fill in the name, email and role.', 'error'); return
+  formError.value = ''
+  if (!teamForm.value.full_name?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(teamForm.value.email?.trim() || '') || !teamForm.value.role) {
+    formError.value = 'Enter a name and a valid email address, then choose a role.'; return
   }
   if (providerVenueLimited.value && !teamForm.value.assigned_location_ids.length) {
-    pushToast('Choose at least one venue within your access.', 'error'); return
+    formError.value = 'Choose at least one venue within your access.'; return
   }
   saving.value = true
   const body = {
@@ -629,7 +636,7 @@ async function saveTeam() {
     ? await apiFetch(`/business/team/${editing.value.id}`, { method: 'PUT', body })
     : await apiFetch('/business/team', { method: 'POST', body })
   saving.value = false
-  if (!res.success) { pushToast(apiErr(res, 'Could not save team member.'), 'error'); return }
+  if (!res.success) { formError.value = apiErr(res, 'Could not save team member. Your changes are still here.'); return }
   clearDirty()
   logAudit({ action: editing.value ? AUDIT.UPDATED : AUDIT.CREATED, entity_type: 'team_member', entity_id: editing.value?.id || body.email, details: `${editing.value ? 'Updated' : 'Added'} ${roleLabelFn(teamForm.value.role)} ${body.name || body.email || ''}`.trim() })
   pushToast(editing.value ? 'Team member updated' : 'Team member added', 'success')
@@ -637,6 +644,8 @@ async function saveTeam() {
   load()
 }
 async function removeTeam(u) {
+  const warning = ownerAccessWarning(u, team.value, currentUser.value?.id)
+  if (warning) { pushToast(warning, 'info'); return }
   if (!(await askConfirm({
     title: 'Remove team member?',
     message: `${u.full_name || u.email} will be removed from your team and will lose access.`,
@@ -736,6 +745,7 @@ const providerGroups = computed(() => {
       const ownerRow = allUsers.value.find(u => String(u.id) === String(b.owner_user_id))
       const provider = {
         id: b.owner_user_id,
+        is_primary_owner: true,
         owner_count: b.owner_count || 0, active_owner_count: b.active_owner_count || 0,
         scope_owner_user_id: b.scope_owner_user_id,
         role: 'provider_admin',
@@ -802,6 +812,8 @@ const { page: platformPage, perPage: platformPerPage, totalPages: platformTotalP
 const filteredProviderGroups = computed(() => {
   const q = search.value.trim().toLowerCase()
   return providerGroups.value.filter(g => {
+    if (businessQuickFilter.value === 'no_owner' && g.provider.active_owner_count > 0) return false
+    if (businessQuickFilter.value === 'no_phone' && g.provider.contact) return false
     if ((directoryStatus.value || directoryRole.value || directoryLogin.value) && !g.staff.some(accountMatch)) return false
     if (filterCountry.value.length || filterCity.value.length) {
       if (!memberGeoMatch(g.provider) && !g.staff.some(memberGeoMatch)) return false
@@ -826,8 +838,14 @@ const filteredProviderGroups = computed(() => {
       roleLabel(u.role).toLowerCase().includes(q)
     )
     return provMatch || staffMatch
-  })
+  }).sort((a,b) => businessSort.value === 'newest' ? Number(b.provider.business_id)-Number(a.provider.business_id) : (a.provider.business_name || '').localeCompare(b.provider.business_name || ''))
 })
+const businessAttention = computed(() => ({ no_owner: providerGroups.value.filter(g => !g.provider.active_owner_count).length, no_phone: providerGroups.value.filter(g => !g.provider.contact).length }))
+const { page: businessPage, perPage: businessPerPage, totalPages: businessTotalPages, paginated: paginatedBusinesses, visiblePages: businessVisiblePages, goTo: businessGoTo } = usePagination(filteredProviderGroups, [search, businessQuickFilter, businessSort, filterCountry, filterCity, filterPlan, filterBizTypes, directoryRole, directoryStatus, directoryLogin], 10)
+const teamAccessWarning = computed(() => ownerAccessWarning(editing.value, team.value, currentUser.value?.id))
+function clearBusinessFilters() {
+  search.value = ''; filterCountry.value = []; filterCity.value = []; filterBizTypes.value = []; filterPlan.value = ''; directoryStatus.value = ''; directoryRole.value = ''; directoryLogin.value = ''; businessQuickFilter.value = 'all'
+}
 
 // Open invite modal pre-filled with a company assignment
 function openAddStaffFor(providerId) {
@@ -952,8 +970,8 @@ function avatarColor(id) {
         :countries="countries"
         :cities="cities"
         :extra-count="(filterBizTypes.length ? 1 : 0) + (filterPlan ? 1 : 0) + (directoryStatus ? 1 : 0) + (directoryRole ? 1 : 0) + (directoryLogin ? 1 : 0)"
-        search-placeholder="Search by name, email or @username…"
-        @clear="filterBizTypes = []; filterPlan = ''; directoryStatus = ''; directoryRole = ''; directoryLogin = ''"
+        search-placeholder="Search business, person, email or phone…"
+        @clear="businessQuickFilter = 'all'; filterBizTypes = []; filterPlan = ''; directoryStatus = ''; directoryRole = ''; directoryLogin = ''"
       >
         <div class="lf-selects">
           <div class="lf-field"><label>Account status</label><select v-model="directoryStatus" class="lf-select"><option value="">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="blocked">Blocked</option></select></div>
@@ -1004,100 +1022,24 @@ function avatarColor(id) {
       </div>
 
       <PaginationBar v-if="teamView === 'platform' && filteredPlatformTeam.length" :page="platformPage" :per-page="platformPerPage" :total="filteredPlatformTeam.length" :total-pages="platformTotalPages" :visible-pages="platformVisiblePages" @goTo="platformGoTo" @update:perPage="platformPerPage = $event" />
-      <div v-if="teamView === 'platform' && !filteredPlatformTeam.length" class="workspace-empty">No team members match your search.</div>
-      <!-- ── Provider Businesses ─────────────────────────────────────── -->
-      <div v-if="teamView === 'businesses'" class="section-block">
-        <div class="section-label"><Building2 :size="13" />Provider Businesses <span class="section-count">{{ filteredProviderGroups.length }}</span></div>
-
-        <div v-if="!filteredProviderGroups.length" class="card" style="text-align:center;padding:32px;color:var(--text-muted);">
-          No providers found.
+      <div v-if="teamView === 'platform' && !filteredPlatformTeam.length && !loadingDirectory && !loadError" class="workspace-empty">No team members match your search.</div>
+      <!-- Provider business directory -->
+      <section v-if="teamView === 'businesses'" class="section-block" :aria-busy="loadingDirectory">
+        <div class="directory-toolbar">
+          <div class="directory-quick-filters" aria-label="Business attention filters">
+            <button :aria-pressed="businessQuickFilter==='all'" @click="businessQuickFilter='all'">All businesses <b>{{ providerGroups.length }}</b></button>
+            <button :aria-pressed="businessQuickFilter==='no_owner'" @click="businessQuickFilter='no_owner'">Needs an active owner <b>{{ businessAttention.no_owner }}</b></button>
+            <button :aria-pressed="businessQuickFilter==='no_phone'" @click="businessQuickFilter='no_phone'">Needs a phone number <b>{{ businessAttention.no_phone }}</b></button>
+          </div>
+          <label class="directory-sort">Sort <select v-model="businessSort" aria-label="Sort businesses"><option value="name">Business name A–Z</option><option value="newest">Newest first</option></select></label>
         </div>
-
-        <div v-for="g in filteredProviderGroups" :key="g.provider.business_id" class="biz-group">
-
-          <!-- Business header row -->
-          <div class="biz-header" role="button" tabindex="0" :aria-expanded="expandedBusinesses.has(g.provider.business_id)" @click="toggleBusiness(g.provider.business_id)" @keydown.enter.self.prevent="toggleBusiness(g.provider.business_id)" @keydown.space.self.prevent="toggleBusiness(g.provider.business_id)">
-            <div class="biz-icon"><Building2 :size="17" /></div>
-            <div class="biz-name-block">
-              <div class="biz-name">{{ g.provider.business_name || g.provider.full_name }}</div>
-              <div v-if="g.provider.username" class="biz-username">@{{ g.provider.username }}</div>
-            </div>
-            <div class="biz-owner-email">{{ g.provider.id ? g.provider.email : 'Owner not assigned' }}<span v-if="g.provider.owner_count"> · {{ g.provider.owner_count }} {{ g.provider.owner_count === 1 ? 'owner' : 'owners' }}</span></div>
-            <div class="biz-badges">
-              <span class="biz-plan-chip" :class="{ premium: isPremiumPlan(g.provider) }" :title="isPremiumPlan(g.provider) ? 'On the Premium plan' : 'On the Free plan'">
-                <Crown v-if="isPremiumPlan(g.provider)" :size="11" />{{ isPremiumPlan(g.provider) ? 'Premium' : 'Free' }}{{ g.provider.plan_override==='premium' ? ' · complimentary' : '' }}
-              </span>
-              <span v-for="t in normalizeBusinessTypes(g.provider.business_types)" :key="t" class="biz-type-chip">{{ businessTypeLabel(t) }}</span>
-              <span class="badge" :class="statusBadge(g.provider.business_status)">{{ g.provider.business_status || 'pending' }}</span>
-              <span class="biz-type-chip">Website {{ g.provider.brand_enabled ? 'published' : 'draft' }}</span><span class="biz-staff-count"><UsersRound :size="12" />{{ g.staff.length }} team member{{ g.staff.length === 1 ? '' : 's' }}</span>
-              <span v-if="g.provider.country_id" class="biz-country-pill">{{ countryName(g.provider.country_id) }}</span>
-            </div>
-            <div class="biz-actions" @click.stop>
-              <a v-if="g.provider.brand_subdomain || g.provider.username" class="btn btn-sm btn-secondary" :href="websiteLink(g.provider)" target="_blank" rel="noopener"><ExternalLink :size="13" />{{ g.provider.brand_enabled ? 'Open website' : 'Preview website' }}</a><button v-if="g.provider.brand_subdomain || g.provider.username" class="btn btn-sm btn-secondary" @click="copyWebsite(g.provider)">Copy link</button><button v-if="isSuperAdmin" class="btn btn-sm btn-secondary" @click="planBusiness=g.provider"><Crown :size="13" />Manage plan</button>
-              <button v-if="!g.provider.id" class="btn btn-sm btn-secondary" @click="inviteBusiness=g.provider">Invite owner</button>
-              <!-- The owner gap is read in the header ("Owner not assigned"), so
-                   the fix for it belongs here rather than below a staff table the
-                   admin has to expand first. -->
-              <button v-if="!g.provider.id" class="btn btn-sm btn-primary biz-assign-btn" @click="assignmentBusiness=g.provider">
-                <UsersRound :size="13" />Assign platform account
-              </button>
-              <button v-if="g.provider.id" class="btn-icon" @click="openAdminEdit(g.provider)" title="Edit business"><Edit2 :size="15" /></button>
-              <button v-if="g.provider.id" class="btn-icon danger" @click="removeAdmin(g.provider)" title="Delete business"><Trash2 :size="15" /></button>
-            </div>
-            <div class="biz-chevron" :class="{ open: expandedBusinesses.has(g.provider.business_id) }"><ChevronDown :size="16" /></div>
-          </div>
-
-          <div class="biz-contact">
-            <span class="biz-contact-label">Business phone</span>
-            <template v-if="g.provider.contact">
-              <strong class="biz-contact-number" dir="ltr">{{ g.provider.contact.phone }}</strong>
-              <a class="btn btn-sm btn-secondary" :href="g.provider.contact.call" :aria-label="'Call ' + g.provider.business_name"><Phone :size="14" />Call</a>
-              <a class="btn btn-sm btn-secondary" :href="g.provider.contact.whatsapp" target="_blank" rel="noopener noreferrer" :aria-label="'WhatsApp ' + g.provider.business_name"><MessageCircle :size="14" />WhatsApp</a>
-              <button class="btn btn-sm btn-secondary" :aria-label="'Copy phone for ' + g.provider.business_name" @click="copyBusinessPhone(g.provider.phone)"><Copy :size="14" />Copy</button>
-            </template>
-            <span v-else class="biz-contact-missing">{{ g.provider.phone ? 'Check phone format: ' + g.provider.phone : 'Phone missing' }}</span>
-            <button v-if="isSuperAdmin" class="btn btn-sm btn-secondary biz-contact-edit" @click="contactBusiness=g.provider"><Edit2 :size="13" />{{ g.provider.phone ? 'Edit phone' : 'Add phone' }}</button>
-          </div>
-          <!-- Staff list (expanded) -->
-          <div v-if="expandedBusinesses.has(g.provider.business_id)" class="staff-section"><div class="staff-section-heading"><strong>Business team</strong><span>{{ g.staff.length }} members · access limited to this business</span></div>
-            <div class="table-wrap"><table class="staff-table">
-              <thead>
-                <tr>
-                  <th>Team member</th><th>Business role</th><th>Venue access</th><th>Status</th><th>Last sign-in</th><th></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="m in g.staff" :key="m.id">
-                  <td>
-                    <div class="cell-main">
-                      <div class="avatar-sm sm" :style="`background:${avatarColor(m.id)}`">{{ avatarInitials(m.full_name) }}</div>
-                      <div>
-                        <div style="font-weight:500;font-size:13px;">{{ m.full_name || '—' }}</div>
-                        <div style="font-size:12px;color:var(--text-muted);">{{ m.email }}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td><span class="badge" :class="roleBadge(m.role)">{{ m.isBusinessOwner ? 'Business owner' : roleLabel(m.role) }}</span><small v-if="m.is_primary_owner" class="primary-owner-label">Primary contact</small></td>
-                  <td style="font-size:13px;color:var(--text-muted);">{{ scopeSummary(m) }}</td>
-                  <td><span class="badge" :class="m.status==='active'?'badge-success':'badge-neutral'">{{ m.status }}</span></td>
-                  <td style="font-size:12px;color:var(--text-muted);">{{ timeAgo(m.last_login) }}</td>
-                  <td><div class="row-actions"><button class="btn btn-sm btn-secondary" :aria-label="'Edit access for ' + m.full_name" @click="openAdminEdit(m)"><Edit2 :size="14" />Edit access</button><button v-if="isSuperAdmin && String(m.id)!==String(currentUser?.id)" class="btn btn-sm btn-secondary" @click="securityAccount=m"><KeyRound :size="14" />Account security</button><button v-if="String(m.id)!==String(currentUser?.id) && (!m.isBusinessOwner || isSuperAdmin)" class="btn-icon danger" @click="removeAdmin(m)" aria-label="Remove team member"><Trash2 :size="15" /></button></div></td>
-                </tr>
-                <tr v-if="!g.staff.length">
-                  <td colspan="6" class="empty-staff">No team members yet. Invite an owner or staff member, or assign an existing platform account.</td>
-                </tr>
-              </tbody>
-            </table></div>
-            <div class="staff-add-row">
-              <button v-if="g.provider.id" class="btn btn-sm btn-secondary" @click="assignmentBusiness=g.provider"><UsersRound :size="13"/>Assign platform account</button>
-              <button class="btn btn-sm btn-secondary" @click="inviteBusiness=g.provider">
-                <Plus :size="13" />Add owner or staff
-              </button>
-            </div>
-          </div>
-
-        </div>
-      </div>
+        <p class="directory-results" role="status">{{ loadingDirectory ? 'Loading businesses and team access…' : filteredProviderGroups.length + ' of ' + providerGroups.length + ' businesses' }}</p>
+        <div v-if="loadingDirectory && !providerGroups.length" class="directory-loading"><RefreshCw :size="22" /><span>Loading your directory…</span></div>
+        <div v-else-if="!filteredProviderGroups.length && !loadError" class="workspace-empty"><strong>No businesses match these filters.</strong><p>Try another name or clear your filters.</p><button class="btn btn-secondary" @click="clearBusinessFilters">Clear filters</button></div>
+        <BusinessTeamCard v-for="g in paginatedBusinesses" :key="g.provider.business_id" :group="g" :expanded="expandedBusinesses.has(g.provider.business_id)" :superadmin="isSuperAdmin" :current-user-id="currentUser?.id" :website="g.provider.brand_subdomain || g.provider.username ? websiteLink(g.provider) : ''" :country="countryName(g.provider.country_id)" :premium="isPremiumPlan(g.provider)" :scope-label="scopeSummary" :last-seen="timeAgo"
+          @toggle="toggleBusiness(g.provider.business_id)" @invite="inviteBusiness=g.provider" @assign="assignmentBusiness=g.provider" @edit="openAdminEdit" @security="securityAccount=$event" @remove="removeAdmin" @plan="planBusiness=g.provider" @contact="contactBusiness=g.provider" @copy-website="copyWebsite(g.provider)" @copy-phone="copyBusinessPhone(g.provider.phone)" />
+        <PaginationBar v-if="filteredProviderGroups.length" :page="businessPage" :per-page="businessPerPage" :total="filteredProviderGroups.length" :total-pages="businessTotalPages" :visible-pages="businessVisiblePages" @goTo="businessGoTo" @update:perPage="businessPerPage=$event" />
+      </section>
 
       <AccountSecurity v-if="securityAccount && isSuperAdmin" :account="securityAccount" @close="securityAccount=null" @saved="load" />
       <BusinessPlanManagement v-if="planBusiness && isSuperAdmin" :business="planBusiness" @close="planBusiness=null" @saved="load" />
@@ -1258,23 +1200,14 @@ function avatarColor(id) {
           <h1 class="page-title">My Team</h1>
           <div class="page-subtitle">Owners share full business access. Managers and staff work within their assigned permissions.</div>
         </div>
-        <button class="btn btn-primary" @click="openTeamNew"><Plus :size="15" />Invite Member</button>
+        <button class="btn btn-primary" @click="openTeamNew"><Plus :size="15" />{{ actorRole === 'provider_admin' ? 'Add owner or staff' : 'Add team member' }}</button>
       </div>
 
-      <!-- Role overview cards -->
-      <div class="role-cards">
-        <div v-for="r in TEAM_ROLES" :key="r.value" class="role-card" :style="`border-top:3px solid ${r.color}`">
-          <div class="role-card-top">
-            <div class="role-card-icon">
-              <Shield v-if="r.value==='facility_admin'" :size="18" />
-              <UserCog v-else-if="r.value==='senior_employee'" :size="18" />
-              <User v-else :size="18" />
-            </div>
-            <div class="role-card-count">{{ countByRole[r.value] }}</div>
-          </div>
-          <div class="role-card-title">{{ r.label }}</div>
-          <div class="role-card-desc">{{ r.desc }}</div>
-        </div>
+      <p v-if="loadError" class="form-error" role="alert">{{ loadError }} <button class="btn btn-sm btn-secondary" @click="load">Retry</button></p>
+      <p v-if="loadingDirectory" class="directory-results" role="status">Loading your team…</p>
+      <div class="directory-quick-filters provider-role-filters" aria-label="Filter team by role">
+        <button :aria-pressed="!filterRole" @click="filterRole=''">All members <b>{{ team.length }}</b></button>
+        <button v-for="r in TEAM_ROLES" :key="r.value" :aria-pressed="filterRole===r.value" @click="filterRole=r.value">{{ r.label }} <b>{{ countByRole[r.value] }}</b></button>
       </div>
 
       <!-- Toolbar -->
@@ -1305,14 +1238,14 @@ function avatarColor(id) {
       </FilterBar>
 
       <!-- Empty state -->
-      <div v-if="!team.length" class="team-empty">
+      <div v-if="!team.length && !loadingDirectory && !loadError" class="team-empty">
         <Users :size="36" style="opacity:0.25" />
         <div class="team-empty-title">No team members yet</div>
         <div class="team-empty-sub">Invite co-owners, managers or staff and choose what each person can access.</div>
         <button class="btn btn-primary" @click="openTeamNew"><Plus :size="14" />Invite your first member</button>
       </div>
 
-      <template v-else>
+      <template v-else-if="team.length">
         <div v-if="filteredTeam.length" class="team-grid">
           <div v-for="u in paginatedTeam" :key="u.id" class="team-card">
             <div class="team-card-header">
@@ -1323,7 +1256,7 @@ function avatarColor(id) {
               </div>
               <div class="team-card-menu">
                 <button v-if="u.role !== 'provider_admin' || actorRole === 'provider_admin'" class="btn-icon" @click="openTeamEdit(u)" :aria-label="'Edit access for ' + u.full_name" title="Edit"><Edit2 :size="15" /></button>
-                <button v-if="String(u.id)!==String(currentUser?.id) && (u.role !== 'provider_admin' || actorRole === 'provider_admin')" class="btn-icon danger" @click="removeTeam(u)" :aria-label="'Remove access for ' + u.full_name" title="Remove"><Trash2 :size="15" /></button>
+                <button v-if="String(u.id)!==String(currentUser?.id) && (u.role !== 'provider_admin' || actorRole === 'provider_admin')" class="btn-icon danger" :disabled="!!ownerAccessWarning(u, team, currentUser?.id)" @click="removeTeam(u)" :aria-label="'Remove access for ' + u.full_name"  :title="ownerAccessWarning(u, team, currentUser?.id) || 'Remove team access'"><Trash2 :size="15" /></button>
               </div>
             </div>
             <div class="team-card-body">
@@ -1349,14 +1282,10 @@ function avatarColor(id) {
       <div v-if="showModal" class="modal-backdrop" @click.self="requestCloseTeamModal">
         <div class="modal team-dialog" v-dialog="requestCloseTeamModal" @input="markDirty" @change="markDirty">
           <div class="modal-header">
-            <div class="modal-title">{{ editing ? 'Edit Member' : 'Invite Team Member' }}</div>
+            <div class="modal-title">{{ editing ? 'Edit team member' : actorRole === 'provider_admin' ? 'Add owner or staff' : 'Add team member' }}</div>
             <button class="btn-icon" @click="requestCloseTeamModal" aria-label="Close"><X :size="18" /></button>
           </div>
           <div class="modal-body">
-            <div class="form-group" style="margin-bottom:20px;">
-              <label class="form-label">Role</label>
-              <RoleSelect v-model="teamForm.role" :roles="assignableRoles" inline />
-            </div>
             <div class="form-row">
               <div class="form-group"><label class="form-label">Full name <span class="required">*</span></label><input aria-label="Full name" v-model="teamForm.full_name" :class="{ 'input-invalid': triedSave && !teamForm.full_name }" placeholder="Jane Smith" /></div>
               <div class="form-group"><label class="form-label">Email <span class="required">*</span></label><input aria-label="Email" v-model="teamForm.email" type="email" :class="{ 'input-invalid': triedSave && !teamForm.email }" placeholder="jane@example.com" /></div>
@@ -1364,9 +1293,11 @@ function avatarColor(id) {
             <div class="form-row">
               <div class="form-group"><label class="form-label">Phone</label><input aria-label="Phone" v-model="teamForm.phone" placeholder="+971 50 123 4567" /></div>
               <div class="form-group"><label class="form-label">Status</label>
-                <select aria-label="Team member status" v-model="teamForm.status"><option value="active">Active</option><option value="inactive">Inactive</option></select>
+                <select aria-label="Team member status" v-model="teamForm.status" :disabled="!!teamAccessWarning || (!editing && teamForm.role==='provider_admin')"><option value="active">Active</option><option value="inactive">Inactive</option></select>
               </div>
             </div>
+            <div class="form-group team-role-field"><label class="form-label">Business role</label><RoleSelect v-model="teamForm.role" :roles="assignableRoles" :disabled="!!teamAccessWarning" inline /></div>
+            <p v-if="teamAccessWarning" class="team-help access-guidance">{{ teamAccessWarning }} Contact details remain editable.</p>
             <!-- Per-user permissions + location/listing/program scope -->
             <p v-if="teamForm.role === 'provider_admin'" class="team-help">Owners have full access to all venues, website settings, payments and the team. At least one owner must stay active.</p>
             <PermissionScopeEditor v-else
@@ -1380,10 +1311,11 @@ function avatarColor(id) {
               :available-listings="editorListings"
               :available-programs="editorPrograms"
             />
+            <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
           </div>
           <div class="modal-footer">
             <button class="btn btn-secondary" @click="requestCloseTeamModal">Cancel</button>
-            <button class="btn btn-primary" :disabled="!teamForm.full_name || !teamForm.email || saving" @click="saveTeam">{{ editing ? 'Save changes' : 'Invite member' }}</button>
+            <button class="btn btn-primary" :disabled="!teamForm.full_name || !teamForm.email || saving" @click="saveTeam">{{ saving ? 'Saving…' : editing ? 'Save changes' : 'Add team member' }}</button>
           </div>
         </div>
       </div>
@@ -1393,6 +1325,8 @@ function avatarColor(id) {
 </template>
 
 <style scoped>
+.team-workspace .workspace-switcher{display:flex;gap:8px;padding-bottom:12px;border-bottom:1px solid var(--border);margin-bottom:0}.team-workspace .workspace-switcher button{flex:0 1 auto;padding:12px 16px;gap:9px;border-radius:8px;border:1px solid transparent;background:transparent;box-shadow:none}.team-workspace .workspace-switcher button[aria-pressed="true"]{border-color:var(--primary-border);background:var(--primary-soft)}.team-workspace .workspace-switcher small{display:none}.team-workspace .workspace-switcher svg{width:17px;height:17px}.directory-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:16px 0}.directory-quick-filters{display:flex;gap:8px;flex-wrap:wrap}.directory-quick-filters button{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text-muted);padding:8px 11px;font-size:12px;cursor:pointer}.directory-quick-filters button[aria-pressed="true"]{color:var(--primary-ink);background:var(--primary-soft);border-color:var(--primary-border)}.directory-quick-filters b{font-size:11px;font-weight:600}.directory-sort{display:flex;align-items:center;gap:8px;color:var(--text-muted);font-size:12px}.directory-sort select{width:auto;padding:8px;min-height:34px}.directory-results{font-size:12px;color:var(--text-muted);margin:12px 0}.directory-loading{display:flex;align-items:center;justify-content:center;gap:12px;min-height:180px;color:var(--text-muted);font-size:14px}.provider-role-filters{margin:20px 0}.team-role-field{margin:18px 0 12px}.access-guidance{border-left:3px solid var(--primary);padding:8px 12px;background:var(--primary-soft)}.team-card-menu button:disabled{opacity:.35;cursor:not-allowed}.team-workspace button:focus-visible{outline:2px solid var(--primary);outline-offset:3px}
+@media(max-width:650px){.team-workspace .workspace-switcher{gap:4px}.team-workspace .workspace-switcher button{padding:10px 8px;font-size:12px;min-width:0}.team-workspace .workspace-switcher strong{font-size:12px}.team-role-guide dl{grid-template-columns:1fr!important;gap:6px!important}.team-role-guide dd{margin-bottom:8px!important}.form-row{grid-template-columns:1fr!important}}
 .primary-owner-label{display:block;font-size:11px;color:var(--text-muted);margin-top:5px}
 .team-role-guide{margin:16px 0;border-bottom:1px solid var(--border);padding-bottom:16px;font-size:13px;color:var(--text-muted)}.team-role-guide summary{color:var(--text);cursor:pointer;font-weight:600}.team-role-guide dl{display:grid;grid-template-columns:160px 1fr;gap:12px;max-width:850px}.team-role-guide dt{font-weight:600;color:var(--text)}.team-role-guide dd{margin:0}.team-role-guide p{line-height:1.6;max-width:850px}.biz-actions{flex-wrap:wrap}.row-actions{flex-wrap:wrap}
 

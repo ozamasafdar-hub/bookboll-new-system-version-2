@@ -33,3 +33,11 @@ Rollback refuses to recreate the one-owner index if multiple owners exist or the
 - The GitHub release workflow includes the new ownership suite. Railway verification uses labelled QA accounts only; verify actual sign-in, both dashboards, simultaneous last-owner changes, scope and unchanged payment totals. Do not charge cards, connect real Stripe accounts or send invitations externally in the workspace.
 
 Batch 3 (superadmin support login) remains separate.
+
+## Team management usability (22 November 2026)
+
+The superadmin directory has searchable, alphabetically sorted business summaries, ten businesses per page, and quick filters for missing active owners or valid business phone numbers. Open **Manage team** for owners and staff; primary contacts appear first, followed by co-owners and staff. Website, call and WhatsApp links stay visible. **Business settings & existing accounts** contains plan/contact controls and the reviewed account-transfer flow. Account security and removal are under each person's **More** menu. There is no misleading “Delete business” shortcut to an account-removal action.
+
+Providers use compact role filters and the **Add owner or staff** form. Contact details precede role and venue permissions. The UI explains protected self/last-owner changes, keeps new owners active, and preserves failed invitation drafts with inline validation errors. Server authorization and MySQL ownership safeguards remain authoritative and unchanged. Loading, failed loads and empty filter results have separate states.
+
+Regression checks cover owner ordering, last-active-owner guidance, directory filters/pagination, mixed-type venue IDs, full-access owners in venue filters and retained failed drafts. Verify desktop and narrow-screen forms, expanded team rows, action menus and both colour themes against the Railway build. No database migration is needed for this usability update.

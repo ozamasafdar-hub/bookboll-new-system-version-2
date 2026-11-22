@@ -16,7 +16,19 @@ export function businessTeam(owner, users = []) {
     seen.add(String(user.id))
     rows.push({ ...user, isBusinessOwner: user.role === 'provider_admin' })
   }
-  return rows
+  return orderBusinessTeam(rows)
+}
+
+export function orderBusinessTeam(users = []) {
+  const rank = u => u.role === 'provider_admin' ? (u.is_primary_owner ? 0 : 1) : 2
+  return [...users].sort((a,b) => rank(a)-rank(b) || (a.full_name || a.email || '').localeCompare(b.full_name || b.email || ''))
+}
+
+export function ownerAccessWarning(member, members = [], currentUserId) {
+  if (!member) return ''
+  if (String(member.id) === String(currentUserId)) return 'Ask another owner or superadmin to change your own access.'
+  if (member.role === 'provider_admin' && member.status === 'active' && !members.some(u => String(u.id) !== String(member.id) && u.role === 'provider_admin' && u.status === 'active')) return 'Add or reactivate another owner before removing this owner’s access.'
+  return ''
 }
 
 export function businessFormErrors(form) {

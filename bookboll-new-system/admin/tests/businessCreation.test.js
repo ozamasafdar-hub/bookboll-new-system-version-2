@@ -128,3 +128,29 @@ test('promoting a provider team member clears the old staff restrictions',async 
   assert.equal(write.path,'/business/team/8');assert.deepEqual(write.body.custom_permissions,{grant:[],revoke:[]})
   assert.equal('assigned_location_ids' in write.body,false)
 })
+
+test('directory filters surface missing active owners and phone numbers and reset pagination',async t=>{
+  const {state:s}=mount(t)
+  s.businesses.value=Array.from({length:12},(_,i)=>({id:i+1,name:`Club ${String(i).padStart(2,'0')}`,active_owner_count:i%2,phone:i%2?'+97455500001':''}))
+  assert.equal(s.filteredProviderGroups.value.length,12)
+  assert.equal(s.paginatedBusinesses.value.length,10)
+  s.businessGoTo(2);assert.equal(s.paginatedBusinesses.value.length,2)
+  s.businessQuickFilter.value='no_owner';await vue.nextTick()
+  assert.equal(s.businessPage.value,1);assert.equal(s.filteredProviderGroups.value.length,6)
+  assert.ok(s.filteredProviderGroups.value.every(g=>!g.provider.active_owner_count))
+  s.businessQuickFilter.value='no_phone';assert.equal(s.filteredProviderGroups.value.length,6)
+  s.businessSort.value='newest';assert.equal(s.filteredProviderGroups.value[0].provider.business_id,11)
+  s.clearBusinessFilters();assert.equal(s.filteredProviderGroups.value.length,12)
+})
+test('venue filtering includes full-access owners and handles string venue IDs',t=>{
+  const {state:s}=mount(t,{role:'provider_admin'})
+  s.team.value=[{id:2,role:'staff',assigned_location_ids:[5]},{id:3,role:'staff',assigned_location_ids:[6]},{id:4,role:'provider_admin',assigned_location_ids:[6]}]
+  s.filterLoc.value='5';assert.deepEqual(s.filteredTeam.value.map(u=>u.id),[4,2])
+})
+test('provider invitation errors stay inline and preserve the draft',async t=>{
+  const {state:s,requests}=mount(t,{role:'provider_admin',fail:true})
+  s.openTeamNew();Object.assign(s.teamForm.value,{full_name:'Co-owner',email:'invalid',role:'provider_admin'})
+  await s.saveTeam();assert.equal(requests.length,0);assert.match(s.formError.value,/valid email/)
+  s.teamForm.value.email='co@example.test';await s.saveTeam()
+  assert.match(s.formError.value,/Email already exists/);assert.equal(s.teamForm.value.full_name,'Co-owner');assert.equal(s.showModal.value,true);assert.equal(s.saving.value,false)
+})
