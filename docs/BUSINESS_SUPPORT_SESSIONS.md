@@ -28,6 +28,8 @@ CI runs `BusinessSupportSessionTest.php` against MySQL, plus the ownership/accou
 
 Local verification on 22 Nov 2026: 64 MySQL tests / 405 assertions passed; 31 focused frontend tests passed; production admin build passed. Deployed verification is recorded in the completion entry in `readmeAlamgir.md`.
 
+Railway verification: QA self-signup business 28 and superadmin-created business 29 both passed scoped reads, reversible private-venue note edits/restoration, financial/security denials, original superadmin login retention and exit/revocation. Provider accounts cannot start support. Start/action/blocked/end audit events identify the real superadmin. No existing business was modified; no money or messages were sent. Browser checks covered entering business 28, refresh, the separate superadmin tab, scoped bookings and returning to the directory. GitHub release run `45045296180` passed for feature commit `1c146f7`.
+
 ## Batch 4 is separate
 
 Do not change existing transaction rates as part of support sessions. Countries/cities UX and the new 10%/15%/15% defaults are queued in `BUSINESS_MANAGEMENT_BATCHES.md`.

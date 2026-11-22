@@ -8,7 +8,7 @@ See [the multi-owner contract, MySQL migration and required tests](docs/MULTIPLE
 
 ## Business phone contacts — Batch 1, 21 November 2026
 
-[Business phone contract and required checks](docs/BUSINESS_PHONE_CONTACTS.md): signup and superadmin business creation require a business number. Use `businesses.phone`, never an owner's personal phone. Superadmin business cards offer Call, WhatsApp, Copy and Add/Edit phone; owners edit their business contact from Settings. Existing missing numbers are flagged, not fabricated. MySQL is unchanged; new validation, isolation and frontend checks are mandatory in CI. Multiple owners and support login remain queued.
+[Business phone contract and required checks](docs/BUSINESS_PHONE_CONTACTS.md): signup and superadmin business creation require a business number. Use `businesses.phone`, never an owner's personal phone. Superadmin business cards offer Call, WhatsApp, Copy and Add/Edit phone; owners edit their business contact from Settings. Existing missing numbers are flagged, not fabricated. MySQL is unchanged; new validation, isolation and frontend checks are mandatory in CI. Multiple owners and support login are implemented in Batches 2 and 3.
 
 ## Business lifecycle audit — 21 November 2026
 

@@ -11,7 +11,7 @@ The user asked to finish the current lifecycle audit first and keep these new re
 
 ## Batch 1: business phone and contact actions
 
-Authorized 21 November 2026. Implementation and required checks are documented in [BUSINESS_PHONE_CONTACTS.md](BUSINESS_PHONE_CONTACTS.md). Batch 1 is deployed. Batch 2 is now authorized; Batch 3 remains queued.
+Authorized 21 November 2026. Implementation and required checks are documented in [BUSINESS_PHONE_CONTACTS.md](BUSINESS_PHONE_CONTACTS.md). Batch 1 is deployed. Batch 2 is deployed; Batch 3 is now implemented. Batch 4 remains queued.
 
 - Collect a business phone number with a country calling-code selector in self-signup and superadmin creation. Store it on the business separately from staff personal numbers.
 - Allow the business and authorized superadmin to edit it. Require valid contact details for newly completed onboarding; flag missing numbers on existing accounts for follow-up rather than fabricating data.
@@ -27,7 +27,7 @@ Authorized 21 November 2026. Implementation and required checks: [MULTIPLE_BUSIN
 - Let superadmins and existing business owners invite and manage co-owners. Managers/staff cannot promote themselves to owner.
 - Preserve at least one active owner. Make owner removal, ownership responsibility and any primary contact explicit; revoke sessions after access changes and retain the audit history.
 - Test two or more owners through both creation paths; each must see the same listings, bookings, payments, website and team. Test last-owner protection, account recovery, business isolation and venue/account transfers.
-- This batch supersedes the current single-owner behavior and its tests. Until it is implemented, the lifecycle audit records that behavior as the existing contract, not a multi-owner solution.
+- This deployed batch supersedes the old single-owner behavior and tests.
 
 ## Batch 3: superadmin “Log in as business”
 

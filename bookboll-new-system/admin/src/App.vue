@@ -346,7 +346,9 @@ const initials = computed(() => {
 </template>
 
 <style>
-.payments-preview-banner { padding: 9px 20px; background: var(--warning-bg, #fff4d6); color: var(--warning-ink, #684a12); border-bottom: 1px solid var(--warning-border, #e9d29a); font-size: 12px; text-align: center; line-height: 1.4; position: relative; z-index: 100; }
+.payments-preview-banner { padding: 9px 20px; background: var(--warning-bg, #fff4d6); color: var(--warning-ink, #684a12); border-bottom: 1px solid var(--warning-border, #e9d29a); font-size: 12px; text-align: center; line-height: 1.4; position: relative; z-index: 30; }
+#app .app .rail, #app .app .topbar { top: var(--business-support-height, 0px); }
+#app .app .rail { height: calc(100vh - var(--business-support-height, 0px)); }
 </style>
 
 
