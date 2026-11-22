@@ -42,6 +42,11 @@ export function validateMarketDraft(values) {
 }
 
 export const BOOKING_FEE_FIELDS = MARKET_GROUPS[0].fields
+export function feeExample(value, venue = false) {
+  const rate = Number(value)
+  if (value === '' || value == null || !Number.isFinite(rate) || rate < 0 || rate > 100) return '—'
+  return (venue ? 100 - rate : rate).toFixed(2)
+}
 export function feeSource(settings, key) {
   const source = settings?.sources?.[key] || 'global'
   return source === 'city' ? 'City override' : source === 'country' ? 'Country override' : 'Global default'

@@ -208,7 +208,7 @@ onMounted(() => { load(1); loadLoyalty() })
         <div v-for="field in BOOKING_FEE_FIELDS" :key="field.key"><span>{{ field.label }}</span><strong>{{ marketValue(globalSettings.effective, field.key) }}</strong><small>Global transaction fee</small></div>
         <button v-if="isSuperAdmin" class="btn btn-primary" @click="openSettings('global')"><Pencil :size="14"/> Edit booking fees</button>
       </div>
-      <p class="geo-fee-context">For new customer bookings. Country, city and listing overrides are shown below; recorded booking fees stay unchanged.</p>
+      <p class="geo-fee-context">For new customer bookings. Country and city overrides take priority; listing-specific marketplace fees and recorded booking fees stay unchanged.</p>
       <details class="geo-other-settings"><summary>Other global settings <span>Events, memberships, comeback offers, services &amp; rewards</span></summary>
       <div class="geo-policy-grid">
         <section v-for="group in MARKET_GROUPS.filter(g => g.key !== 'marketplace')" :key="group.key" class="geo-policy"><div class="geo-policy-title"><h3>{{ group.short === 'Services' ? 'Available services' : group.label }}</h3><button v-if="isSuperAdmin" class="geo-link" :aria-label="'Edit global ' + group.label.toLowerCase()" @click="openSettings('global', {}, group.key)">Edit <Pencil :size="12"/></button></div><dl><div v-for="field in group.fields" :key="field.key"><dt>{{ field.label }}<small v-if="field.automatic && globalSettings.effective[field.key] == null">{{ field.automatic }}</small></dt><dd :class="{ 'geo-off': field.boolean && !globalSettings.effective[field.key] }">{{ marketValue(globalSettings.effective, field.key) }}</dd></div></dl></section>

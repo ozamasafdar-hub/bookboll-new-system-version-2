@@ -1,8 +1,17 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { MARKET_GROUPS, marketDraft, effectiveDraft, marketValue, marketChanges, validateMarketDraft, overrideCount } from '../src/lib/marketSettings.js'
+import { MARKET_GROUPS, marketDraft, effectiveDraft, marketValue, marketChanges, validateMarketDraft, overrideCount, feeExample } from '../src/lib/marketSettings.js'
 
 const parent = {facility:20, program:15, event:10, site_free:15, site_premium:10, module_listings:true, module_classes:true, module_matchmaking:true}
+test('fee examples hide invalid drafts and preserve zero and fractional fees', () => {
+  for (const value of ['', null, 101, -1, NaN]) {
+    assert.equal(feeExample(value), '—')
+    assert.equal(feeExample(value, true), '—')
+  }
+  assert.equal(feeExample(0, true), '100.00')
+  assert.equal(feeExample(8.25), '8.25')
+  assert.equal(feeExample(8.25, true), '91.75')
+})
 test('country drafts preserve zero and disabled overrides, with website fees inherited independently of the marketplace rate', () => {
   const draft = marketDraft({overrides:{facility:12, site_free:0, module_classes:false}})
   const current = effectiveDraft(draft,parent)
