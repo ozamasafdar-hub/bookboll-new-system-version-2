@@ -20,8 +20,9 @@ function fundedBooking(string $recipient,string $method,string $surface='marketp
 }
 it('calculates a provider promo fee on the discounted price for both methods and surfaces',function($method,$surface){
     $b=fundedBooking('provider',$method,$surface);$context=PaymentFinancialContext::forNewBooking($b);
-    expect((float)$b->total_price)->toBe(90.0)->and($context['net_fee_minor'])->toBe(1800)->and((int)$b->merchant_share_minor)->toBe(7200);
-    if ($method==='deposit_remaining_on_arrival') expect((float)$b->payments()->where('type','deposit')->value('amount'))->toBe(18.0)->and((float)$b->payments()->where('type','remaining')->value('amount'))->toBe(72.0);
+    $fee = $surface === 'site' ? 1350 : 1800; // 15% website / explicit 20% listing, applied to 90.
+    expect((float)$b->total_price)->toBe(90.0)->and($context['net_fee_minor'])->toBe($fee)->and((int)$b->merchant_share_minor)->toBe(9000 - $fee);
+    if ($method==='deposit_remaining_on_arrival') expect((float)$b->payments()->where('type','deposit')->value('amount'))->toBe((float) ($fee / 100))->and((float)$b->payments()->where('type','remaining')->value('amount'))->toBe((float) ((9000 - $fee) / 100));
     else expect((float)$b->payments()->where('type','full')->value('amount'))->toBe(90.0);
 })->with([['online_payment','marketplace'],['deposit_remaining_on_arrival','marketplace'],['online_payment','site'],['deposit_remaining_on_arrival','site']]);
 it('funds a platform promo from the fee and preserves the venue amount',function($method){

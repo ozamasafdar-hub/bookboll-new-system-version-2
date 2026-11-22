@@ -12,8 +12,8 @@ class MarketSettings
     public const DEFAULTS = [
         'comeback_enabled' => true, 'comeback_discount_pct' => 10.0,
         'membership_listing_monthly' => 20,'facility' => 15.0, 'program' => 15.0, 'event' => 10.0,
-        // Null preserves the existing standard / half-standard own-site policy.
-        'site_free' => null, 'site_premium' => null,
+        // Independent booking fees; website fees never derive from listing commissions.
+        'site_free' => 15.0, 'site_premium' => 10.0,
         'module_listings' => true, 'module_classes' => true, 'module_matchmaking' => true];
     public const SITE_KEYS = ['site_free', 'site_premium'];
     private ?array $rows = null;
@@ -28,7 +28,9 @@ class MarketSettings
             $this->rates = [];
             foreach (CommissionRate::all() as $r) $this->rates[$r->country_id][$r->listing_type] = (float) $r->rate_percent;
         }
-        return $this->rows[$scope.':'.$id] ?? [];
+        // Legacy nulls mean inherit, including old automatic website settings.
+        // Keep explicit zero fees and disabled services.
+        return array_filter($this->rows[$scope.':'.$id] ?? [], fn ($value) => $value !== null);
     }
 
     public function config(?int $countryId = null, ?City $city = null): array
@@ -68,6 +70,6 @@ class MarketSettings
     {
         $city = $cityId ? City::find($cityId) : null;
         $rate = $this->config($countryId, $city)['effective'][$premium ? 'site_premium' : 'site_free'];
-        return $rate !== null ? (float) $rate : round($standard * ($premium ? CommissionPolicy::PAID_PLAN_MULTIPLIER : 1), 4);
+        return (float) $rate;
     }
 }

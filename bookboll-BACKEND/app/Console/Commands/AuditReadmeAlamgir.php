@@ -140,9 +140,11 @@ class AuditReadmeAlamgir extends Command
 
         // 6. Own-site commission policy (readmeAlamgir "Requested policy")
         $this->check(
-            'Commission: own-site halves only for a paid plan',
-            \App\Support\CommissionPolicy::PAID_PLAN_MULTIPLIER === 0.5,
-            'CommissionPolicy'
+            'Commission: independent 15% marketplace, 15% Free website, 10% Premium defaults',
+            \App\Support\MarketSettings::DEFAULTS['facility'] === 15.0
+                && \App\Support\MarketSettings::DEFAULTS['site_free'] === 15.0
+                && \App\Support\MarketSettings::DEFAULTS['site_premium'] === 10.0,
+            'MarketSettings; country/city overrides apply to new bookings'
         );
         $this->check(
             'Commission: 7.5% of 100 bills 7.50, not 7',

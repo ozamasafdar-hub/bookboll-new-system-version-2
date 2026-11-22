@@ -97,7 +97,7 @@ it('does not rewrite a confirmed booking when the plan later lapses', function (
     $business->update(['plan' => 'free']);
 
     // A NEW booking would now be charged 20%...
-    expect(Policy::effectiveRatePct($listing->fresh('venue'), Policy::CHANNEL_SITE))->toBe(20.0);
+    expect(Policy::effectiveRatePct($listing->fresh('venue'), Policy::CHANNEL_SITE))->toBe(15.0);
     // ...but the confirmed one still says what it charged.
     expect((float) $booking->fresh()->commission_effective_pct)->toBe(10.0)
         ->and(Money::toMajor($booking->fresh()->commission_fee_minor, 'QAR'))->toBe(10.0);

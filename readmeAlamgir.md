@@ -1,3 +1,7 @@
+## Batch 4: global, country and city booking fees — 22 November 2026
+
+[Fee settings contract, migration and required checks](docs/BOOKING_FEE_SETTINGS.md): global defaults are marketplace **15%**, Free website **15%**, Premium website **10%**, with independent country/city overrides. This replaces automatic half-marketplace website pricing. The approved Qatar/Pakistan marketplace country overrides reset to inheritance once. Listing-specific pricing and historical booking/payment snapshots are preserved. Run the new MySQL migration and all fee/checkout regression tests before release. The editor shows sources, reset-to-inherit controls and a fee/venue-share preview.
+
 ## Batch 3: superadmin business support — 22 November 2026
 
 [Support session contract and mandatory checks](docs/BUSINESS_SUPPORT_SESSIONS.md): Team & Users now offers Log in as business for platform superadmins. Sessions last at most 30 minutes, retain the original superadmin login, enforce business scope on the server and audit the real actor. Routine edits are allowed; payments, cancellations, account/role/password and integration changes remain outside support. Run the new MySQL migration and CI tests; never bypass the global support middleware. Batch 4 is queued in [the batch plan](docs/BUSINESS_MANAGEMENT_BATCHES.md): Premium website 10%, marketplace 15%, Free website 15%, with global/country/city settings. No fee defaults change in Batch 3.

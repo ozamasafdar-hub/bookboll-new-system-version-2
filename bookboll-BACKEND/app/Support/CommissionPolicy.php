@@ -16,7 +16,7 @@ use App\Services\BookingWalletService;
  *
  *   Marketplace booking  -> the standard rate, on every plan.
  *   Merchant's own site  -> its Free / paid Premium rate, city > country >
- *                           global. Automatic defaults retain standard / half.
+ *                           global. Defaults are 15% Free / 10% Premium.
  *
  * Two rules that look like details and are not:
  *
@@ -31,9 +31,6 @@ class CommissionPolicy
 {
     public const CHANNEL_MARKETPLACE = 'marketplace';
     public const CHANNEL_SITE        = 'site';
-
-    /** The own-site multiplier for a merchant on a paid plan. */
-    public const PAID_PLAN_MULTIPLIER = 0.5;
 
     /**
      * Whether this business's plan earns the own-site discount.

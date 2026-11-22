@@ -18,23 +18,23 @@ test('website fee previews use resolved Free and Premium rates including zero in
   assert.equal(paid.siteRest, 194)
   assert.equal(free.premiumSitePct, 3)
   assert.equal(paymentExample(200, 20, true, {site_premium: 0}).siteDep, 0)
-  assert.equal(websiteCommissionRate(24, true, {site_premium: null}), 12)
+  assert.equal(websiteCommissionRate(24, true, {site_premium: null}), 10)
 })
 
 test('marketplace and website examples identify the correct fee and balance', () => {
   const example = paymentExample(450,20,false)
   assert.equal(example.fee,90)
   assert.equal(example.share,360)
-  assert.equal(example.siteDep,90)
-  assert.equal(example.siteRest,360)
+  assert.equal(example.siteDep,67.5)
+  assert.equal(example.siteRest,382.5)
   assert.equal(example.siteDep + example.siteRest,450)
   const paid = paymentExample(450,20,true)
   assert.equal(paid.siteDep,45)
   assert.equal(paid.siteRest,405)
   assert.equal(paid.fee,90)
-  assert.equal(paymentExample(100,15,true).siteDep,7.5)
+  assert.equal(paymentExample(100,15,true).siteDep,10)
   assert.equal(paymentExample(125,20).fee,25)
-  assert.equal(paymentExample(100,0,true).siteDep,0)
+  assert.equal(paymentExample(100,0,true).siteDep,10)
   assert.equal(paymentExample('',20).isReal,false)
 })
 test('website discount follows the merchant paid subscription, never platform exemptions', () => {
@@ -46,8 +46,8 @@ test('website discount follows the merchant paid subscription, never platform ex
   assert.equal(hasPaidWebsiteDiscount(undefined),false)
   assert.equal(hasPaidWebsiteDiscount({is_premium:true,status:'active',own_site_commission_discount_eligible:false}),false)
   assert.equal(hasPaidWebsiteDiscount({own_site_commission_discount_eligible:true}),true)
-  assert.equal(websiteCommissionRate(15,true),7.5)
-  assert.equal(websiteCommissionRate(20,false),20)
+  assert.equal(websiteCommissionRate(15,true),10)
+  assert.equal(websiteCommissionRate(20,false),15)
 })
 // Exercise the listing form's actual validation and save boundary with an API
 // spy. No real account, consent or payment settings are changed by these tests.
@@ -62,7 +62,7 @@ test('listing save payload retires own-site cash and uses the plan fee with or w
   for (const paid of [false,true]) for (const connected of [false,true]) {
     const result = payload(ref({deposit_enabled:true,site_deposit_enabled:true,site_deposit_percentage:99,site_cash_enabled:true,site_online_enabled:true}),ref(paymentExample(100,15,paid)),ref(connected),15)
     assert.equal(result.site_cash_enabled,false)
-    assert.equal(result.site_deposit_percentage,paid ? 7.5 : 15)
+    assert.equal(result.site_deposit_percentage,paid ? 10 : 15)
     assert.equal(result.deposit_percentage,15)
     assert.equal(result.site_online_enabled,connected)
   }

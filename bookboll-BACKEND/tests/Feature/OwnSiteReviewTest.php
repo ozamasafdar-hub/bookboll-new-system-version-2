@@ -250,9 +250,9 @@ it('previews the deposit from the current plan, not from a stored number', funct
 
     $paid = reviewQueue($this->owner)->assertOk()->json('data.listings.0.preview');
     expect($paid['plan_eligible'])->toBeTrue();
-    expect($paid['effective_rate_pct'])->toBe(round($free['standard_rate_pct'] / 2, 4));
+    expect($paid['effective_rate_pct'])->toBe(10);
     // Cast: JSON encodes 100.0 as 100, so a float sum never matches it strictly.
-    expect($paid['deposit_due_now'] + $paid['arrival_balance'])->toBe((float) $paid['base_price']);
+    expect((float) ($paid['deposit_due_now'] + $paid['arrival_balance']))->toBe((float) $paid['base_price']);
 });
 
 it('says full online is unavailable until payouts are connected for that venue', function () {

@@ -139,7 +139,7 @@ it('lets a per-listing override beat the country rate', function () {
  *
  * They used to be the provider's own no-show protection, set by the provider,
  * with Bookboll taking nothing. They are now Bookboll's commission: the
- * standard rate, halved for a paid Premium merchant, retained by Bookboll and
+ * configured website rate for Free or eligible Premium businesses, retained by Bookboll and
  * included in the quoted price. The five tests that pinned the old rule are
  * rewritten below to pin the new one — the behaviour they described is gone on
  * purpose, so asserting it would now be asserting the bug.
@@ -152,9 +152,9 @@ it('charges Bookboll commission on the own site, not the provider stored figure'
     // The listing still carries the provider's old 10% in site_deposit_percentage.
     $listing = depositListing($this->pakistan, SNAPSHOT_15);
 
-    // On a Free plan the own-site rate IS the standard rate. The stored 10% is
+    // On a Free plan the website default is 15%. The stored 10% is
     // a record of a preview, never the authority.
-    expect(charged($listing, 100, 'site'))->toBe(50.0);
+    expect(charged($listing, 100, 'site'))->toBe(15.0);
 });
 
 it('ignores the stored own-site percentage entirely, so a merchant cannot set their own fee', function () {
@@ -168,7 +168,7 @@ it('ignores the stored own-site percentage entirely, so a merchant cannot set th
             'site_deposit_percentage' => $stored,
         ]));
 
-        expect(charged($listing, 100, 'site'))->toBe(50.0);
+        expect(charged($listing, 100, 'site'))->toBe(15.0);
     }
 });
 
@@ -187,7 +187,7 @@ it('keeps a fixed deposit amount on the marketplace, but never on the own site',
 
     // Own site: the deposit is Bookboll's fee, so a stored amount must not win —
     // otherwise a merchant sets their own commission by typing a number.
-    expect(charged($listing, 350, 'site', 3))->toBe(175.0);   // 50% of 350
+    expect(charged($listing, 350, 'site', 3))->toBe(52.5);   // Free website default: 15% of 350
 });
 
 it('rounds the deposit on the real money instead of flooring it', function () {
@@ -207,6 +207,8 @@ it('takes nothing when the commission itself is zero', function () {
     // Zero commission is a real configuration and must stay zero — never
     // silently replaced by a default rate.
     $listing = depositListing($this->pakistan, SNAPSHOT_15, ['commission_rate' => 0]);
+    \App\Models\MarketSetting::updateOrCreate(['scope' => 'country', 'scope_id' => $this->pakistan->id], ['values' => ['site_free' => 0]]);
+    app(\App\Support\MarketSettings::class)->clear();
 
     expect(charged($listing, 100, 'site'))->toBe(0.0)
         ->and(charged($listing, 100, 'marketplace'))->toBe(0.0);

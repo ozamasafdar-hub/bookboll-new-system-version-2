@@ -1,12 +1,11 @@
 export const MARKET_GROUPS = [
-  { key: 'marketplace', label: 'Marketplace fees', short: 'Marketplace', help: 'Bookings made through Bookboll. These rates are the same on Free and Premium.', fields: [
-    { key: 'facility', label: 'Venue bookings' }, { key: 'event', label: 'Event seats' },
+  { key: 'marketplace', label: 'Booking transaction fees', short: 'Booking fees', help: 'Choose the platform fee for each booking source. Premium website fees apply to active paid Premium and complimentary Premium businesses. Marketplace fees are the same on every plan.', fields: [
+    { key: 'facility', label: 'Bookboll marketplace' },
+    { key: 'site_free', label: 'Free website' },
+    { key: 'site_premium', label: 'Premium website' },
   ] },
+  { key: 'events', label: 'Event fees', short: 'Events', help: 'Platform fee on event seats booked through Bookboll.', fields: [{ key: 'event', label: 'Event seats' }] },
   { key: 'memberships', label: 'Marketplace membership listings', short: 'Membership listings', help: 'Monthly subscription per listing in USD, on every business plan. Own-website membership listings require Premium. Existing subscriptions keep their agreed price until cancelled; new subscriptions use this rate.', fields: [{ key: 'membership_listing_monthly', label: 'Monthly listing fee', currency: true }] },
-  { key: 'website', label: 'Provider website fees', short: 'Provider website', help: 'Venue bookings on a businessâ€™s own website. The same fee applies to deposits and full online payments.', fields: [
-    { key: 'site_free', label: 'Free plan', automatic: 'Match marketplace rate' },
-    { key: 'site_premium', label: 'Paid Premium plan', automatic: 'Half the marketplace rate' },
-  ] },
   { key: 'comeback', label: 'Come back to the same venue', short: 'Comeback offer', help: 'After a customer’s first completed marketplace booking at each venue, send a personal code by email and WhatsApp where they have opted in. Valid for 7 days, once, at that venue on the marketplace. The discount comes only from Bookboll’s fee and is capped at that fee; the venue’s share stays unchanged.', fields: [
     { key: 'comeback_enabled', label: 'Send comeback offers', boolean: true },
     { key: 'comeback_discount_pct', label: 'Booking discount' },
@@ -22,7 +21,7 @@ export function effectiveDraft(values, parent) { return Object.fromEntries(MARKE
 export function marketValue(effective, key) {
   if (key === 'membership_listing_monthly') return `USD ${Number(effective[key] ?? 20).toFixed(2)}`
   if (key.startsWith('module_') || key === 'comeback_enabled') return effective[key] ? 'Enabled' : 'Disabled'
-  const rate = effective[key] ?? Number(effective.facility) * (key === 'site_premium' ? .5 : 1)
+  const rate = effective[key] ?? (key === 'site_premium' ? 10 : 15)
   return `${Number(Number(rate).toFixed(4))}%`
 }
 export function marketChanges(initial, draft) {
@@ -40,4 +39,10 @@ export function validateMarketDraft(values) {
     if (n !== null && (n === '' || !Number.isFinite(Number(n)) || Number(n) < 0 || Number(n) > 100)) return { key: f.key, message: `${f.label}: enter a percentage from 0 to 100.` }
   }
   return null
+}
+
+export const BOOKING_FEE_FIELDS = MARKET_GROUPS[0].fields
+export function feeSource(settings, key) {
+  const source = settings?.sources?.[key] || 'global'
+  return source === 'city' ? 'City override' : source === 'country' ? 'Country override' : 'Global default'
 }

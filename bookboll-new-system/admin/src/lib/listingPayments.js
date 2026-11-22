@@ -4,9 +4,8 @@ export function hasPaidWebsiteDiscount(plan) {
   return plan?.is_premium === true && plan?.status === 'active' && !plan?.is_platform
 }
 export function websiteCommissionRate(commission, paidPlan = false, websiteFees = {}) {
-  const rate = Math.max(0, Math.min(100, Number(commission) || 0))
   const configured = websiteFees[paidPlan ? 'site_premium' : 'site_free']
-  return configured != null ? Number(configured) : rate * (paidPlan ? 0.5 : 1)
+  return configured != null ? Number(configured) : (paidPlan ? 10 : 15)
 }
 export function paymentExample(price, commission, paidPlan = false, websiteFees = {}) {
   const isReal = Number.isFinite(Number(price)) && Number(price) > 0

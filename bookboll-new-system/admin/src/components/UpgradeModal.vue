@@ -141,7 +141,7 @@ function close() { clearPromo(); step.value = 'gate'; upgradeModal.value = { ope
               <li class="everything">Everything in Free, plus:</li>
               <li v-for="ft in PREMIUM_FEATURES.slice(0, 6)" :key="ft.key"><Check :size="13" /> {{ ft.label }}</li>
             </ul>
-            <p class="ug-fee-note">Website commission is halved during your paid subscription. Marketplace rates stay the same.</p>
+            <p class="ug-fee-note">Premium website bookings default to a 10% platform fee; Free websites and marketplace bookings default to 15%. Country, city and marketplace listing overrides may apply.</p>
             <button class="ug-plan-btn" @click="step = 'checkout'"><Sparkles :size="14" /> Choose Premium</button>
           </div>
         </div>

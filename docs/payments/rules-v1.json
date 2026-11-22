@@ -404,13 +404,36 @@
     {
       "id": "P27_VERIFIED_PROVIDER_CONNECT",
       "rule": "Provider full-online and balance payments require an owner-authorized, mode-matched Stripe connection with current capabilities. Each checkout snapshots the sum of its frozen net platform fees, exact business recipient, amount and currency; settlement verifies these against Stripe. Deposits stay on Bookboll; previously paid deposits are not charged as fees again; staff bookings have zero fee. Destination charges never generate a second withdrawable provider-wallet credit. Legacy wallet flags are not connection evidence.",
-      "implementation": ["bookboll-BACKEND/app/Services/ProviderStripeService.php", "bookboll-BACKEND/app/Services/StripeService.php"],
+      "implementation": [
+        "bookboll-BACKEND/app/Services/ProviderStripeService.php",
+        "bookboll-BACKEND/app/Services/StripeService.php"
+      ],
       "production_acceptance": "Record Stripe test-mode OAuth, capability restrictions, two-slot fee split, remaining balance after deposit, duplicate callback/webhook, disconnect and destination refund/reversal evidence. Verify business isolation and that no duplicate wallet credit is created.",
       "tests": [
         "bookboll-BACKEND/tests/Feature/ProviderStripeConnectionTest.php",
         "bookboll-BACKEND/tests/Feature/StripeMultiBookingSettlementTest.php",
         "bookboll-BACKEND/tests/Feature/StripeRefundGatewayTest.php",
         "bookboll-BACKEND/tests/Feature/BusinessSetupAccessTest.php"
+      ]
+    },
+    {
+      "id": "P28_INDEPENDENT_MARKET_FEES",
+      "rule": "New customer bookings use separate marketplace, Free website and eligible Premium website fees. Defaults are 15%, 15%, 10%; city overrides country overrides global. Null inherits and zero is explicit. Paid and complimentary Premium qualify. Preserve listing-specific marketplace pricing, fixed deposits, staff zero fees, promo funding and all saved historical fee snapshots. The approved QA/PK country marketplace reset is one-time only.",
+      "production_acceptance": "Run the MySQL Batch 4 migration and geography, quote, plan, promotion and snapshot suites. Verify defaults, country/city overrides/reset, country-admin jurisdiction and provider denial, deposit/full-online parity, and idempotent rollout preserving subsequent edits.",
+      "implementation": [
+        "bookboll-BACKEND/app/Support/MarketSettings.php",
+        "bookboll-BACKEND/app/Support/CommissionPolicy.php",
+        "bookboll-BACKEND/app/Services/GeographyService.php",
+        "bookboll-BACKEND/database/migrations/2026_11_22_000002_set_independent_booking_fee_defaults.php",
+        "bookboll-new-system/admin/src/pages/Countries.vue"
+      ],
+      "tests": [
+        "bookboll-BACKEND/tests/Feature/GeographySettingsTest.php",
+        "bookboll-BACKEND/tests/Feature/OwnSiteCommissionPolicyTest.php",
+        "bookboll-BACKEND/tests/Feature/DepositFollowsSurfaceAndCommissionTest.php",
+        "bookboll-BACKEND/tests/Feature/CommissionSnapshotAndLedgerTest.php",
+        "bookboll-BACKEND/tests/Feature/BookingPromotionFundingTest.php",
+        "bookboll-new-system/admin/tests/marketSettings.test.js"
       ]
     }
   ],

@@ -40,9 +40,9 @@ Authorized 22 November 2026, including routine business edits. Implementation an
 - Enforce the authorized support policy on the server; do not silently inherit unrestricted owner powers.
 - Test authorization, cross-business isolation, exit/expiry, browser refresh and audit attribution from both dashboard perspectives.
 
-## Batch 4: countries, cities and transaction fees — queued
+## Batch 4: countries, cities and transaction fees
 
-Requested 22 November 2026. Plan only in Batch 3; implement when the user starts Batch 4.
+Authorized 22 November 2026. Implementation and release checks: [BOOKING_FEE_SETTINGS.md](BOOKING_FEE_SETTINGS.md). The user also explicitly approved resetting Qatar and Pakistan's marketplace country overrides to the new global default.
 
 - Make global defaults and each country's effective settings easy to scan, edit and supervise; preserve country/city override inheritance with clear source labels and reset-to-inherit controls.
 - Set the requested global defaults: **Premium provider website 10%**, **Bookboll marketplace 15%**, **Free provider website 15%**. All countries/cities follow these unless explicitly overridden.

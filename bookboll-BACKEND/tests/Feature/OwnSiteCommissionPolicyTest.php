@@ -64,20 +64,20 @@ function paidPremium(float $standardPct): array
     return listingAt($standardPct, ['plan' => 'premium'], ['status' => 'active']);
 }
 
-it('charges the standard rate on a Free own-site booking, and keeps the deposit', function () {
+it('charges the independent Free website rate on a booking, and keeps the deposit', function () {
     [$listing] = listingAt(20, ['plan' => 'free']);
 
     $q = Policy::quote($listing, Policy::CHANNEL_SITE, Money::toMinor(100, 'QAR'), 'QAR', 'deposit');
 
-    // Deposit 20 retained by Bookboll, 80 on arrival.
-    expect($q['effective_rate_pct'])->toBe(20.0)
+    // Deposit 15 retained by Bookboll, 85 on arrival.
+    expect($q['effective_rate_pct'])->toBe(15.0)
         ->and($q['plan_eligible'])->toBeFalse()
-        ->and(Money::toMajor($q['fee_minor'], 'QAR'))->toBe(20.0)
-        ->and(Money::toMajor($q['due_now_minor'], 'QAR'))->toBe(20.0)
-        ->and(Money::toMajor($q['arrival_balance_minor'], 'QAR'))->toBe(80.0);
+        ->and(Money::toMajor($q['fee_minor'], 'QAR'))->toBe(15.0)
+        ->and(Money::toMajor($q['due_now_minor'], 'QAR'))->toBe(15.0)
+        ->and(Money::toMajor($q['arrival_balance_minor'], 'QAR'))->toBe(85.0);
 });
 
-it('halves the own-site rate for a paid Premium merchant', function () {
+it('uses the Premium website rate for a paid Premium merchant', function () {
     [$listing] = paidPremium(20);
 
     $q = Policy::quote($listing, Policy::CHANNEL_SITE, Money::toMinor(100, 'QAR'), 'QAR', 'deposit');
@@ -89,8 +89,10 @@ it('halves the own-site rate for a paid Premium merchant', function () {
         ->and(Money::toMajor($q['merchant_share_minor'], 'QAR'))->toBe(90.0);
 });
 
-it('charges 7.50 on a 15% standard rate halved, not 7', function () {
+it('preserves fractional configured website fees in minor units', function () {
     [$listing] = paidPremium(15);
+    \App\Models\MarketSetting::where('scope', 'global')->update(['values' => ['site_premium' => 7.5]]);
+    app(\App\Support\MarketSettings::class)->clear();
 
     $q = Policy::quote($listing, Policy::CHANNEL_SITE, Money::toMinor(100, 'QAR'), 'QAR', 'deposit');
 
@@ -117,7 +119,7 @@ it('refuses the discount to a trial, a past-due plan and a free plan', function 
     [$plan, $subAttrs] = $case;
     [$listing] = listingAt(20, ['plan' => $plan], $subAttrs);
 
-    expect(Policy::effectiveRatePct($listing, Policy::CHANNEL_SITE))->toBe(20.0);
+    expect(Policy::effectiveRatePct($listing, Policy::CHANNEL_SITE))->toBe(15.0);
 })->with([
     'legacy trial'      => [['premium', ['status' => 'trialing', 'trial_ends_at' => now()->addDays(10)]]],
     'active but in trial window' => [['premium', ['status' => 'active', 'trial_ends_at' => now()->addDays(5)]]],
@@ -134,7 +136,7 @@ it('keeps the discount for a cancellation scheduled at period end, and drops it 
 
     [$ended] = listingAt(20, ['plan' => 'premium'],
         ['status' => 'active', 'cancel_at_period_end' => true, 'current_period_end' => now()->subDay()]);
-    expect(Policy::effectiveRatePct($ended, Policy::CHANNEL_SITE))->toBe(20.0);
+    expect(Policy::effectiveRatePct($ended, Policy::CHANNEL_SITE))->toBe(15.0);
 });
 
 it('charges the whole price on full online, and credits only the merchant share', function () {
@@ -150,12 +152,15 @@ it('charges the whole price on full online, and credits only the merchant share'
 
 it('reconciles fee, share and arrival balance against the total, at any rate', function (array $case) {
     [$total, $pct, $method] = $case;
-    [$listing] = paidPremium($pct * 2);   // halved back to $pct on own site
+    [$listing] = paidPremium(20);
+    \App\Models\MarketSetting::where('scope', 'global')->update(['values' => ['site_premium' => $pct]]);
+    app(\App\Support\MarketSettings::class)->clear();
 
     $minor = Money::toMinor($total, 'QAR');
     $q = Policy::quote($listing, Policy::CHANNEL_SITE, $minor, 'QAR', $method);
 
-    expect($q['fee_minor'] + $q['merchant_share_minor'])->toBe($minor)
+    expect($q['effective_rate_pct'])->toBe((float) $pct)
+        ->and($q['fee_minor'] + $q['merchant_share_minor'])->toBe($minor)
         ->and($q['due_now_minor'] + $q['arrival_balance_minor'])->toBe($minor)
         ->and($q['fee_minor'])->toBeGreaterThanOrEqual(0)
         ->and($q['arrival_balance_minor'])->toBeGreaterThanOrEqual(0);
