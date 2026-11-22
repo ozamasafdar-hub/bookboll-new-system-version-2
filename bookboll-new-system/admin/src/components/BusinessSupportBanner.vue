@@ -8,7 +8,7 @@ const minutes = computed(() => Math.max(0, Math.ceil((Date.parse(session?.expire
 let timer, resize
 async function leave() {
   busy.value = true; error.value = ''
-  const res = await apiFetch('/business-support/exit', { method:'POST' })
+  const res = await apiFetch('/business-support/exit', { method:'POST', timeout:20000 })
   if (res.success || res.status === 401) returnToSuperadmin()
   else { error.value = 'Could not end the session. Please retry.'; busy.value = false }
 }

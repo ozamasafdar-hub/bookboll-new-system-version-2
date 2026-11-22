@@ -8,13 +8,13 @@ const emit = defineEmits(['close'])
 const busy = ref(false), error = ref('')
 async function start(business) {
   busy.value = true; error.value = ''
-  const res = await apiFetch(`/admin/businesses/${business.business_id}/support-session`, { method:'POST' })
+  const res = await apiFetch(`/admin/businesses/${business.business_id}/support-session`, { method:'POST', timeout:20000 })
   if (!res.success) { error.value = res.message; busy.value = false; return }
   try {
     saveSupportSession(res.data)
     window.location.assign('/admin')
   } catch {
-    await apiFetch('/business-support/exit', { method:'POST', token:res.data.token })
+    await apiFetch('/business-support/exit', { method:'POST', token:res.data.token, timeout:20000 })
     error.value = 'Allow session storage in this browser before starting support.'; busy.value = false
   }
 }

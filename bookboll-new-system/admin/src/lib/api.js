@@ -37,10 +37,10 @@ export function clearAdminToken() {
 
 /**
  * @param {string} path - Absolute path under the API base, e.g. `/login`
- * @param {{ method?: string, body?: object|null, token?: string|null, query?: Record<string, string|number|undefined|null> }} [opts]
+ * @param {{ method?: string, body?: object|null, token?: string|null, timeout?: number, query?: Record<string, string|number|undefined|null> }} [opts]
  * @returns {Promise<{ success: boolean, message?: string, data?: any, errors?: any, code?: number, status: number }>}
  */
-export async function apiFetch(path, { method = 'GET', body = null, token = null, query = null } = {}) {
+export async function apiFetch(path, { method = 'GET', body = null, token = null, query = null, timeout = 0 } = {}) {
   const headers = {}
   const bearer = token !== null && token !== undefined ? token : getAdminToken()
   if (bearer) headers.Authorization = `Bearer ${bearer}`
@@ -49,6 +49,7 @@ export async function apiFetch(path, { method = 'GET', body = null, token = null
     const res = await client.request({
       url: path.startsWith('/') ? path : `/${path}`,
       method,
+      timeout,
       data: body ?? undefined,
       params: query || undefined,
       headers,

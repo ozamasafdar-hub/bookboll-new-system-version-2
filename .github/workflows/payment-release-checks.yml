@@ -65,7 +65,7 @@ jobs:
         working-directory: bookboll-new-system/admin
       - run: node --test tests/currentUser.test.js
         working-directory: bookboll-new-system/admin
-      - run: node --test tests/businessSupport.test.js tests/sessionExpiry.test.js
+      - run: node --test tests/businessSupport.test.js tests/sessionExpiry.test.js tests/apiSessionBoundary.test.js
         working-directory: bookboll-new-system/admin
       - run: node --test tests/businessPhone.test.js tests/businessSetup.test.js tests/businessCreation.test.js tests/providerSettings.test.js
         working-directory: bookboll-new-system/admin

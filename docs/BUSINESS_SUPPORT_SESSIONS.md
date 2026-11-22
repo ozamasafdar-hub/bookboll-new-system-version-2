@@ -22,6 +22,8 @@ An active owner is required. Active/approved businesses and pending businesses b
 
 `bb_admin_token` remains in local storage. The separate support token and display context live in this tab's `sessionStorage` only. Full document reloads clear account-specific caches on entry/return. Corrupt support storage never falls back to the administrator token. A support 401 returns to the original session; it does not delete that session. Late responses from an old bearer cannot sign out the newly active account. Signing out during support returns to superadmin. A change to the original login in another tab ends this tab's support context. Real-time personal channels are disabled during support.
 
+Entry/exit requests time out after 20 seconds and permit retry after a lost connection. A failed exit keeps the business context until the server confirms revocation or rejects the expired token. A reload can recover a request interrupted by deployment. `apiSessionBoundary.test.js` verifies timeout/error handling, stale-response protection and the bearer actually sent; it is also required in CI.
+
 ## Required verification
 
 CI runs `BusinessSupportSessionTest.php` against MySQL, plus the ownership/account/preview regression suites and frontend `businessSupport.test.js` / `sessionExpiry.test.js`. Coverage includes role rejection, scoped reads/writes, actual staff booking creation, audit attribution, source/owner/membership/business revocation, expiry, cookie precedence, copied-account isolation, forbidden financial/security paths and independent original login.

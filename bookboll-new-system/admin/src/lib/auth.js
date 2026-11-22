@@ -220,7 +220,7 @@ function resetError(res, fallback) {
 
 export async function signOut() {
   if (supportSession()) {
-    const res = await apiFetch('/business-support/exit', { method:'POST' })
+    const res = await apiFetch('/business-support/exit', { method:'POST', timeout:20000 })
     if (res.success || res.status===401) returnToSuperadmin()
     return
   }
