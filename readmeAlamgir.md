@@ -1,6 +1,10 @@
+## Batch 3: superadmin business support — 22 November 2026
+
+[Support session contract and mandatory checks](docs/BUSINESS_SUPPORT_SESSIONS.md): Team & Users now offers Log in as business for platform superadmins. Sessions last at most 30 minutes, retain the original superadmin login, enforce business scope on the server and audit the real actor. Routine edits are allowed; payments, cancellations, account/role/password and integration changes remain outside support. Run the new MySQL migration and CI tests; never bypass the global support middleware. Batch 4 is queued in [the batch plan](docs/BUSINESS_MANAGEMENT_BATCHES.md): Premium website 10%, marketplace 15%, Free website 15%, with global/country/city settings. No fee defaults change in Batch 3.
+
 ## Batch 2: multiple business owners — 21 November 2026
 
-See [the multi-owner contract, MySQL migration and required tests](docs/MULTIPLE_BUSINESS_OWNERS.md). Superadmins and owners can add co-owners. Preserve the last active owner and the stable legacy business data key; do not restore the old one-owner index. Batch 3 remains queued.
+See [the multi-owner contract, MySQL migration and required tests](docs/MULTIPLE_BUSINESS_OWNERS.md). Superadmins and owners can add co-owners. Preserve the last active owner and the stable legacy business data key; do not restore the old one-owner index. Batch 2 is deployed.
 
 ## Business phone contacts — Batch 1, 21 November 2026
 

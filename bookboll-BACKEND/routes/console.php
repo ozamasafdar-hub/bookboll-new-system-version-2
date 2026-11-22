@@ -52,3 +52,9 @@ Schedule::command('uploads:prune')->dailyAt('03:10');
 // Contract uploads nobody attached to an agreement. Only unlinked rows are
 // ever considered, so a contract in use is never at risk.
 Schedule::command('contracts:prune-temporary')->dailyAt('03:25');
+
+// A closed browser must not leave an open support audit/session indefinitely.
+Schedule::call(function () {
+    \App\Models\BusinessSupportSession::whereNull('ended_at')->where('expires_at', '<=', now())
+        ->eachById(fn ($session) => $session->finish('expired'));
+})->everyMinute()->name('business-support-expiry')->withoutOverlapping();

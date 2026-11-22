@@ -120,6 +120,9 @@ Route::prefix('business')->name('business.')->group(function () {
 
 Route::middleware(['auth:sanctum'])->group(function () {
 
+    Route::post('admin/businesses/{business}/support-session', [\App\Http\Controllers\Admin\BusinessSupportController::class, 'store'])->middleware('throttle:20,1');
+    Route::post('business-support/exit', [\App\Http\Controllers\Admin\BusinessSupportController::class, 'destroy']);
+
     Route::post('logout', [UserController::class, 'logout'])->name('api.logout');
     Route::post('admin-app/delete-account', [UserController::class, 'deleteAdminAppAccount'])->name('admin-app.delete-account');
     Route::get('me', [UserController::class, 'me'])->name('me');

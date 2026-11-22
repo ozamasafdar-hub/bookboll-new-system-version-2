@@ -703,6 +703,7 @@ class UserService
         $permissionNames = $user->getAllPermissions()->pluck('name')->values()->all();
 
         $response = [
+            'support_session' => \App\Support\BusinessSupport::session()?->details(),
             'user'            => $user,
             'roles'           => $roles,
             'permissions'     => $permissionNames,

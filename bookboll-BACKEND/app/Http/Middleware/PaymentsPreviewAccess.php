@@ -55,7 +55,8 @@ class PaymentsPreviewAccess
         if (!$user && !in_array($request->method(), ['GET','HEAD','OPTIONS'], true)) {
             return response()->json(['success'=>false,'message'=>'Sign in with a workspace account to save changes.'],401);
         }
-        if ($user && !$user->workspace_access && $user->email !== config('preview.admin_email')) {
+        $workspaceActor = $request->attributes->get('business_support_actor') ?? $user;
+        if ($workspaceActor && !$workspaceActor->workspace_access && $workspaceActor->email !== config('preview.admin_email')) {
             return response()->json(['success'=>false,'message'=>'This copied account is not enabled in the workspace.'],403);
         }
         // Public marketplace reads remain public; protected routes keep their

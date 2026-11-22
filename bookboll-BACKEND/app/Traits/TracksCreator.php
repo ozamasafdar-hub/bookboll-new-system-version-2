@@ -9,7 +9,7 @@ trait TracksCreator
     {
         static::creating(function ($model) {
             if (auth()->check() && empty($model->created_by)) {
-                $model->created_by = auth()->id();
+                $model->created_by = \App\Support\BusinessSupport::actorId();
             }
         });
     }

@@ -6,6 +6,7 @@
 import Echo from 'laravel-echo'
 import Pusher from 'pusher-js'
 import { ADMIN_TOKEN_KEY, getAdminToken } from './api.js'
+import { supportSession } from './businessSupport.js'
 
 let echoInstance = null
 
@@ -35,6 +36,7 @@ async function parseBroadcastAuthResponse(res) {
 }
 
 export function getEcho() {
+  if (supportSession()) return null
   const key = import.meta.env.VITE_PUSHER_APP_KEY
   const cluster = import.meta.env.VITE_PUSHER_APP_CLUSTER || 'mt1'
   if (!key) return null

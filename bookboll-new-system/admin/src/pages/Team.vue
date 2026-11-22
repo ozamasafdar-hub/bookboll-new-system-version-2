@@ -1,4 +1,5 @@
 <script setup>
+import BusinessSupportDialog from '../components/BusinessSupportDialog.vue'
 import AccountSecurity from '../components/AccountSecurity.vue'
 import BusinessPlanManagement from '../components/BusinessPlanManagement.vue'
 import '../styles/management.css'
@@ -232,6 +233,7 @@ const newBusiness = computed(() => !editing.value && adminForm.value.role === 'p
 const businessErrors = computed(() => businessFormErrors(adminForm.value))
 const showBusinessSetup = ref(false)
 const inviteBusiness = ref(null)
+const supportBusiness = ref(null)
 const inviteRoles = computed(() => {
   const inBusiness = adminForm.value.owner_user_id || editing.value?.business_id || editing.value?.role === 'provider_admin'
   return assignableRoles.value.filter(r => inBusiness ? PROVIDER_ROLES.includes(r) : PLATFORM_ROLES.includes(r) || (editing.value && r === editing.value.role))
@@ -1037,7 +1039,7 @@ function avatarColor(id) {
         <div v-if="loadingDirectory && !providerGroups.length" class="directory-loading"><RefreshCw :size="22" /><span>Loading your directory…</span></div>
         <div v-else-if="!filteredProviderGroups.length && !loadError" class="workspace-empty"><strong>No businesses match these filters.</strong><p>Try another name or clear your filters.</p><button class="btn btn-secondary" @click="clearBusinessFilters">Clear filters</button></div>
         <BusinessTeamCard v-for="g in paginatedBusinesses" :key="g.provider.business_id" :group="g" :expanded="expandedBusinesses.has(g.provider.business_id)" :superadmin="isSuperAdmin" :current-user-id="currentUser?.id" :website="g.provider.brand_subdomain || g.provider.username ? websiteLink(g.provider) : ''" :country="countryName(g.provider.country_id)" :premium="isPremiumPlan(g.provider)" :scope-label="scopeSummary" :last-seen="timeAgo"
-          @toggle="toggleBusiness(g.provider.business_id)" @invite="inviteBusiness=g.provider" @assign="assignmentBusiness=g.provider" @edit="openAdminEdit" @security="securityAccount=$event" @remove="removeAdmin" @plan="planBusiness=g.provider" @contact="contactBusiness=g.provider" @copy-website="copyWebsite(g.provider)" @copy-phone="copyBusinessPhone(g.provider.phone)" />
+          @toggle="toggleBusiness(g.provider.business_id)" @support="supportBusiness=g.provider" @invite="inviteBusiness=g.provider" @assign="assignmentBusiness=g.provider" @edit="openAdminEdit" @security="securityAccount=$event" @remove="removeAdmin" @plan="planBusiness=g.provider" @contact="contactBusiness=g.provider" @copy-website="copyWebsite(g.provider)" @copy-phone="copyBusinessPhone(g.provider.phone)" />
         <PaginationBar v-if="filteredProviderGroups.length" :page="businessPage" :per-page="businessPerPage" :total="filteredProviderGroups.length" :total-pages="businessTotalPages" :visible-pages="businessVisiblePages" @goTo="businessGoTo" @update:perPage="businessPerPage=$event" />
       </section>
 
@@ -1046,6 +1048,7 @@ function avatarColor(id) {
       <BusinessContact v-if="contactBusiness && isSuperAdmin" :business="contactBusiness" :default-iso="contactCountryIso(contactBusiness)" @close="contactBusiness=null" @saved="load" />
       <BusinessSetup v-if="showBusinessSetup" :countries="countries.filter(c => !jurisdictionCountryIds || jurisdictionCountryIds.has(c.id) || jurisdictionCountryIds.has(String(c.id)))" @close="showBusinessSetup=false" @created="createdBusiness" @invite="inviteBusiness=$event" @assign="assignNewBusiness" />
       <BusinessInvite v-if="inviteBusiness" :business="inviteBusiness" @close="inviteBusiness=null" @saved="load" />
+      <BusinessSupportDialog v-if="supportBusiness && isSuperAdmin" :business="supportBusiness" @close="supportBusiness=null" />
       <BusinessAssignment v-if="assignmentBusiness" :business="assignmentBusiness" @close="assignmentBusiness=null" @assigned="assignmentSaved"/>
       <!-- Admin modal -->
       <div v-if="showModal" class="modal-backdrop" @click.self="requestCloseTeamModal">

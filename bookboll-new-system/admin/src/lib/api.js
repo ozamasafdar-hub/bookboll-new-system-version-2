@@ -4,6 +4,7 @@
  */
 import axios from 'axios'
 import { endExpiredSession, isSessionExpired } from './sessionExpiry.js'
+import { supportSession } from './businessSupport.js'
 
 export const ADMIN_TOKEN_KEY = 'bb_admin_token'
 
@@ -18,6 +19,8 @@ const client = axios.create({
 })
 
 export function getAdminToken() {
+  const support = supportSession()
+  if (support) return support.token || 'invalid-support-session'
   try { return localStorage.getItem(ADMIN_TOKEN_KEY) || '' } catch { return '' }
 }
 
@@ -58,7 +61,7 @@ export async function apiFetch(path, { method = 'GET', body = null, token = null
     // The session was revoked while this tab was open. Every caller still gets
     // its normal {success:false} answer — the redirect is already on its way,
     // and a half-finished screen must not throw on top of it.
-    if (isSessionExpired(res.status, bearer)) {
+    if (isSessionExpired(res.status, bearer) && bearer === getAdminToken()) {
       endExpiredSession()
     }
 

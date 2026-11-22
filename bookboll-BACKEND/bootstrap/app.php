@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ['prefix' => 'api', 'middleware' => ['auth:sanctum']],
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->prepend(\App\Http\Middleware\BusinessSupportAccess::class);
         $middleware->api(prepend: [\App\Http\Middleware\PaymentsPreviewAccess::class]);
         $middleware->api(append: [\App\Http\Middleware\RequirePaymentRelease::class, \App\Http\Middleware\RetiredMembershipOperations::class]);
         $middleware->web(append: [\App\Http\Middleware\RequirePaymentRelease::class, \App\Http\Middleware\RetiredMembershipOperations::class]);

@@ -12,6 +12,7 @@ import { ref, computed } from 'vue'
 import { apiFetch, getAdminToken, setAdminToken, clearAdminToken } from './api.js'
 import { disconnectEcho } from './echo.js'
 import { resetPlan } from './premium.js'
+import { supportSession, returnToSuperadmin, clearSupportSession } from './businessSupport.js'
 import {
   applyLaravelUser,
   clearLaravelUser,
@@ -83,6 +84,7 @@ function isPreviewRender() {
 export async function initAuth() {
   if (isPreviewRender()) { authLoading.value = false; return }
 
+  const wasSupport = Boolean(supportSession())
   const token = getAdminToken()
   if (!token) {
     clearSession()
@@ -92,6 +94,7 @@ export async function initAuth() {
 
   const res = await apiFetch('/me', { method: 'GET', token })
   if (!res.success || res.status === 401) {
+    if (wasSupport) { returnToSuperadmin('ended'); authLoading.value=false; return }
     clearSession()
     authLoading.value = false
     return
@@ -132,6 +135,7 @@ export async function signIn(email, password) {
     return false
   }
 
+  clearSupportSession()
   setAdminToken(token)
   if (!applySession(res.data)) {
     authError.value = PORTAL_REJECT_MSG
@@ -215,6 +219,11 @@ function resetError(res, fallback) {
 }
 
 export async function signOut() {
+  if (supportSession()) {
+    const res = await apiFetch('/business-support/exit', { method:'POST' })
+    if (res.success || res.status===401) returnToSuperadmin()
+    return
+  }
   const token = getAdminToken()
   if (token) {
     try { await apiFetch('/logout', { method: 'POST', token }) } catch { /* ignore */ }

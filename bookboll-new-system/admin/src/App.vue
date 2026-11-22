@@ -1,5 +1,7 @@
 <script setup>
 import CookieConsent from './components/CookieConsent.vue'
+import BusinessSupportBanner from './components/BusinessSupportBanner.vue'
+import { supportSession } from './lib/businessSupport.js'
 import { ref, computed, onMounted, onUnmounted, nextTick, watch, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { canAccessPage } from './lib/permissions.js'
@@ -99,6 +101,7 @@ const { currentUser, activeUserId, allUsers, switchableUsers, role, isSuperAdmin
 watch(authUser, (u) => { if (u && !needsAccountChoice.value) loadUserContext() }, { immediate: true })
 
 async function handleSignOut() {
+  if (supportSession()) { await signOut(); return }
   await signOut()
   router.replace('/login')
 }
@@ -204,6 +207,7 @@ const initials = computed(() => {
 </script>
 
 <template>
+  <BusinessSupportBanner />
   <div v-if="paymentsPreview" class="payments-preview-banner" role="status">{{ railwayWorkspace ? 'Railway workspace · Changes are saved to the shared database copy · Real payments and messages disabled' : 'Payments preview · Database copy from 4 Nov 2026 · Read-only · No live payments' }}</div>
   <!-- Auth pages (login / callback) render bare -->
   <router-view v-if="area === 'auth'" />

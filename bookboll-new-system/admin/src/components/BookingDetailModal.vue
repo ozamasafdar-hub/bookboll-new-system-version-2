@@ -1,4 +1,6 @@
 <script setup>
+import { supportSession } from '../lib/businessSupport.js'
+const inBusinessSupport = Boolean(supportSession())
 import { ref, computed, watch } from 'vue'
 import { fetchBookingCrm, fetchBookingOccupancy, fetchBookingLookups, updateDashboardBooking, registerCustomer, collectDashboardPayment, generateDashboardPaymentLink, firstError } from '../lib/bookings.js'
 import { X, MapPin, Calendar, Clock, User, Mail, Phone, Star, CreditCard, FileText, PhoneCall, Receipt, Send, Tag, Check, CircleAlert as AlertCircle, Loader, Pencil, StickyNote, ChevronRight, ChevronDown, Plus } from 'lucide-vue-next'
@@ -181,7 +183,7 @@ function editIsBooked(slot) {
   return slotConflicts(slot, editExistingBookings.value, buffer)
 }
 
-const editTotal = computed(() => editSelectedSlot.value ? editResolvePrice(editSelectedSlot.value.start_time) : 0)
+const editTotal = computed(() => inBusinessSupport ? Number(booking.value?.total || 0) : (editSelectedSlot.value ? editResolvePrice(editSelectedSlot.value.start_time) : 0))
 
 // No invented currency anywhere on this screen: an amount whose currency cannot
 // be resolved prints bare rather than claiming to be dirhams.
@@ -279,9 +281,8 @@ async function saveEdit() {
     booking_date:   editDate.value,
     start_time:     editSelectedSlot.value.start_time,
     end_time:       editSelectedSlot.value.end_time,
-    total:          editTotal.value,
+    ...(inBusinessSupport ? {} : { total:editTotal.value, payment_method:editPaymentMethod.value }),
     booking_status: editBookingStatus.value,
-    payment_method: editPaymentMethod.value,
     notes:          editNotes.value.trim() || '',
   })
   if (!upd.success) {
@@ -1369,7 +1370,7 @@ function sendConfirmationEmail() {
                 <select v-model="editBookingStatus" class="bdm-edit-select">
                   <option value="confirmed">Confirmed</option>
                   <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
+                  <option v-if="!inBusinessSupport" value="cancelled">Cancelled</option>
                   <option value="no_show">No Show</option>
                   <option value="pending">Pending</option>
                 </select>
@@ -1380,7 +1381,7 @@ function sendConfirmationEmail() {
             <div class="bdm-edit-field">
               <label class="bdm-edit-label">Payment Method <span class="bdm-req">*</span></label>
               <div class="bdm-edit-select-wrap">
-                <select v-model="editPaymentMethod" class="bdm-edit-select">
+                <select v-model="editPaymentMethod" :disabled="inBusinessSupport" class="bdm-edit-select">
                   <option value="" disabled>Select payment method</option>
                   <option value="payment_skipped">Skip payment</option>
                   <option value="cash">Pay on Arrival</option>

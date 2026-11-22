@@ -31,12 +31,25 @@ Authorized 21 November 2026. Implementation and required checks: [MULTIPLE_BUSIN
 
 ## Batch 3: superadmin “Log in as business”
 
+Authorized 22 November 2026, including routine business edits. Implementation and required checks: [BUSINESS_SUPPORT_SESSIONS.md](BUSINESS_SUPPORT_SESSIONS.md). Refunds/payment changes, cancellations, gateways, passwords and team roles stay in the normal superadmin workspace.
+
 - Add an easy action in the business directory and detail view for platform superadmins only.
 - Use an explicit, short-lived support session scoped to the selected business, without revealing or resetting the owner's password.
 - Show a persistent banner naming the business and an Exit action that returns to the original superadmin session.
 - Audit start, end and actions with both the real superadmin and effective business identity. Clearly handle expiry, inactive businesses, revoked access and multiple browser tabs.
-- Decide the access policy for money movement and account-security changes before implementation; do not silently inherit unrestricted owner powers.
+- Enforce the authorized support policy on the server; do not silently inherit unrestricted owner powers.
 - Test authorization, cross-business isolation, exit/expiry, browser refresh and audit attribution from both dashboard perspectives.
+
+## Batch 4: countries, cities and transaction fees — queued
+
+Requested 22 November 2026. Plan only in Batch 3; implement when the user starts Batch 4.
+
+- Make global defaults and each country's effective settings easy to scan, edit and supervise; preserve country/city override inheritance with clear source labels and reset-to-inherit controls.
+- Set the requested global defaults: **Premium provider website 10%**, **Bookboll marketplace 15%**, **Free provider website 15%**. All countries/cities follow these unless explicitly overridden.
+- Provide separate editable marketplace, Free website and Premium website percentages at global, country and city level. Show the effective values before saving and which locations inherit the change.
+- Check existing overrides before migration; do not silently replace deliberate venue-specific pricing or rewrite historical fee snapshots. Keep fixed-deposit and promo funding rules compatible with the resolved fee policy.
+- Verify percentage validation, inheritance, provider plan selection and booking/payment snapshots on MySQL, for both marketplace and provider-site checkout. Preserve existing historical financial reconciliation rules.
+- Test global/country/city settings from the superadmin UI, update enforced checks/instructions, push this branch and deploy Railway as its own batch.
 
 ## Completion standard for each batch
 

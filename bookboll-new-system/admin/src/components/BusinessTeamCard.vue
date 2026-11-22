@@ -3,7 +3,7 @@ import { Building2, ChevronDown, Plus, ExternalLink, Phone, MessageCircle, Penci
 import { roleLabel } from '../lib/permissions.js'
 import { ownerAccessWarning } from '../lib/businessTeam.js'
 const props=defineProps({ group:Object, expanded:Boolean, superadmin:Boolean, currentUserId:[Number,String], website:String, country:String, premium:Boolean, scopeLabel:Function, lastSeen:Function })
-defineEmits(['toggle','invite','assign','edit','security','remove','plan','contact','copyWebsite','copyPhone'])
+defineEmits(['toggle','invite','assign','edit','security','remove','plan','contact','copyWebsite','copyPhone','support'])
 const initials = name => (name || '?').split(' ').map(s=>s[0]).slice(0,2).join('').toUpperCase()
 const blocked = member => ownerAccessWarning(member,props.group.staff,props.currentUserId)
 const businessStatus = status => ({active:'Active business',approved:'Active business',pending:'Awaiting approval',suspended:'Suspended business',rejected:'Not approved'}[status] || 'Status unavailable')
@@ -17,6 +17,7 @@ const businessStatus = status => ({active:'Active business',approved:'Active bus
       </button>
       <div class="business-counts"><strong>{{ group.provider.owner_count }} {{ group.provider.owner_count===1?'owner':'owners' }}</strong><small>{{ group.staff.length }} team {{ group.staff.length===1?'member':'members' }}</small></div>
       <div class="business-actions">
+        <button v-if="superadmin" class="btn btn-sm btn-secondary" @click="$emit('support')">Log in as business</button>
         <a v-if="website" :href="website" target="_blank" rel="noopener" class="btn btn-sm btn-secondary"><ExternalLink :size="14" />{{ group.provider.brand_enabled?'Website':'Preview site' }}</a>
         <button v-if="!group.provider.owner_count" class="btn btn-sm btn-primary" @click="$emit('invite')"><Plus :size="14" />Add owner</button>
         <button class="btn btn-sm" :class="expanded?'btn-secondary':'btn-primary'" :aria-expanded="expanded" :aria-controls="`business-team-${group.provider.business_id}`" :aria-label="`${expanded?'Close':'Manage'} team for ${group.provider.business_name}`" @click="$emit('toggle')">{{ expanded?'Close team':'Manage team' }}<ChevronDown :size="14" :class="{rotated:expanded}" /></button>

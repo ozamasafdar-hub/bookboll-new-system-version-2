@@ -56,6 +56,7 @@ jobs:
         working-directory: bookboll-BACKEND
         run: |
           php vendor/bin/pest tests/Feature/MultipleBusinessOwnersTest.php
+          php vendor/bin/pest tests/Feature/BusinessSupportSessionTest.php
           php vendor/bin/pest tests/Feature/BusinessPhoneTest.php tests/Feature/ProviderSettingsTest.php
           php vendor/bin/pest tests/Feature/BusinessLifecycleTest.php tests/Feature/BusinessEmailVerificationTest.php
           php tests/payment-report-rules.php
@@ -63,6 +64,8 @@ jobs:
       - run: npm ci
         working-directory: bookboll-new-system/admin
       - run: node --test tests/currentUser.test.js
+        working-directory: bookboll-new-system/admin
+      - run: node --test tests/businessSupport.test.js tests/sessionExpiry.test.js
         working-directory: bookboll-new-system/admin
       - run: node --test tests/businessPhone.test.js tests/businessSetup.test.js tests/businessCreation.test.js tests/providerSettings.test.js
         working-directory: bookboll-new-system/admin

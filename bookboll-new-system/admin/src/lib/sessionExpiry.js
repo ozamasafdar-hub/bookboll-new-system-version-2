@@ -16,6 +16,8 @@
  * discards every in-memory store whether or not it had a reset function.
  */
 
+import { supportSession, returnToSuperadmin } from './businessSupport.js'
+
 /** Keys that belong to the signed-in account and must not outlive it. */
 const SESSION_KEYS = [
   'bb_admin_token',       // api.js — the Sanctum bearer
@@ -61,6 +63,8 @@ export function isSessionExpired(status, sentToken) {
 export function endExpiredSession() {
   if (handled) return
   handled = true
+
+  if (supportSession()) { returnToSuperadmin('expired'); return }
 
   for (const key of SESSION_KEYS) {
     try { localStorage.removeItem(key) } catch { /* storage can be unavailable */ }

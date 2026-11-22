@@ -1,4 +1,6 @@
 <script setup>
+import { supportSession } from '../lib/businessSupport.js'
+const inBusinessSupport = Boolean(supportSession())
 import { ref, computed, watch, nextTick } from 'vue'
 import {
   fetchBookingLookups, fetchBookingOccupancy, createDashboardBooking, registerCustomer, firstError,
@@ -835,10 +837,10 @@ function fmt(n) { return Number(n).toLocaleString(undefined, { minimumFractionDi
                 <option value="" disabled>Select payment method</option>
                 <option value="payment_skipped">Skip payment</option>
                 <option value="cash">Pay on Arrival</option>
-                <option v-if="can(CAP.ACCEPT_PAYMENTS)" value="paid_cash">Paid cash</option>
-                <option v-if="can(CAP.ACCEPT_PAYMENTS)" value="paid_cheque">Paid cheque</option>
-                <option v-if="can(CAP.ACCEPT_PAYMENTS)" value="paid_card">Paid by card at venue</option>
-                <option v-if="can(CAP.ACCEPT_PAYMENTS)" value="paid_wire">Paid bank transfer</option>
+                <option v-if="!inBusinessSupport && can(CAP.ACCEPT_PAYMENTS)" value="paid_cash">Paid cash</option>
+                <option v-if="!inBusinessSupport && can(CAP.ACCEPT_PAYMENTS)" value="paid_cheque">Paid cheque</option>
+                <option v-if="!inBusinessSupport && can(CAP.ACCEPT_PAYMENTS)" value="paid_card">Paid by card at venue</option>
+                <option v-if="!inBusinessSupport && can(CAP.ACCEPT_PAYMENTS)" value="paid_wire">Paid bank transfer</option>
               </select>
               <ChevronDown :size="15" class="nbm-select-arrow" />
             </div>

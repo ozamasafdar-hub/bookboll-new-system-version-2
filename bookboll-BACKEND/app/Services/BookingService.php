@@ -5098,7 +5098,7 @@ class BookingService
                 // Rewards are snapshotted centrally from the country/global policy.
                 'full_payment_received' => $mapped['status'] === BookingPaymentStatus::FULLY_PAID,
                 'is_free'               => $mapped['status'] === BookingPaymentStatus::PAYMENT_SKIPPED,
-                'created_by'            => auth()->id(),
+                'created_by'            => \App\Support\BusinessSupport::actorId(),
                 'payment_breakdown'     => [
                     'base_price'         => $basePrice,
                     'addon_total'        => $addonTotal,
@@ -5142,9 +5142,9 @@ class BookingService
             }
 
             $booking->history()->create([
-                'user_id'     => auth()->id(),
+                'user_id'     => \App\Support\BusinessSupport::actorId(),
                 'action'      => 'booking_created',
-                'description' => 'Booking created in admin dashboard by ' . (auth()->user()?->name ?? 'staff'),
+                'description' => 'Booking created in admin dashboard by ' . (\App\Models\User::find(\App\Support\BusinessSupport::actorId())?->name ?? 'staff') . (\App\Support\BusinessSupport::session() ? ' (business support)' : ''),
             ]);
 
             DB::commit();
