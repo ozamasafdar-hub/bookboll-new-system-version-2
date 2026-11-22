@@ -13,6 +13,8 @@ class BusinessSupportAccess
     public function handle(Request $request, Closure $next)
     {
         $token = $request->bearerToken() ? PersonalAccessToken::findToken($request->bearerToken()) : null;
+        // An expired/deleted bearer must never fall back to a more privileged web cookie.
+        if ($request->bearerToken() && !$token) return response()->json(['success'=>false, 'message'=>'This session has ended. Sign in again.'], 401);
         if (!$token || ($token->name !== 'bookboll-business-support' && !in_array('business-support', $token->abilities ?? [], true))) return $next($request);
         $session = BusinessSupportSession::where('token_id', $token->id)->first();
         $actor = $session ? User::find($session->actor_id) : null;

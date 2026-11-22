@@ -115,4 +115,6 @@ it('uses the scoped bearer even when a superadmin web cookie is also authenticat
     $f=bsFixture(); $data=bsStart($f); Auth::forgetGuards();
     $this->actingAs($f[0],'web')->withHeader('Authorization','Bearer '.$data['token'])
         ->getJson('/api/me')->assertOk()->assertJsonPath('data.user.id',$f[1]->id)->assertJsonPath('data.scope.is_global',false);
+    BusinessSupportSession::first()->finish('test_exit'); Auth::forgetGuards();
+    $this->actingAs($f[0],'web')->withHeader('Authorization','Bearer '.$data['token'])->getJson('/api/me')->assertUnauthorized();
 });
