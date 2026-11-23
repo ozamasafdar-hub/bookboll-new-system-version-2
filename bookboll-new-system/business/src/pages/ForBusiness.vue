@@ -25,6 +25,7 @@ import { adminLoginUrl, adminDashboardUrl } from '../lib/crossApp.js'
 import { webBaseUrl } from '../lib/appBase.js'
 import { useBookingFees } from '../lib/bookingFees.js'
 import BusinessHeader from '../components/BusinessHeader.vue'
+import ListingHomes from '../components/ListingHomes.vue'
 import {
   Store, Globe, Check, ArrowRight, CalendarCheck, CreditCard, Repeat, UserPlus, MapPin, Wallet, Search, ChevronDown, Palette, Link2, Smartphone, CheckCircle2,
 } from 'lucide-vue-next'
@@ -154,16 +155,13 @@ const workflow = computed(() => workflows.find(w => w.key === activeWorkflow.val
         <div class="biz-site-features"><article><Palette :size="25" /><h3>Looks like you</h3><p>Add your logo, photos and brand colours. Tell your story and show what makes your venue worth a visit.</p></article><article><Link2 :size="25" /><h3>A link of your own</h3><p>Start at <strong>yourclub.bookboll.com</strong>. Connect your own domain for a one-time fee, or embed booking on a site you already have.</p></article><article><CalendarCheck :size="25" /><h3>Open for bookings</h3><p>Customers see live availability, reserve a court or contact an academy, and choose from your enabled payment options.</p></article><article><Smartphone :size="25" /><h3>Made for every screen</h3><p>Share your link on social media or WhatsApp. Customers can book from their phone, with no app required.</p></article></div>
       </section>
 
+      <ListingHomes />
+
       <section id="tools" class="biz-tools biz-container">
         <div class="biz-section-head"><h2>Less admin.<br />More time for your customers.</h2><p>From the first reservation to the last check-in, keep the daily details together.</p></div>
         <div class="biz-workspace"><div class="biz-tabs" role="tablist" aria-label="Business tools"><button v-for="w in workflows" :key="w.key" :id="`tab-${w.key}`" role="tab" :aria-selected="activeWorkflow === w.key" :tabindex="activeWorkflow === w.key ? 0 : -1" @keydown="moveWorkflow($event,w.key)" :aria-controls="`panel-${w.key}`" @click="activeWorkflow = w.key"><component :is="w.icon" :size="22" /><span>{{ w.title }}</span><ArrowRight :size="17" /></button></div>
           <div :id="`panel-${workflow.key}`" class="biz-tool-detail" role="tabpanel" :aria-labelledby="`tab-${workflow.key}`"><h3>{{ workflow.title }}</h3><p>{{ workflow.description }}</p><ul><li v-for="item in workflow.items" :key="item"><Check :size="17" />{{ item }}</li></ul></div></div>
       </section>
-
-      <section class="biz-channels"><div class="biz-container"><div class="biz-section-head"><h2>Two ways to get booked.<br />One business account.</h2><p>Bring your own customers and make room for new ones. Both channels connect to your dashboard.</p></div><div class="biz-channel-grid">
-        <article><span class="biz-channel-icon"><Globe :size="26" /></span><h3>Your own booking website</h3><p>A home for your business, with your name, logo and colours.</p><ul><li><Check :size="16" />Your own address: yourclub.bookboll.com</li><li><Check :size="16" />Live availability and online booking</li><li><Check :size="16" />Embed booking on an existing website</li></ul><small>A custom domain is available for a one-time fee.</small><a v-if="authUser" :href="adminDashboardUrl('/brand')" class="biz-button biz-channel-cta">Manage your website <ArrowRight :size="17" /></a><router-link v-else to="/signup" class="biz-button biz-channel-cta">Create your own website <ArrowRight :size="17" /></router-link></article>
-        <article><span class="biz-channel-icon blue"><Search :size="26" /></span><h3>The Bookboll marketplace</h3><p>Help people looking for a court, class or activity discover you.</p><ul><li><Check :size="16" />Show your venue to people browsing nearby</li><li><Check :size="16" />List bookable spaces and academy contact listings</li><li><Check :size="16" />Manage customers from both channels together</li></ul><small>Marketplace listings are reviewed before going live.</small><a v-if="authUser" :href="adminDashboardUrl('/listings')" class="biz-button biz-channel-cta biz-button-blue">Get listed <ArrowRight :size="17" /></a><router-link v-else to="/signup" class="biz-button biz-channel-cta biz-button-blue">Get listed <ArrowRight :size="17" /></router-link></article>
-      </div></div></section>
 
       <section class="biz-plan-section"><div class="biz-container">
         <div class="biz-section-head"><div><p class="biz-section-kicker"><CreditCard :size="18" /> Simple plans. Clear fees.</p><h2>Start with Free.<br />Grow on your terms.</h2></div><p>Your website, marketplace presence and booking dashboard come together. Choose the plan that fits your business.</p></div>
