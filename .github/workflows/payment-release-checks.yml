@@ -74,5 +74,5 @@ jobs:
         working-directory: bookboll-new-system/admin
       - run: npm run build
         working-directory: bookboll-new-system/admin
-      - run: npm ci && npm run build
+      - run: npm ci && node --test tests/bookingFees.test.js && npm run build
         working-directory: bookboll-new-system/business

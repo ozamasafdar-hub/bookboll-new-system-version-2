@@ -8,6 +8,8 @@ In **Team & Users → Provider businesses**, choose **Log in as business** on th
 
 An active owner is required. Active/approved businesses and pending businesses being onboarded can be supported. Suspended/rejected businesses cannot. The session uses the primary active owner when eligible, otherwise another active co-owner. It never changes the business data key, owner assignment or revenue recipient.
 
+23 November correction: support entry and per-request validation share the ownership rules used by business management. Recognise both active `owner` and legacy `provider_admin` managing memberships, plus a genuine pre-membership `owner_id` relationship. An explicit revoked/downgraded membership wins over the legacy pointer. Still require an active provider-admin account, no platform roles, and matching effective business scope. Do not fix this by assigning new roles or enabling copied owners' workspace logins. `BusinessSupportSessionTest` covers both legacy formats, revocation after entry, an inactive primary owner with an eligible co-owner, and platform/staff denial.
+
 ## Server contract — keep these checks
 
 - MySQL migration `2026_11_22_000001_create_business_support_sessions.php` stores actor, effective owner, business, source token, support token, expiry and end reason. It preserves audit identifiers after tokens are removed.

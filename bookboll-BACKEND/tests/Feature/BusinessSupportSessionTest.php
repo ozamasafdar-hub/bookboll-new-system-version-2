@@ -51,6 +51,34 @@ it('refuses support starts for every non-superadmin role',function (string $role
     bsRequest($token,'POST','/api/admin/businesses/'.$f[2]->id.'/support-session')->assertForbidden();
 })->with(['admin','platform_staff','provider_admin','facility_admin','customer']);
 
+it('supports existing owner formats without changing their roles or enabling their login',function (string $format) {
+    $f=bsFixture(); $owner=$f[1]; $owner->forceFill(['workspace_access'=>false])->save();
+    if ($format==='legacy') BusinessMembership::where('user_id',$owner->id)->delete();
+    else BusinessMembership::where('user_id',$owner->id)->update(['role'=>'provider_admin']);
+    $data=bsStart($f);
+    bsRequest($data['token'],'GET','/api/me')->assertOk()->assertJsonPath('data.user.id',$owner->id)->assertJsonPath('data.scope.is_global',false);
+    expect((bool)$owner->fresh()->workspace_access)->toBeFalse();
+    // An explicit revocation must win over the old businesses.owner_id link.
+    BusinessMembership::updateOrCreate(['business_id'=>$f[2]->id,'user_id'=>$owner->id],['role'=>'provider_admin','status'=>'revoked','scope'=>'all']);
+    bsRequest($data['token'],'GET','/api/me')->assertUnauthorized();
+    bsRequest($f[3]->plainTextToken,'POST','/api/admin/businesses/'.$f[2]->id.'/support-session')->assertUnprocessable();
+})->with(['legacy','provider_admin']);
+
+it('uses an eligible co-owner if the primary owner is inactive',function () {
+    $f=bsFixture(); $f[1]->update(['status'=>'inactive']); $co=bsUser('provider_admin');
+    BusinessMembership::create(['business_id'=>$f[2]->id,'user_id'=>$co->id,'role'=>'provider_admin','status'=>'active','scope'=>'all']);
+    $data=bsStart($f);
+    bsRequest($data['token'],'GET','/api/me')->assertOk()->assertJsonPath('data.user.id',$co->id);
+});
+
+it('never treats platform roles or ordinary business staff as support owners',function () {
+    $f=bsFixture(); $f[1]->assignRole('admin');
+    bsRequest($f[3]->plainTextToken,'POST','/api/admin/businesses/'.$f[2]->id.'/support-session')->assertUnprocessable();
+    $f[1]->syncRoles(['facility_admin']);
+    BusinessMembership::where('user_id',$f[1]->id)->update(['role'=>'facility_admin']);
+    bsRequest($f[3]->plainTextToken,'POST','/api/admin/businesses/'.$f[2]->id.'/support-session')->assertUnprocessable();
+});
+
 it('blocks sensitive writes and legacy GET side effects even with a valid support token',function () {
     $f=bsFixture(); $token=bsStart($f)['token'];
     foreach ([['POST','/api/admin/payments/1/refund'],['PUT','/api/business/settings/account'],['POST','/api/business/team'],

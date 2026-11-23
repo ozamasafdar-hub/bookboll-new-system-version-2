@@ -428,7 +428,8 @@
         "bookboll-new-system/admin/src/pages/Countries.vue",
         "bookboll-BACKEND/app/Http/Controllers/BookingFeeController.php",
         "bookboll-new-system/admin/src/components/BookingFeeComparison.vue",
-        "bookboll-new-system/business/src/lib/bookingFees.js"
+        "bookboll-new-system/business/src/lib/bookingFees.js",
+        "bookboll-new-system/business/src/pages/BookingFees.vue"
       ],
       "tests": [
         "bookboll-BACKEND/tests/Feature/GeographySettingsTest.php",
@@ -438,7 +439,8 @@
         "bookboll-BACKEND/tests/Feature/BookingPromotionFundingTest.php",
         "bookboll-new-system/admin/tests/marketSettings.test.js",
         "bookboll-BACKEND/tests/Feature/BookingFeePresentationTest.php",
-        "bookboll-new-system/admin/tests/bookingFeeComparison.test.js"
+        "bookboll-new-system/admin/tests/bookingFeeComparison.test.js",
+        "bookboll-new-system/business/tests/bookingFees.test.js"
       ]
     }
   ],

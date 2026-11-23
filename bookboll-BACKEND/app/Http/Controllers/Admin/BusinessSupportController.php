@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\{Business, BusinessMembership, BusinessSupportSession, PersonalAccessToken, User};
+use App\Models\{Business, BusinessSupportSession, PersonalAccessToken, User};
 use App\Support\{AccountAdministration, BusinessSupport};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,8 +16,7 @@ class BusinessSupportController extends Controller
         $source = $request->user()->currentAccessToken();
         abort_unless($source instanceof PersonalAccessToken && !in_array('business-support', $source->abilities ?? [], true), 403, 'Sign in again before starting business support.');
         abort_unless(in_array($business->status, ['active', 'approved', 'pending'], true), 422, 'Activate this business before starting a support session.');
-        $owners = BusinessMembership::active()->where('business_id', $business->id)->where('role', 'owner')->with('user')->get();
-        $owner = $owners->sortByDesc(fn($m)=>(int)$m->user_id === (int)$business->owner_id)->pluck('user')->first(fn($u)=>BusinessSupport::eligibleOwner($u, $business));
+        $owner = BusinessSupport::ownerFor($business);
         abort_unless($owner, 422, 'Add an active business owner before using Log in as business.');
         return DB::transaction(function () use ($request, $business, $owner, $source) {
             $expires = now()->addMinutes(30);

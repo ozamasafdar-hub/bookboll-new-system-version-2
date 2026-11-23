@@ -105,6 +105,8 @@ Route::post('admin-app/reset-password', [UserController::class, 'adminAppResetPa
 // Bookboll for Business — public provider signup
 Route::prefix('business')->name('business.')->group(function () {
     Route::get('booking-fees', [\App\Http\Controllers\BookingFeeController::class, 'published'])->middleware('throttle:120,1')->name('booking-fees');
+    Route::get('booking-fees/countries', [\App\Http\Controllers\BookingFeeController::class, 'countries'])->middleware('throttle:120,1')->name('booking-fees.countries');
+    Route::get('booking-fees/countries/{country}/cities', [\App\Http\Controllers\BookingFeeController::class, 'cities'])->whereNumber('country')->middleware('throttle:120,1')->name('booking-fees.cities');
     Route::post('register', [BusinessController::class, 'register'])->middleware('throttle:10,10')->name('register');
     Route::get('username-available', [BusinessController::class, 'usernameAvailable'])->name('username-available');
 

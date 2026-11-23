@@ -88,7 +88,7 @@ const open = ref(-1)
     <!-- ── Plans ──────────────────────────────────────────────────────────── -->
     <section class="fbp-sec">
 
-      <div class="fbp-rate-context"><div><strong>Booking fees at a glance</strong><p>Current global defaults. Your venue’s city rate overrides its country rate; otherwise these defaults apply.</p></div><span v-if="feeLoading" role="status">Loading rates…</span><div v-if="feeError" role="alert">{{ feeError }} <button @click="loadFees">Retry rates</button></div></div>
+      <div class="fbp-rate-context"><div><strong>Booking fees at a glance</strong><p>Current global defaults. Your venue’s city rate overrides its country rate; otherwise these defaults apply. <router-link to="/booking-fees">See country &amp; city rates →</router-link></p></div><span v-if="feeLoading" role="status">Loading rates…</span><div v-if="feeError" role="alert">{{ feeError }} <button @click="loadFees">Retry rates</button></div></div>
       <div class="fbp-pt">
         <!-- column headers -->
         <div class="fbp-pt-corner"></div>

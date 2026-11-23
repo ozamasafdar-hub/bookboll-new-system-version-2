@@ -50,6 +50,39 @@ it('limits the upgrade comparison to the signed in business and its venue access
     $this->actingAs($staff,'sanctum')->getJson('/api/admin/plan/booking-fees')->assertOk()->assertJsonCount(1,'data.venues');
 });
 
+it('publishes enabled country and city rates with independent inheritance and explicit zero',function () {
+    MarketSetting::updateOrCreate(['scope'=>'country','scope_id'=>$this->country->id],['values'=>['site_free'=>12,'comeback_discount_pct'=>75]]);
+    MarketSetting::updateOrCreate(['scope'=>'city','scope_id'=>$this->city->id],['values'=>['site_premium'=>0,'site_free'=>null,'module_classes'=>false]]);
+    app(MarketSettings::class)->clear();
+    $this->getJson('/api/business/booking-fees/countries')->assertOk()->assertJsonCount(1,'data.countries')
+        ->assertJsonPath('data.countries.0.custom_city_count',1)->assertJsonPath('data.countries.0.rates.site_free',12)
+        ->assertJsonPath('data.countries.0.sources.site_free','country');
+    $r=$this->getJson('/api/business/booking-fees/countries/'.$this->country->id.'/cities?custom_only=1')->assertOk()->assertJsonCount(1,'data.cities')
+        ->assertJsonPath('data.cities.0.rates.site_free',12)->assertJsonPath('data.cities.0.rates.site_premium',0)
+        ->assertJsonPath('data.cities.0.sources.site_premium','city')->assertJsonPath('data.cities.0.sources.facility','global');
+    expect(array_keys($r->json('data.cities.0')))->toBe(['id','name','rates','sources']);
+    expect(array_keys($r->json('data.cities.0.rates')))->toBe(['facility','site_free','site_premium']);
+    $this->city->update(['status'=>0]);
+    $this->getJson('/api/business/booking-fees/countries/'.$this->country->id.'/cities')->assertJsonCount(0,'data.cities');
+    $this->getJson('/api/business/booking-fees/countries')->assertJsonPath('data.countries.0.custom_city_count',0);
+    $this->country->update(['status'=>0]);
+    $this->getJson('/api/business/booking-fees/countries')->assertJsonCount(0,'data.countries');
+    $this->getJson('/api/business/booking-fees/countries/'.$this->country->id.'/cities')->assertNotFound();
+});
+
+it('bounds public city results, searches within a country and ignores unrelated or null settings',function () {
+    for($i=0;$i<51;$i++) City::create(['name'=>sprintf('City %02d',$i),'country_id'=>$this->country->id,'country_code'=>'ZQA','state_id'=>$this->city->state_id,'status'=>1]);
+    MarketSetting::updateOrCreate(['scope'=>'city','scope_id'=>$this->city->id],['values'=>['site_free'=>null,'module_classes'=>true]]);
+    $url='/api/business/booking-fees/countries/'.$this->country->id.'/cities';
+    $this->getJson($url)->assertOk()->assertJsonCount(50,'data.cities')->assertJsonPath('data.pagination.total',52)->assertJsonPath('data.pagination.last_page',2);
+    $this->getJson($url.'?page=2')->assertJsonCount(2,'data.cities');
+    $this->getJson($url.'?search=City%2002')->assertJsonCount(1,'data.cities')->assertJsonPath('data.cities.0.name','City 02');
+    $this->getJson($url.'?search=%25')->assertJsonCount(0,'data.cities');
+    $this->getJson($url.'?custom_only=1')->assertJsonCount(0,'data.cities');
+    $this->getJson($url.'?page=-1')->assertUnprocessable();
+    $this->getJson('/api/business/booking-fees/countries/99999999/cities')->assertNotFound();
+});
+
 it('matches upgrade rates to the storefront, online charge and saved booking split',function ($plan,$level,$method) {
     if($plan==='premium') {
         $this->business->update(['plan'=>'premium']);

@@ -11,6 +11,7 @@ import { loadAdminBrand } from './lib/adminBrand.js'
 
 import ForBusiness from './pages/ForBusiness.vue'
 import ForBusinessPricing from './pages/ForBusinessPricing.vue'
+import BookingFees from './pages/BookingFees.vue'
 import ForBusinessBlog from './pages/ForBusinessBlog.vue'
 import ForBusinessBlogPost from './pages/ForBusinessBlogPost.vue'
 import ProviderTerms from './pages/ProviderTerms.vue'
@@ -22,6 +23,7 @@ const router = createRouter({
   routes: [
     { path: '/', component: ForBusiness, meta: { indexable: true, allowAuthed: true } },
     { path: '/pricing', component: ForBusinessPricing, meta: { indexable: true, allowAuthed: true } },
+    { path: '/booking-fees', component: BookingFees, meta: { indexable: true, allowAuthed: true } },
     { path: '/blog', component: ForBusinessBlog, meta: { indexable: true, allowAuthed: true } },
     { path: '/post/:slug', component: ForBusinessBlogPost, meta: { indexable: true, allowAuthed: true } },
     { path: '/terms', component: ProviderTerms, meta: { indexable: true, allowAuthed: true } },

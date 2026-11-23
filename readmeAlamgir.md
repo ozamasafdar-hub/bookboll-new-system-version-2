@@ -1,3 +1,7 @@
+## Legacy owner support login and public country/city fees — 23 November 2026
+
+Support login now recognises existing `provider_admin` owner memberships and genuine pre-membership owners using the same ownership evidence as business management; revoked/inactive/wrong-business or platform access remains blocked. No roles or login permissions are rewritten. The business site now links to `/booking-fees` for global/country/city booking rates, override indicators, search and city pagination. Only enabled locations and the three public booking fees are exposed. See [support checks](docs/BUSINESS_SUPPORT_SESSIONS.md) and [fee-directory checks](docs/BOOKING_FEE_SETTINGS.md); CI includes regression tests for both. No database migration or new fee changes are required.
+
 ## Pricing and upgrades use the saved booking fees — 23 November 2026
 
 The business pricing/landing pages show current global fees, and the provider upgrade modal shows each accessible venue's Free/Premium website rates and marketplace rate, including the country/city source. [Required parity and isolation tests](docs/BOOKING_FEE_SETTINGS.md) now compare these displayed rates with actual deposit/full-online booking allocations on MySQL. Keep both new fee endpoints, the shared resolver and CI checks when copying this environment. No new migration is required; annual Premium billing and historical snapshots remain unchanged.

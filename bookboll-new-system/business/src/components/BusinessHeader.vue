@@ -32,6 +32,7 @@ defineProps({ howItWorks: { type: Boolean, default: false } })
       <nav aria-label="Business navigation">
         <a v-if="howItWorks" href="#tools" class="bh-anchor">How it works</a>
         <router-link to="/pricing">Pricing</router-link>
+        <router-link to="/booking-fees">Country &amp; city fees</router-link>
         <router-link to="/blog">Blog</router-link>
         <LanguageSwitcher compact />
         <a v-if="authUser" :href="adminDashboardUrl()" class="bh-cta">Open dashboard</a>
