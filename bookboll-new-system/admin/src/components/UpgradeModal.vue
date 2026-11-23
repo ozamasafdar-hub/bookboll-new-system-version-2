@@ -13,6 +13,8 @@ import { computed, ref, watch, nextTick, onBeforeUnmount } from 'vue'
 import {
   upgradeModal, PREMIUM_FEATURES, PREMIUM_YEARLY_TOTAL, usePremium,
 } from '../lib/premium.js'
+import BookingFeeComparison from './BookingFeeComparison.vue'
+import { apiFetch } from '../lib/api.js'
 import { validatePromo } from '../lib/promocodes.js'
 import { Crown, Check, X, Sparkles, Loader, Tag, ArrowRight, Gift, ShieldCheck, CreditCard, Lock } from 'lucide-vue-next'
 
@@ -26,10 +28,22 @@ const FREE_FEATURES = [
   'Free branded booking website',
   'Venue marketplace listings',
   'Court, venue & activity bookings',
-  'Online payments & payout wallet',
+  'Deposits & optional Stripe payouts',
   'One calendar + team accounts',
 ]
 
+const feeData = ref(null), feeLoading = ref(false), feeError = ref(''), feeVenue = ref('')
+let feeRequest = 0
+async function loadFees() {
+  const request = ++feeRequest
+  feeLoading.value = true; feeError.value = ''; feeData.value = null
+  try {
+    const response = await apiFetch('/admin/plan/booking-fees')
+    if (!response.success) throw new Error(response.message || 'Could not load current rates.')
+    if (request === feeRequest) feeData.value = response.data
+  } catch (error) { if (request === feeRequest) feeError.value = error.message || 'Could not load current rates.' }
+  finally { if (request === feeRequest) feeLoading.value = false }
+}
 const step = ref('gate')            // 'gate' | 'plans' | 'checkout'
 const dialog = ref(null)
 let returnFocus = null, previousOverflow = ''
@@ -43,16 +57,16 @@ watch(open, async o => {
     returnFocus = document.activeElement
     previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    step.value = 'gate'; clearPromo()
+    step.value = 'gate'; clearPromo(); feeVenue.value = ''; loadFees()
     await nextTick()
     dialog.value?.querySelector('.ug-x')?.focus()
-  } else releaseDialog()
+  } else { ++feeRequest; feeData.value = null; releaseDialog() }
 })
 watch(step, async () => { await nextTick(); dialog.value?.querySelector('.ug-title, .ug-co-plan')?.focus({ preventScroll: true }) })
 onBeforeUnmount(() => { if (open.value) releaseDialog() })
 function dialogKeydown(event) {
   if (event.key !== 'Tab') return
-  const targets = [...dialog.value.querySelectorAll('button:not([disabled]), input:not([disabled]), a[href]')].filter(el => el.getClientRects().length)
+  const targets = [...dialog.value.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), summary, a[href]')].filter(el => el.getClientRects().length)
   const first = targets[0], last = targets.at(-1)
   if (event.shiftKey && (document.activeElement === first || !targets.includes(document.activeElement))) { event.preventDefault(); last?.focus() }
   else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
@@ -99,7 +113,8 @@ function close() { clearPromo(); step.value = 'gate'; upgradeModal.value = { ope
         <div class="ug-ic"><Crown :size="26" /></div>
         <h3 class="ug-title" tabindex="-1">{{ highlight ? 'Premium feature' : 'Grow with Premium' }}</h3>
         <p v-if="highlight" class="ug-sub"><b>{{ featureLabel }}</b> is part of Bookboll Premium — unlock it and the full business toolkit.</p>
-        <p v-else class="ug-sub">Lower your own-website booking commission with a paid plan and get more tools for your business.</p>
+        <p v-else class="ug-sub">Compare your venue’s website fees and unlock more business tools with Premium.</p>
+        <BookingFeeComparison v-model="feeVenue" :data="feeData" :loading="feeLoading" :error="feeError" @retry="loadFees" />
         <ul class="ug-gate-feats">
           <li v-for="ft in PREMIUM_FEATURES.slice(0, 4)" :key="ft.key" :class="{ hot: ft.key === highlight }">
             <span class="ug-feat-ic"><Check :size="12" /></span>{{ ft.label }}
@@ -118,6 +133,7 @@ function close() { clearPromo(); step.value = 'gate'; upgradeModal.value = { ope
         <h3 class="ug-title" tabindex="-1">Choose your plan</h3>
         <p class="ug-sub">Keep the core tools on Free, or subscribe to Premium for a year.</p>
 
+        <BookingFeeComparison v-model="feeVenue" :data="feeData" :loading="feeLoading" :error="feeError" @retry="loadFees" />
         <p class="ug-fee-note">Marketplace membership listings have a separate monthly fee per listing on every plan. Default USD 20/month; country and city rates may differ.</p>
         <div class="ug-plans">
           <!-- Free -->
@@ -125,7 +141,7 @@ function close() { clearPromo(); step.value = 'gate'; upgradeModal.value = { ope
             <div class="ug-plan-name">Free</div>
             <div class="ug-plan-price"><b>$0</b><span>forever</span></div>
             <div class="ug-plan-tag current">Your current plan</div>
-            <p class="ug-fee-note">Standard booking commission on your website and the marketplace.</p>
+            <p class="ug-fee-note">Your venue’s Free website rate applies. See the booking fees above.</p>
             <ul class="ug-plan-list">
               <li v-for="f in FREE_FEATURES.slice(0, 5)" :key="f"><Check :size="13" /> {{ f }}</li>
             </ul>
@@ -141,7 +157,7 @@ function close() { clearPromo(); step.value = 'gate'; upgradeModal.value = { ope
               <li class="everything">Everything in Free, plus:</li>
               <li v-for="ft in PREMIUM_FEATURES.slice(0, 6)" :key="ft.key"><Check :size="13" /> {{ ft.label }}</li>
             </ul>
-            <p class="ug-fee-note">Premium website bookings default to a 10% platform fee; Free websites and marketplace bookings default to 15%. Country, city and marketplace listing overrides may apply.</p>
+            <p class="ug-fee-note">Your venue’s Premium website rate applies. Marketplace fees stay the same.</p>
             <button class="ug-plan-btn" @click="step = 'checkout'"><Sparkles :size="14" /> Choose Premium</button>
           </div>
         </div>
@@ -166,7 +182,7 @@ function close() { clearPromo(); step.value = 'gate'; upgradeModal.value = { ope
             </div>
 
 
-            <p class="ug-fee-note">Your website has separate Free and paid Premium rates. Check your listing’s payment settings for the applicable rate. Marketplace rates stay the same. Connecting payouts does not remove commission.</p>
+            <BookingFeeComparison v-model="feeVenue" :data="feeData" :loading="feeLoading" :error="feeError" @retry="loadFees" />
             <div class="ug-co-inc-h"><ShieldCheck :size="15" /> What's included</div>
             <div class="ug-co-grid">
               <div v-for="ft in PREMIUM_FEATURES" :key="ft.key" class="ug-co-inc" :class="{ hot: ft.key === highlight }">
@@ -213,9 +229,9 @@ function close() { clearPromo(); step.value = 'gate'; upgradeModal.value = { ope
 
 <style scoped>
 .ug-backdrop { position: fixed; inset: 0; z-index: 4300; background: rgba(15,23,42,.55); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; padding: 20px; overflow-y: auto; }
-.ug-card { position: relative; width: 100%; background: var(--surface, #ffffff); border-radius: 20px; padding: 28px 26px 22px; box-shadow: 0 24px 60px rgba(0,0,0,.4); text-align: center; }
-.ug-card.step-gate { max-width: 440px; }
-.ug-card.step-plans { max-width: 680px; }
+.ug-card { max-height:calc(100dvh - 48px);overflow-y:auto;position: relative; width: 100%; background: var(--surface, #ffffff); border-radius: 20px; padding: 28px 26px 22px; box-shadow: 0 24px 60px rgba(0,0,0,.4); text-align: center; }
+.ug-card.step-gate { max-width: 560px; }
+.ug-card.step-plans { max-width: 760px; }
 .ug-card.step-checkout { max-width: 860px; text-align: start; }
 .ug-x { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 50%; border: none; background: var(--bg, #f1f5f9); color: var(--text-muted, #64748b); display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2; }
 .ug-x:hover { background: var(--border, #e2e8f0); color: var(--text, #0f172a); }

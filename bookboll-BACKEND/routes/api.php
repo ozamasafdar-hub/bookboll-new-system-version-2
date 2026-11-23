@@ -104,6 +104,7 @@ Route::post('admin-app/reset-password', [UserController::class, 'adminAppResetPa
 
 // Bookboll for Business — public provider signup
 Route::prefix('business')->name('business.')->group(function () {
+    Route::get('booking-fees', [\App\Http\Controllers\BookingFeeController::class, 'published'])->middleware('throttle:120,1')->name('booking-fees');
     Route::post('register', [BusinessController::class, 'register'])->middleware('throttle:10,10')->name('register');
     Route::get('username-available', [BusinessController::class, 'usernameAvailable'])->name('username-available');
 
@@ -299,6 +300,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         // any admin role (the shell asks on every load to know what to unlock); only
         // the provider side may start, cancel or resume one, enforced in the service.
         Route::get('plan', [ProviderPlanController::class, 'show'])->name('plan.show');
+        Route::get('plan/booking-fees', [\App\Http\Controllers\BookingFeeController::class, 'provider'])->name('plan.booking-fees');
         Route::post('plan/checkout', [ProviderPlanController::class, 'checkout'])->name('plan.checkout');
         Route::get('plan/checkout/{session}', [ProviderPlanController::class, 'confirm'])->name('plan.confirm');
         Route::post('plan/cancel', [ProviderPlanController::class, 'cancel'])->name('plan.cancel');

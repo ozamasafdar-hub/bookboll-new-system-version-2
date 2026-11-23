@@ -1,3 +1,7 @@
+## Pricing and upgrades use the saved booking fees — 23 November 2026
+
+The business pricing/landing pages show current global fees, and the provider upgrade modal shows each accessible venue's Free/Premium website rates and marketplace rate, including the country/city source. [Required parity and isolation tests](docs/BOOKING_FEE_SETTINGS.md) now compare these displayed rates with actual deposit/full-online booking allocations on MySQL. Keep both new fee endpoints, the shared resolver and CI checks when copying this environment. No new migration is required; annual Premium billing and historical snapshots remain unchanged.
+
 ## Batch 4: global, country and city booking fees — 22 November 2026
 
 [Fee settings contract, migration and required checks](docs/BOOKING_FEE_SETTINGS.md): global defaults are marketplace **15%**, Free website **15%**, Premium website **10%**, with independent country/city overrides. This replaces automatic half-marketplace website pricing. The approved Qatar/Pakistan marketplace country overrides reset to inheritance once. Listing-specific pricing and historical booking/payment snapshots are preserved. Run the new MySQL migration and all fee/checkout regression tests before release. The editor shows sources, reset-to-inherit controls and a fee/venue-share preview.

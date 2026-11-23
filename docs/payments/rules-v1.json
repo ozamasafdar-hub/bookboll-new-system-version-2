@@ -425,7 +425,10 @@
         "bookboll-BACKEND/app/Support/CommissionPolicy.php",
         "bookboll-BACKEND/app/Services/GeographyService.php",
         "bookboll-BACKEND/database/migrations/2026_11_22_000002_set_independent_booking_fee_defaults.php",
-        "bookboll-new-system/admin/src/pages/Countries.vue"
+        "bookboll-new-system/admin/src/pages/Countries.vue",
+        "bookboll-BACKEND/app/Http/Controllers/BookingFeeController.php",
+        "bookboll-new-system/admin/src/components/BookingFeeComparison.vue",
+        "bookboll-new-system/business/src/lib/bookingFees.js"
       ],
       "tests": [
         "bookboll-BACKEND/tests/Feature/GeographySettingsTest.php",
@@ -433,7 +436,9 @@
         "bookboll-BACKEND/tests/Feature/DepositFollowsSurfaceAndCommissionTest.php",
         "bookboll-BACKEND/tests/Feature/CommissionSnapshotAndLedgerTest.php",
         "bookboll-BACKEND/tests/Feature/BookingPromotionFundingTest.php",
-        "bookboll-new-system/admin/tests/marketSettings.test.js"
+        "bookboll-new-system/admin/tests/marketSettings.test.js",
+        "bookboll-BACKEND/tests/Feature/BookingFeePresentationTest.php",
+        "bookboll-new-system/admin/tests/bookingFeeComparison.test.js"
       ]
     }
   ],

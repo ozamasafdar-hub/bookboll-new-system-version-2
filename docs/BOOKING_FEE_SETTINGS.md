@@ -22,6 +22,14 @@ Marketplace listing-specific commissions/fixed deposits still take priority wher
 
 ## Required release checks
 
+### Pricing and upgrade presentation — 23 November 2026
+
+The business landing/pricing pages load current global rates from the public `GET /api/business/booking-fees` endpoint. No provider records or unrelated settings are exposed. The authenticated `GET /api/admin/plan/booking-fees` comparison returns the signed-in business's accessible venues and independently resolved rates/sources. A business without venues sees its country defaults. Never accept a client-supplied business, plan or country as checkout authority.
+
+The upgrade modal shows Free/Premium website fees and the marketplace rate on every step, with a venue selector, source labels and a price-100 example. The annual plan charge is separate. Failed rate requests show a retry, not invented fallback pricing. Marketplace listing overrides/fixed deposits remain explicitly distinguished from geographic defaults. Full online receipts use connected Stripe payouts; deposits require no provider gateway.
+
+`BookingFeePresentationTest` must pass on MySQL: published data scope, provider/venue isolation, and a 12-case Free/Premium × global/country/city × deposit/full-online matrix comparing the upgrade API, catalog, charge calculation and persisted booking/payment allocations. It also checks zero, decimals, ignored stale listing deposit values and preserved historical snapshots. `bookingFeeComparison.test.js` checks reactive venue selection, zero and missing-data handling; `annualPlan.test.js` keeps subscription billing annual. These tests run in the release workflow and are listed in policy P28. No additional migration is needed for this presentation change.
+
 CI runs MySQL/MariaDB integration tests in `GeographySettingsTest`, `OwnSiteCommissionPolicyTest`, `DepositFollowsSurfaceAndCommissionTest`, `CommissionSnapshotAndLedgerTest`, `BookingPromotionFundingTest`, `AccountManagementTest`, and `OwnSiteReviewTest`, alongside the full existing financial regression suite. The policy manifest requires P28. Do not omit these when copying this environment to production.
 
 Validate numeric limits and explicit 0, inheritance/reset at every level, country-admin jurisdiction and provider denial, Premium eligibility, deposits and full online checkout, fixed deposits/promos, catalog quote parity, snapshot preservation, and migration idempotency. Browser verification must cover global/country/city editors, review/discard and small-screen layout. Railway preview never sends real payments or messages.

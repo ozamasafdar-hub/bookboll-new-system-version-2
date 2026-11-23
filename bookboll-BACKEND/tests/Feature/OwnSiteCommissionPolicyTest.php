@@ -4,7 +4,7 @@
  * The commission policy readmeAlamgir specifies, as its own acceptance table.
  *
  *   Marketplace booking -> the standard rate, on every plan.
- *   Merchant's own site -> the standard rate, HALVED for a paid Premium merchant.
+ *   Merchant's own site -> the independently configured Free or eligible Premium website rate.
  *
  * Connecting payouts never changes the commission, and on the merchant's own
  * site the online deposit IS Bookboll's fee rather than the provider's no-show

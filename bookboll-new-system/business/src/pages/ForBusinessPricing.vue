@@ -6,7 +6,7 @@
  * Annual plan headers and account-aware calls to action,
  * a commission comparison and shared core tools, plus the Premium growth
  * toolkit with ✗/✓ marks. Subscription prices read from lib/premium.js.
- * Commission enforcement is pending in readmeAlamgir.md. Fixed teal landing theme (NOT the
+ * Booking fees read the live global defaults. Fixed teal landing theme (NOT the
  * marketplace brand), bare 'auth' layout, indexable with its own SEO + FAQ LD.
  */
 import { ref, computed } from 'vue'
@@ -14,29 +14,31 @@ import { useSeo, faqLd } from '../lib/seo.js'
 import { authUser } from '../lib/auth.js'
 import { adminLoginUrl, adminDashboardUrl } from '../lib/crossApp.js'
 import { PREMIUM_YEARLY_TOTAL, PREMIUM_FEATURES } from '../lib/premium.js'
+import { useBookingFees } from '../lib/bookingFees.js'
 import BusinessHeader from '../components/BusinessHeader.vue'
 import { Check, X as XIcon, ArrowRight, ArrowLeft, Info } from 'lucide-vue-next'
 
 // Booking commission differs by plan; core tools are included on both.
-const CORE_ROWS = [
-  { label: 'Own-website booking commission', free: 'Your market’s Free rate', premium: 'Your market’s Premium rate' },
-  { label: 'Marketplace booking commission', free: 'Standard rate', premium: 'Standard rate' },
+const { feeRates, feeLoading, feeError, loadFees, rateLabel, shareLabel } = useBookingFees()
+const CORE_ROWS = computed(() => [
+  { label: 'Your own website · booking fee', free: rateLabel('site_free'), premium: rateLabel('site_premium'), fee: true },
+  { label: 'Bookboll marketplace · booking fee', free: rateLabel('facility'), premium: rateLabel('facility'), fee: true },
   { label: 'Free branded booking website (yourclub.bookboll.com)' },
   { label: 'Bookboll marketplace listing' },
   { label: 'Court, venue & activity bookings' },
   { label: 'Membership listings on your own website', free: 'Premium required', premium: 'Included' },
   { label: 'Marketplace membership listing', free: 'USD 20/month per listing*', premium: 'USD 20/month per listing*' },
-  { label: 'Online payments & payout wallet' },
+  { label: 'Deposits & optional Stripe payouts' },
   { label: 'Calendar & staff accounts' },
-]
+])
 
 const PRICING_FAQS = [
   { q: 'Is the Free plan really free?',
-    a: 'The Free plan has no setup or monthly subscription fee. Booking commissions apply on both your own website and the Bookboll marketplace. Own-website bookings use the Free or paid Premium rate configured for your venue’s market. Your listing form shows both rates. Marketplace rates stay the same across plans.' },
+    a: 'The Free plan has no setup or monthly subscription fee. Booking commissions apply on both your own website and the Bookboll marketplace. The table shows the current global defaults. Your venue’s country or city can set a different Free or Premium website rate. Your dashboard shows the applicable rates. Marketplace rates stay the same across plans.' },
   { q: 'How is Premium billed?',
     a: 'Premium is an annual subscription with no free trial. The annual charge is due when you subscribe. You can cancel renewal from the dashboard and keep access until the end of your paid year.' },
   { q: 'Does connecting payouts remove the commission?',
-    a: 'No. Your website offers full payment online or deposit + on arrival. Full online payment needs connected payouts: Bookboll deducts its commission and credits your share to your Bookings wallet. Deposit + on arrival works without connected payouts: Bookboll keeps the online deposit fee, and you collect the remaining balance. Commission applies either way.' },
+    a: 'No. Your website offers full payment online or deposit + on arrival. Full online payment needs connected payouts: Bookboll takes its platform fee and Stripe sends your share to your connected Stripe account. Deposit + on arrival works without connected payouts: Bookboll keeps the online deposit fee, and you collect the remaining balance. Commission applies either way.' },
   { q: 'What does Premium cost?',
     a: `US$${PREMIUM_YEARLY_TOTAL} per year, billed annually. There is no monthly plan or free trial.` },
   { q: 'Can I switch or cancel later?',
@@ -80,12 +82,13 @@ const open = ref(-1)
     <section class="fbp-hero">
       <router-link to="/" class="fbp-back"><ArrowLeft :size="15" /> Bookboll for Business</router-link>
       <h1>Simple pricing.<br /><span class="fbp-hl">Free forever</span>, or grow with Premium.</h1>
-      <p class="fbp-hero-sub">No monthly subscription on Free. Booking commissions apply on both channels. Premium includes own-website membership listings, your market’s Premium website booking rate and more business tools.</p>
+      <p class="fbp-hero-sub">Create your branded booking website for free. Compare booking fees below, or choose annual Premium for more business tools.</p>
     </section>
 
     <!-- ── Plans ──────────────────────────────────────────────────────────── -->
     <section class="fbp-sec">
 
+      <div class="fbp-rate-context"><div><strong>Booking fees at a glance</strong><p>Current global defaults. Your venue’s city rate overrides its country rate; otherwise these defaults apply.</p></div><span v-if="feeLoading" role="status">Loading rates…</span><div v-if="feeError" role="alert">{{ feeError }} <button @click="loadFees">Retry rates</button></div></div>
       <div class="fbp-pt">
         <!-- column headers -->
         <div class="fbp-pt-corner"></div>
@@ -108,8 +111,8 @@ const open = ref(-1)
         <div class="fbp-pt-group">Booking fees &amp; included tools</div>
         <template v-for="r in CORE_ROWS" :key="r.label">
           <div class="fbp-pt-l">{{ r.label }}</div>
-          <div class="fbp-pt-c" data-plan="Free"><template v-if="r.free">{{ r.free }}</template><Check v-else :size="17" class="fbp-pt-yes" aria-label="Included" /></div>
-          <div class="fbp-pt-c hot" data-plan="Premium"><template v-if="r.premium">{{ r.premium }}</template><Check v-else :size="17" class="fbp-pt-yes" aria-label="Included" /></div>
+          <div class="fbp-pt-c" :class="{ 'fbp-fee-value': r.fee }" data-plan="Free"><template v-if="r.free">{{ r.free }}</template><Check v-else :size="17" class="fbp-pt-yes" aria-label="Included" /></div>
+          <div class="fbp-pt-c hot" :class="{ 'fbp-fee-value': r.fee }" data-plan="Premium"><template v-if="r.premium">{{ r.premium }}</template><Check v-else :size="17" class="fbp-pt-yes" aria-label="Included" /></div>
         </template>
 
         <!-- premium growth toolkit -->
@@ -123,8 +126,9 @@ const open = ref(-1)
 
       <div class="fbp-note">
         <Info :size="14" />
-        <span><b>How the commission works:</b> your website uses the Free or paid Premium rate configured for your venue’s market. Your dashboard shows the applicable rate. Connecting payouts does not remove the fee. Marketplace booking fees stay the same on both plans.</span>
+        <span><b>How the commission works:</b> the percentage is included in the booking price. The same website rate applies to deposits and full online payments. Marketplace listing-specific commissions or fixed deposits may differ. Staff-added bookings have no platform fee.</span>
       </div>
+      <div v-if="feeRates" class="fbp-fee-example"><div><strong>A website booking priced at 100</strong><p>Before discounts and payment processing fees, at the global rates above.</p></div><div><span>With Free, you keep</span><b>{{ shareLabel('site_free') }}</b></div><div><span>With Premium, you keep</span><b>{{ shareLabel('site_premium') }}</b></div></div>
       <div class="fbp-note">
         <Info :size="14" />
         <span>Subscription prices are in USD. Premium is ${{ PREMIUM_YEARLY_TOTAL }} once a year with no free trial. Booking commissions apply separately. *Marketplace membership listings default to USD 20 per listing each month on both plans; country/city rates may differ. Customers enrol and pay the academy directly. Your team can manage members, attendance and offline receipts in the dashboard without a payment gateway. Optional extras: a custom domain (one-time fee). <router-link to="/terms" class="fbp-link">Provider terms apply</router-link>.</span>
@@ -245,5 +249,6 @@ const open = ref(-1)
   .fbp-pt-c::before { content:attr(data-plan); font-size:10px; text-transform:uppercase; letter-spacing:.05em; font-weight:600; color:#64748b; }
   .fbp-pt-cta { font-size:12px; padding:9px 12px; }
 }
+.fbp-rate-context{display:flex;justify-content:space-between;gap:16px;align-items:center;margin:0 0 20px}.fbp-rate-context strong{font-size:20px}.fbp-rate-context p{font-size:13px;line-height:1.6;color:#475569;max-width:65ch;margin:8px 0 0}.fbp-rate-context button{color:#0f766e;text-decoration:underline;border:0;background:none;cursor:pointer}.fbp-fee-value{font-size:26px!important;font-weight:750;font-variant-numeric:tabular-nums}.fbp-fee-example{display:flex;align-items:center;gap:28px;padding:24px 0;border-block:1px solid #cbd5e1;margin-top:24px}.fbp-fee-example>div:first-child{flex:1}.fbp-fee-example p,.fbp-fee-example span{font-size:12px;line-height:1.6;color:#475569}.fbp-fee-example b{display:block;font-size:26px;color:#0f766e;font-variant-numeric:tabular-nums}.fbp-fee-example strong{font-size:16px}@media(max-width:600px){.fbp-rate-context{display:block}.fbp-fee-example{flex-wrap:wrap;gap:20px}.fbp-fee-example>div:first-child{flex-basis:100%}.fbp-fee-value{font-size:22px!important}}
 </style>
 

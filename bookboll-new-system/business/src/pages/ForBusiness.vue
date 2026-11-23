@@ -13,7 +13,7 @@
  * /signup) above the footer. Colours are FIXED to the recruit-banner teal theme — do NOT
  * swap for --brand vars.
  *
- * Copy stays audited-accurate: loyalty is marketplace-only, deposits/wallet mechanics and the
+ * Copy stays audited-accurate: loyalty is marketplace-only, deposits and Stripe payouts and the
  * contact-only memberships are disclosed, steps mirror the real funnel,
  * and CTAs are auth-aware (signed-in providers see "Open my dashboard").
  */
@@ -23,6 +23,7 @@ import { BRAND_APEX } from '../lib/brand.js'
 import { authUser } from '../lib/auth.js'
 import { adminLoginUrl, adminDashboardUrl } from '../lib/crossApp.js'
 import { webBaseUrl } from '../lib/appBase.js'
+import { useBookingFees } from '../lib/bookingFees.js'
 import BusinessHeader from '../components/BusinessHeader.vue'
 import {
   Store, Globe, Check, ArrowRight, CalendarCheck, CreditCard, Repeat, UserPlus, MapPin, Wallet, Search, ChevronDown, Palette, Link2, Smartphone, CheckCircle2,
@@ -32,19 +33,20 @@ import {
 // commission (lib/approvalState.js PLATFORM_COMMISSION), Premium $588/year (lib/premium.js
 // PREMIUM_YEARLY_TOTAL), custom domain = one-time fee (Brand.vue DOMAIN_FEE; price not quoted here).
 // Never promise refunds; commission applies to marketplace and own-website bookings.
+const { feeLoading, feeError, loadFees, rateLabel } = useBookingFees()
 const FAQS = [
   { q: 'How much does Bookboll cost for a sports facility?',
-    a: 'Getting started is free — no setup fees and no monthly fee for the core platform. Booking commissions apply on your website and the Bookboll marketplace. Free merchants pay the standard rate; paid Premium merchants use the configured Premium rate on their own-website bookings. Rates vary by country and listing, and your dashboard shows yours. Optional extras: a custom domain (one-time fee) and a Premium plan ($588/year, billed annually with no free trial) for advanced marketing and export features.' },
+    a: 'Getting started is free — no setup fees and no monthly fee for the core platform. Booking commissions apply on your website and the Bookboll marketplace. Your website uses the Free or eligible Premium rate. The pricing comparison shows current global defaults; country and city settings can override them. Your dashboard shows the rates for each venue. Marketplace rates stay the same on both plans. Optional extras: a custom domain (one-time fee) and a Premium plan ($588/year, billed annually with no free trial) for advanced marketing and export features.' },
   { q: 'What is the Bookboll 2-in-1?',
-    a: 'One free account gives you two sales channels: your own branded booking website (yourclub.bookboll.com) where you can welcome your own customers, plus a listing on the Bookboll marketplace where players searching near you can discover and book your facility. Both channels share one dashboard, one calendar and one wallet.' },
+    a: 'One free account gives you two sales channels: your own branded booking website (yourclub.bookboll.com) where you can welcome your own customers, plus a listing on the Bookboll marketplace where players searching near you can discover and book your facility. Both channels share one dashboard, one calendar and shared payment records.' },
   { q: 'Do I need my own website to use Bookboll?',
     a: 'No. Bookboll gives every business a free branded booking website on its own subdomain — with hourly court booking, live availability and online payments built in. Membership contact listings on your own website require Premium. Already have a website? Embed the Bookboll booking widget or add a booking button to it instead.' },
   { q: 'Can I use my own custom domain?',
     a: 'Yes. Your free site lives at yourbrand.bookboll.com, and you can connect a custom domain like yourclub.com at any time for a one-time fee — your logo, colours and languages stay yours either way.' },
   { q: 'How do payouts work?',
-    a: 'You add a payout method — such as Stripe or the Bookboll wallet, depending on wallet type and country — to your Bookboll payout wallet, set up per country so each country pays out in its own currency. Membership customers arrange payment directly with the academy; Bookboll has no membership payout wallet. Your share of online payments is credited to your wallet; anything paid on arrival you collect directly at the venue.' },
+    a: 'Connect your Stripe account to offer full online payment. Bookboll takes its platform fee and Stripe sends your share to your connected account. With deposit + remaining on arrival, you collect the balance at your venue and do not need a payment gateway account. Membership customers contact and pay the academy directly.' },
   { q: 'How do online deposits work?',
-    a: 'A deposit is part of the price, not an extra charge: the customer pays the deposit online to confirm the booking, it counts toward their total, and they pay only the remaining balance when they arrive. On both your website and the marketplace, Bookboll keeps the online deposit as its fee and you collect the remaining balance on arrival. This works with or without connected payouts. Full payment online needs connected payouts: Bookboll deducts its commission and credits your share to your Bookings wallet. Paid Premium uses your market’s Premium rate for own-website bookings; check your listing’s payment settings for the rate.' },
+    a: 'A deposit is part of the price, not an extra charge: the customer pays the deposit online to confirm the booking, it counts toward their total, and they pay only the remaining balance when they arrive. On both your website and the marketplace, Bookboll keeps the online deposit as its fee and you collect the remaining balance on arrival. This works with or without connected payouts. Full payment online needs connected payouts: Bookboll takes its platform fee and Stripe sends your share to your connected account. Paid Premium uses your market’s Premium rate for own-website bookings; check your listing’s payment settings for the rate.' },
   { q: 'What can I list on Bookboll?',
     a: 'Courts and pitches for hourly rental (padel, football, tennis, basketball, badminton, volleyball and more), full venues, gyms, classes and academy contact listings, activity venues like escape rooms, billiards and bowling — plus games, hangouts and tournaments hosted at your venue.' },
   { q: 'Does Bookboll support gym memberships and subscriptions?',
@@ -87,7 +89,7 @@ useSeo({
 
 const YEAR = new Date().getFullYear()
 // Mirrors the REAL funnel: signup wizard (account → optional website) → dashboard
-// (location + listing/program) → payout wallet → live.
+// (location + listing/program) → payment options → live.
 const steps = [
   { icon: UserPlus, title: 'Create your account', sub: 'Choose your business address and verify your email.' },
   { icon: Globe, title: 'Set up your website', sub: 'Logo & colours — your address is already reserved. Skippable.', opt: true },
@@ -163,12 +165,12 @@ const workflow = computed(() => workflows.find(w => w.key === activeWorkflow.val
 
       <section class="biz-plan-section"><div class="biz-container">
         <div class="biz-section-head"><div><p class="biz-section-kicker"><CreditCard :size="18" /> Simple plans. Clear fees.</p><h2>Start with Free.<br />Grow on your terms.</h2></div><p>Your website, marketplace presence and booking dashboard come together. Choose the plan that fits your business.</p></div>
-        <div class="biz-plan-grid">
-          <article class="biz-plan-card"><div class="biz-plan-top"><span class="biz-plan-label">FREE</span><span class="biz-plan-audience">For getting started</span></div><h3>$0 <small>/ month</small></h3><p class="biz-plan-description">The essentials to get online and start taking bookings.</p><ul><li><Check :size="17" />Your branded booking website</li><li><Check :size="17" />Venue bookings &amp; a shared calendar</li><li><Check :size="17" />A presence on the Bookboll marketplace</li></ul><div class="biz-commission-note"><strong>Standard booking commission</strong><span>Applies to bookings on your website and the marketplace.</span></div><a v-if="authUser" :href="adminDashboardUrl()" class="biz-button">Open dashboard <ArrowRight :size="17" /></a><router-link v-else to="/signup" class="biz-button">Start with Free <ArrowRight :size="17" /></router-link><small class="biz-plan-billing">No setup fee. Booking commissions apply.</small></article>
-          <article class="biz-plan-card biz-plan-premium"><div class="biz-plan-top"><span class="biz-plan-label">PREMIUM</span><span class="biz-plan-audience">For your next stage</span></div><h3>$588 <small>USD / year</small></h3><p class="biz-plan-description">More tools for growing relationships and repeat bookings.</p><ul><li><Check :size="17" />Everything in Free</li><li><Check :size="17" />Own-website membership listings</li><li><Check :size="17" />Promo codes, campaigns &amp; website banners</li></ul><div class="biz-commission-note"><strong>Premium website fee rate</strong><span>Your market’s Premium rate on your own website. Check your listing’s payment settings for the rate. Marketplace fees stay the same.</span></div><router-link to="/pricing" class="biz-button">Explore Premium <ArrowRight :size="17" /></router-link><small class="biz-plan-billing">Billed annually. No free trial.</small></article>
+        <p v-if="feeLoading" role="status">Loading current fees…</p><p v-if="feeError" role="alert">{{ feeError }} <button class="biz-text-link" @click="loadFees">Retry rates</button></p><div class="biz-plan-grid">
+          <article class="biz-plan-card"><div class="biz-plan-top"><span class="biz-plan-label">FREE</span><span class="biz-plan-audience">For getting started</span></div><h3>$0 <small>/ month</small></h3><p class="biz-plan-description">The essentials to get online and start taking bookings.</p><ul><li><Check :size="17" />Your branded booking website</li><li><Check :size="17" />Venue bookings &amp; a shared calendar</li><li><Check :size="17" />A presence on the Bookboll marketplace</li></ul><div class="biz-commission-note"><strong>{{ rateLabel('site_free') }} website fee</strong><span>{{ rateLabel('facility') }} marketplace fee. Current global defaults.</span></div><a v-if="authUser" :href="adminDashboardUrl()" class="biz-button">Open dashboard <ArrowRight :size="17" /></a><router-link v-else to="/signup" class="biz-button">Start with Free <ArrowRight :size="17" /></router-link><small class="biz-plan-billing">No setup fee. Booking commissions apply.</small></article>
+          <article class="biz-plan-card biz-plan-premium"><div class="biz-plan-top"><span class="biz-plan-label">PREMIUM</span><span class="biz-plan-audience">For your next stage</span></div><h3>$588 <small>USD / year</small></h3><p class="biz-plan-description">More tools for growing relationships and repeat bookings.</p><ul><li><Check :size="17" />Everything in Free</li><li><Check :size="17" />Own-website membership listings</li><li><Check :size="17" />Promo codes, campaigns &amp; website banners</li></ul><div class="biz-commission-note"><strong>{{ rateLabel('site_premium') }} website fee</strong><span>{{ rateLabel('facility') }} marketplace fee, the same on both plans. Current global defaults.</span></div><router-link to="/pricing" class="biz-button">Explore Premium <ArrowRight :size="17" /></router-link><small class="biz-plan-billing">Billed annually. No free trial.</small></article>
         </div>
-        <div class="biz-pricing-footnote"><p>No setup fee. Commission varies by country and listing; your dashboard shows your rate. A custom domain has a separate one-time fee.</p><router-link to="/pricing" class="biz-text-link">Compare all features <ArrowRight :size="16" /></router-link></div>
-        <details class="biz-payment-explainer"><summary><span><Wallet :size="19" /> How deposits and payouts work</span><ChevronDown :size="18" /></summary><p>A deposit is part of the booking price. Bookboll keeps the online deposit as its fee; you collect the remaining balance on arrival. For full online payments, connect payouts: your share is credited to your Bookings wallet after commission. Membership listings are advertisements: customers contact and pay the academy directly.</p></details>
+        <div class="biz-pricing-footnote"><p>No setup fee. City rates override country rates, then global defaults apply. Your dashboard shows your venue’s rates; marketplace listing-specific fees may differ. A custom domain has a separate one-time fee.</p><router-link to="/pricing" class="biz-text-link">Compare all features <ArrowRight :size="16" /></router-link></div>
+        <details class="biz-payment-explainer"><summary><span><Wallet :size="19" /> How deposits and payouts work</span><ChevronDown :size="18" /></summary><p>A deposit is part of the booking price. Bookboll keeps the online deposit as its fee; you collect the remaining balance on arrival. For full online payments, connect Stripe: Bookboll takes its fee and Stripe sends your share to your connected account. Deposit + on arrival needs no payment gateway account. Membership listings are advertisements: customers contact and pay the academy directly.</p></details>
       </div></section>
 
       <section class="biz-launch-section"><div class="biz-container biz-launch-layout">
