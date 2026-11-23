@@ -21,10 +21,10 @@ function storedToken() {
 
 /**
  * @param {string} path - Absolute path under the API base, e.g. `/business/register`
- * @param {{ method?: string, body?: object|null, token?: string|null, query?: Record<string, string|number|undefined|null> }} [opts]
+ * @param {{ method?: string, body?: object|null, token?: string|null, query?: Record<string, string|number|undefined|null>, timeout?: number }} [opts]
  * @returns {Promise<{ success: boolean, message?: string, data?: any, errors?: any, code?: number, status: number }>}
  */
-export async function apiFetch(path, { method = 'GET', body = null, token = null, query = null } = {}) {
+export async function apiFetch(path, { method = 'GET', body = null, token = null, query = null, timeout = 0 } = {}) {
   const headers = {}
   // Fall back to the stored token, as the admin and web apps do. Without this,
   // only calls that passed a token explicitly were authenticated — which is why
@@ -40,6 +40,7 @@ export async function apiFetch(path, { method = 'GET', body = null, token = null
       method,
       data: body ?? undefined,
       params: query || undefined,
+      timeout,
       headers,
       validateStatus: () => true, // normalize success/error ourselves
     })

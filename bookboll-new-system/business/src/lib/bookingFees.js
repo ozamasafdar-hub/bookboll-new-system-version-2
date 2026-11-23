@@ -9,7 +9,7 @@ export function useBookingFees() {
   async function loadFees() {
     feeLoading.value = true; feeError.value = ''; feeRates.value = null
     try {
-      const response = await apiFetch('/business/booking-fees', { token: '' })
+      const response = await apiFetch('/business/booking-fees', { token: '', timeout: 15000 })
       if (!response.success || !response.data?.rates) throw new Error('Missing rates')
       feeRates.value = response.data.rates
     } catch { feeError.value = 'Current booking fees could not be loaded.' }

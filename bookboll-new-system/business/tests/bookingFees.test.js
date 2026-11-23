@@ -4,7 +4,14 @@ import {readFileSync} from 'node:fs'
 import {parse} from '@vue/compiler-sfc'
 import {ref,computed,nextTick} from 'vue'
 const script=parse(readFileSync(new URL('../src/pages/BookingFees.vue',import.meta.url),'utf8')).descriptor.scriptSetup.content.replace(/^import .*$/gm,'')
-function page(apiFetch){return new Function('ref','computed','nextTick','onMounted','useSeo','apiFetch',script+';return {countries,filtered,search,customCountries,selected,citySearch,customCities,cities,cityError,cityLoading,pagination,loadCities,loadCountries,error,global}') (ref,computed,nextTick,()=>{},()=>{},apiFetch)}
+function page(apiFetch){return new Function('ref','computed','nextTick','onMounted','useSeo','apiFetch',script+';return {countries,filtered,visibleCountries,countryLimit,search,customCountries,selected,citySearch,customCities,cities,cityError,cityLoading,pagination,loadCities,loadCountries,error,global}') (ref,computed,nextTick,()=>{},()=>{},apiFetch)}
+test('country list stays short while search still includes countries beyond the visible rows',()=>{
+ const p=page(()=>{}),sources={facility:'global',site_free:'global',site_premium:'global'}
+ p.countries.value=Array.from({length:45},(_,i)=>({id:i,name:`Country ${i}`,code:`C${i}`,sources,custom_city_count:0}))
+ assert.equal(p.visibleCountries.value.length,20)
+ p.countryLimit.value+=20;assert.equal(p.visibleCountries.value.length,40)
+ p.search.value='Country 44';assert.deepEqual(p.visibleCountries.value.map(c=>c.id),[44])
+})
 test('country filter includes countries with only city overrides and preserves search',()=>{
  const p=page(()=>{}),sources={facility:'global',site_free:'global',site_premium:'global'}
  p.countries.value=[{id:1,name:'Qatar',code:'QA',sources,custom_city_count:0},{id:2,name:'Pakistan',code:'PK',sources,custom_city_count:1},{id:3,name:'Test',code:'TT',sources:{...sources,site_premium:'country'},custom_city_count:0}]
