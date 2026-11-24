@@ -1168,12 +1168,19 @@ if (! function_exists('initialBookingStatus')) {
 }
 
 if (! function_exists('autoConfirmBookingIfPaid')) {
-    function autoConfirmBookingIfPaid($booking)
+    /**
+     * Confirm a booking once its money has landed, and tell the customer.
+     *
+     * Returns true when it confirmed the booking here — which also means the
+     * invoice was regenerated and emailed — so callers that used to regenerate
+     * right after can skip it and not write a second invoice row.
+     */
+    function autoConfirmBookingIfPaid($booking): bool
     {
         try {
 
             if (in_array($booking->status, [BookingStatus::CONFIRMED, BookingStatus::CANCELLED, BookingStatus::COMPLETED])) {
-                return;
+                return false;
             }
 
             $totalPaid  = (float) $booking->payments()->where('status', PaymentStatus::PAID)->sum('amount');
@@ -1187,7 +1194,7 @@ if (! function_exists('autoConfirmBookingIfPaid')) {
                 && ! $booking->payments()->where('status', PaymentStatus::PENDING)->exists();
 
             if (! $nothingToCollect && ($totalPrice <= 0 || $totalPaid < $totalPrice)) {
-                return;
+                return false;
             }
 
             // A payment-skipped booking keeps that payment_status — no money
@@ -1224,6 +1231,13 @@ if (! function_exists('autoConfirmBookingIfPaid')) {
                 }
             }
 
+            // The invoice goes out WITH the confirmation, so it has to be
+            // regenerated first — the one stored at booking time still shows
+            // the payment as pending. Callers used to regenerate after this
+            // returned, by which point the stale PDF had already been sent.
+            regenerateBookingInvoice($booking);
+            $booking->unsetRelation('latestInvoice');
+
             try {
                 $booking->load('venue:id,name,maps_url');
                 $user = $booking->user;
@@ -1234,12 +1248,16 @@ if (! function_exists('autoConfirmBookingIfPaid')) {
                     'exception'  => $e,
                 ]);
             }
+
+            return true;
         } catch (Exception $e) {
             Log::error("Failed to auto-confirm booking #{$booking->id}: " . $e->getMessage(), [
                 'booking_id' => $booking->id,
                 'exception'  => $e,
             ]);
         }
+
+        return false;
     }
 }
 

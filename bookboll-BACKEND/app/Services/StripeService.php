@@ -895,8 +895,12 @@ class StripeService
         foreach ($settled as $bookingId) {
             $booking = Booking::find($bookingId);
             if ($booking) {
-                autoConfirmBookingIfPaid($booking);
-                regenerateBookingInvoice($booking);
+                // Confirming regenerates the invoice itself (it is emailed with
+                // the confirmation); only an already-confirmed booking still
+                // needs its invoice refreshed here.
+                if (! autoConfirmBookingIfPaid($booking)) {
+                    regenerateBookingInvoice($booking);
+                }
             }
         }
 

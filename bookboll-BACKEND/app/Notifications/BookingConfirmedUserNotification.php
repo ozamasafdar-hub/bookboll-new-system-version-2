@@ -2,12 +2,14 @@
 namespace App\Notifications;
 
 use App\Models\Booking;
+use App\Models\Invoice;
 use App\Support\BookingDate;
 use BookingPaymentStatus;
 use BookingStatus;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Storage;
 
 class BookingConfirmedUserNotification extends Notification
 {
@@ -41,11 +43,19 @@ class BookingConfirmedUserNotification extends Notification
 
         $mail->action('View Booking', config('app.frontend_url'));
 
-        // Rendered as a markdown line rather than another ->action():
-        // MailMessage holds a single action, so a third call would silently
-        // replace 'View Booking' above.
-        if ($invoiceUrl = $this->invoiceUrl()) {
-            $mail->line('Invoice: [Download your invoice](' . $invoiceUrl . ')');
+        // The invoice PDF rides along as an attachment, with a link as the
+        // fallback for clients that strip attachments. The link is a markdown
+        // line rather than another ->action(): MailMessage holds a single
+        // action, so a third call would silently replace 'View Booking'.
+        if ($invoice = $this->invoice()) {
+            $mail->line('Invoice: [Download your invoice](' . $invoice->full_path . ')');
+
+            if ($invoice->path && Storage::disk('public')->exists($invoice->path)) {
+                $mail->attach(Storage::disk('public')->path($invoice->path), [
+                    'as'   => 'Invoice-' . $this->booking->booking_id . '.pdf',
+                    'mime' => 'application/pdf',
+                ]);
+            }
         }
 
         $mail->line('If you have any questions, contact us.')
@@ -62,7 +72,7 @@ class BookingConfirmedUserNotification extends Notification
      * really paid something, and a skipped/free one still has an invoice the
      * customer may want.
      */
-    protected function invoiceUrl(): ?string
+    protected function invoice(): ?Invoice
     {
         if (in_array($this->booking->payment_status, [
             BookingPaymentStatus::PENDING,
@@ -71,7 +81,7 @@ class BookingConfirmedUserNotification extends Notification
             return null;
         }
 
-        return $this->booking->latestInvoice?->full_path;
+        return $this->booking->latestInvoice;
     }
 
     public function toArray($notifiable)

@@ -1,7 +1,8 @@
 <?php
 
 /**
- * The booking confirmation email carries a link to the booking's invoice.
+ * The booking confirmation email carries the booking's invoice — attached as a
+ * PDF, with a link as the fallback.
  *
  * The invoice PDF has always been generated and stored against the booking, but
  * nothing ever showed it to the customer — they had to call the generate-invoice
@@ -16,8 +17,11 @@ use App\Models\Invoice;
 use App\Models\Listing;
 use App\Models\User;
 use App\Models\Venue;
+use App\Models\Payment;
 use App\Notifications\BookingConfirmedUserNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 
 uses(RefreshDatabase::class);
 
@@ -134,4 +138,74 @@ it('keeps the single mail action pointing at the booking', function () {
 
     expect($mail->actionText)->toBe('View Booking')
         ->and($mail->actionUrl)->toBe(config('app.frontend_url'));
+});
+
+it('attaches the invoice PDF when the file exists', function () {
+    Storage::fake('public');
+    $user    = User::factory()->create();
+    $booking = invoiceLinkBooking($user, BookingPaymentStatus::FULLY_PAID);
+    $invoice = invoiceFor($booking, 'invoices/invoice_INV_2026_00020_1.pdf');
+    Storage::disk('public')->put($invoice->path, '%PDF-1.4 test');
+
+    $mail = (new BookingConfirmedUserNotification($booking->fresh()))->toMail($user);
+
+    expect($mail->attachments)->toHaveCount(1)
+        ->and($mail->attachments[0]['file'])->toBe(Storage::disk('public')->path($invoice->path))
+        ->and($mail->attachments[0]['options']['as'])->toBe('Invoice-'.$booking->fresh()->booking_id.'.pdf')
+        ->and($mail->attachments[0]['options']['mime'])->toBe('application/pdf');
+});
+
+it('still links, but does not attach, when the PDF is missing from disk', function () {
+    // A missing file must never turn a confirmation email into an exception.
+    Storage::fake('public');
+    $user    = User::factory()->create();
+    $booking = invoiceLinkBooking($user, BookingPaymentStatus::FULLY_PAID);
+    $invoice = invoiceFor($booking, 'invoices/invoice_INV_2026_00021_1.pdf');
+
+    $mail = (new BookingConfirmedUserNotification($booking->fresh()))->toMail($user);
+
+    expect($mail->attachments)->toBeEmpty()
+        ->and(confirmationBody($booking->fresh(), $user))->toContain($invoice->full_path);
+});
+
+it('regenerates the invoice BEFORE sending the confirmation, so the emailed PDF shows the payment', function () {
+    // The invoice stored at booking time shows the payment as pending. Every
+    // caller used to regenerate only after autoConfirmBookingIfPaid() returned —
+    // after the stale PDF had already gone out.
+    Storage::fake('public');
+    Notification::fake();
+
+    $user    = User::factory()->create();
+    $booking = invoiceLinkBooking($user, BookingPaymentStatus::FULLY_PAID);
+    $booking->update(['status' => 'pending']);
+    $stale = invoiceFor($booking, 'invoices/invoice_INV_2026_00001_'.$booking->id.'.pdf');
+
+    Payment::create([
+        'booking_id' => $booking->id, 'user_id' => $user->id, 'type' => PaymentType::FULL,
+        'amount' => 175, 'status' => PaymentStatus::PAID, 'method' => PaymentMethod::CASH,
+        'date' => now()->toDateString(), 'payment_id' => 'PAY_TEST_0001',
+    ]);
+
+    $confirmed = autoConfirmBookingIfPaid($booking->fresh());
+
+    expect($confirmed)->toBeTrue();
+    expect(Invoice::where('booking_id', $booking->id)->count())->toBe(2);
+    expect($stale->fresh()->status)->toBe('re_generated');
+
+    $latest = $booking->fresh()->latestInvoice;
+    expect($latest->id)->not->toBe($stale->id);
+    Storage::disk('public')->assertExists($latest->path);
+
+    Notification::assertSentTo($user, BookingConfirmedUserNotification::class, function ($n) use ($latest) {
+        return $n->booking->latestInvoice->id === $latest->id;
+    });
+});
+
+it('reports false when it does not confirm, so callers regenerate themselves', function () {
+    Notification::fake();
+    $user    = User::factory()->create();
+    $booking = invoiceLinkBooking($user, BookingPaymentStatus::FULLY_PAID); // already confirmed
+
+    expect(autoConfirmBookingIfPaid($booking))->toBeFalse();
+    Notification::assertNothingSent();
 });

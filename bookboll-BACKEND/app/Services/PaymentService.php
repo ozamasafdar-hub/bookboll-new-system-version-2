@@ -1375,13 +1375,14 @@ class PaymentService
 
             $autoConfirmRequested = (bool) ($validated['auto_confirm_booking'] ?? false);
             $bookingConfirmed     = false;
+            $invoiceRegenerated   = false;
 
             if (
                 $autoConfirmRequested
                 && $allPaid
                 && $booking->status === BookingStatus::PENDING
             ) {
-                autoConfirmBookingIfPaid($booking);
+                $invoiceRegenerated = autoConfirmBookingIfPaid($booking);
                 $booking->refresh();
                 $bookingConfirmed = $booking->status === BookingStatus::CONFIRMED;
             }
@@ -1410,7 +1411,7 @@ class PaymentService
                 'description' => $description,
             ]);
 
-            if ($allPaid) {
+            if ($allPaid && ! $invoiceRegenerated) {
                 regenerateBookingInvoice($booking);
             }
 
@@ -1707,8 +1708,8 @@ class PaymentService
                 $booking->update($bookingUpdates);
 
                 if ($booking->payment_status === BookingPaymentStatus::FULLY_PAID) {
-                    autoConfirmBookingIfPaid($booking);
-                    if ($isMain) {
+                    $confirmedNow = autoConfirmBookingIfPaid($booking);
+                    if ($isMain && ! $confirmedNow) {
                         regenerateBookingInvoice($booking);
                     }
                 }
