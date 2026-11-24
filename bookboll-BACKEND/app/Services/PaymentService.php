@@ -963,17 +963,33 @@ class PaymentService
                 'source'         => 'admin', // Admin-generated payment link (for QR codes, etc.)
             ];
 
+            $linkCurrency = strtolower($booking->currency ?: Booking::currencyForVenue($booking->venue_id));
+
+            // Below Stripe's floor there is no link to hand out. That is a normal
+            // outcome of asking, not a failure, so it answers 200 with link null
+            // and `online_payment_available` false. It used to answer 422, and
+            // the admin app that is live today treats any non-2xx here as an
+            // error: it shows an alert, resets its selection, re-requests the
+            // link, and shows the same alert again, endlessly. A 200 settles it
+            // on the first try. Checked before touching Stripe so a refused
+            // amount never creates a customer there for nothing.
+            if (StripeMinimumCharge::isBelowFloor((float) $totalAmount, $linkCurrency)) {
+                return sendSuccess(StripeMinimumCharge::adminMessage((float) $totalAmount, $linkCurrency), [
+                    'link'                     => null,
+                    'total_amount'             => $totalAmount,
+                    'payment_link_id'          => null,
+                    'due_bookings_count'       => count($dueBookings),
+                    'online_payment_available' => false,
+                    'currency'                 => strtoupper($linkCurrency),
+                    'minimum_charge'           => StripeMinimumCharge::floorFor($linkCurrency),
+                ], 200, false);
+            }
+
             Stripe::setApiKey(config('services.stripe.secret'));
 
             // Use Checkout Session instead of PaymentLink for better control and consistency
 
             $returnUrls = $this->stripeService->checkoutReturnUrls();
-
-            $linkCurrency = strtolower($booking->currency ?: Booking::currencyForVenue($booking->venue_id));
-
-            if (StripeMinimumCharge::isBelowFloor((float) $totalAmount, $linkCurrency)) {
-                return sendError(StripeMinimumCharge::message((float) $totalAmount, $linkCurrency), [], 422);
-            }
 
             $session = \Stripe\Checkout\Session::create([
                 ...($connectData ? ['payment_intent_data'=>$connectData] : []),
@@ -1015,10 +1031,12 @@ class PaymentService
             ];
 
             return sendSuccess('Link generated successfully', [
-                'link'               => $paymentLink->url,
-                'total_amount'       => $totalAmount,
-                'payment_link_id'    => $paymentLink->id,
-                'due_bookings_count' => count($dueBookings),
+                'link'                     => $paymentLink->url,
+                'total_amount'             => $totalAmount,
+                'payment_link_id'          => $paymentLink->id,
+                'due_bookings_count'       => count($dueBookings),
+                'online_payment_available' => true,
+                'currency'                 => strtoupper($linkCurrency),
             ]);
         } catch (Exception $e) {
             Log::error("Failed to generate payment link for booking #{$validated['booking_id']}: " . $e->getMessage(), [
