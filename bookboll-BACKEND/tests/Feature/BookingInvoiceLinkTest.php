@@ -1,0 +1,137 @@
+<?php
+
+/**
+ * The booking confirmation email carries a link to the booking's invoice.
+ *
+ * The invoice PDF has always been generated and stored against the booking, but
+ * nothing ever showed it to the customer — they had to call the generate-invoice
+ * endpoint to get at it. The confirmation email now links the latest one.
+ *
+ * The link is a markdown line, not a ->action(): MailMessage holds a single
+ * action, so adding a third would silently replace 'View Booking'.
+ */
+
+use App\Models\Booking;
+use App\Models\Invoice;
+use App\Models\Listing;
+use App\Models\User;
+use App\Models\Venue;
+use App\Notifications\BookingConfirmedUserNotification;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+
+uses(RefreshDatabase::class);
+
+/** A confirmed booking, with the payment status under test. */
+function invoiceLinkBooking(User $user, ?string $paymentStatus): Booking
+{
+    $venue = Venue::create([
+        'name' => 'Abu Hamor', 'status' => Venue::ACTIVE,
+        'maps_url' => 'https://maps.google.com/?q=0,0',
+        'operator_type' => 'bookboll', 'currency_override' => 'QAR',
+        'min_advance_booking' => 0, 'max_bookings_per_slot' => 1,
+    ]);
+
+    $listing = Listing::create([
+        'name' => 'Indoor Padel Court', 'venue_id' => $venue->id, 'status' => 'active',
+        'base_price' => 175, 'capacity' => 4, 'slot_duration' => 2,
+        'payment_options' => ['cash_on_arrival' => '0'], 'max_bookings_per_slot' => 1,
+    ]);
+
+    $booking = Booking::create([
+        'user_id' => $user->id, 'venue_id' => $venue->id, 'listing_id' => $listing->id,
+        'booking_id' => 'BKN_2026_11_02154', 'date' => now()->addDays(3)->toDateString(),
+        'start_time' => '19:00', 'end_time' => '21:00',
+        'subtotal' => 175, 'total_price' => 175, 'status' => 'confirmed',
+        'payment_status' => $paymentStatus,
+    ]);
+
+    return $booking->fresh()->load('user', 'venue', 'listing');
+}
+
+/** Every line of the rendered confirmation mail. */
+function confirmationBody(Booking $booking, User $user): string
+{
+    $mail = (new BookingConfirmedUserNotification($booking))->toMail($user);
+
+    return implode("\n", array_map(
+        fn ($line) => (string) $line,
+        array_merge($mail->introLines, $mail->outroLines)
+    ));
+}
+
+function invoiceFor(Booking $booking, string $path): Invoice
+{
+    return $booking->user->invoices()->create([
+        'user_id'        => $booking->user_id,
+        'booking_id'     => $booking->id,
+        'status'         => 'generated',
+        'path'           => $path,
+        'invoice_number' => 'INV_2026_'.substr($path, -9, 5),
+    ]);
+}
+
+it('links the invoice on a fully paid booking', function () {
+    $user    = User::factory()->create(['name' => 'Syazwan']);
+    $booking = invoiceLinkBooking($user, BookingPaymentStatus::FULLY_PAID);
+    $invoice = invoiceFor($booking, 'invoices/invoice_INV_2026_00008_1.pdf');
+
+    expect(confirmationBody($booking->fresh(), $user))
+        ->toContain($invoice->full_path)
+        ->toContain('Download your invoice');
+});
+
+it('links the LATEST invoice when the booking has been re-invoiced', function () {
+    // regenerateBookingInvoice() marks the old row re_generated and writes a new
+    // one, so the customer must be sent the newest, not the first.
+    $user    = User::factory()->create();
+    $booking = invoiceLinkBooking($user, BookingPaymentStatus::FULLY_PAID);
+
+    $first = invoiceFor($booking, 'invoices/invoice_INV_2026_00008_1.pdf');
+    $first->update(['status' => 're_generated']);
+    $latest = invoiceFor($booking, 'invoices/invoice_INV_2026_00009_1.pdf');
+
+    $body = confirmationBody($booking->fresh(), $user);
+
+    expect($body)->toContain($latest->full_path)
+        ->and($body)->not->toContain($first->full_path);
+});
+
+it('links the invoice on a deposit-paid booking too', function () {
+    // Real money changed hands, so there is a real invoice worth reading.
+    $user    = User::factory()->create();
+    $booking = invoiceLinkBooking($user, BookingPaymentStatus::DEPOSIT_PAID);
+    $invoice = invoiceFor($booking, 'invoices/invoice_INV_2026_00010_1.pdf');
+
+    expect(confirmationBody($booking->fresh(), $user))->toContain($invoice->full_path);
+});
+
+it('says nothing about an invoice when none has been generated', function () {
+    $user    = User::factory()->create();
+    $booking = invoiceLinkBooking($user, BookingPaymentStatus::FULLY_PAID);
+
+    expect(confirmationBody($booking, $user))->not->toContain('Download your invoice');
+});
+
+it('withholds the link while the booking is still unpaid or cancelled', function () {
+    foreach ([BookingPaymentStatus::PENDING, BookingPaymentStatus::CANCELLED] as $status) {
+        $user    = User::factory()->create();
+        $booking = invoiceLinkBooking($user, $status);
+        invoiceFor($booking, 'invoices/invoice_INV_2026_00011_'.$booking->id.'.pdf');
+
+        expect(confirmationBody($booking->fresh(), $user))
+            ->not->toContain('Download your invoice');
+    }
+});
+
+it('keeps the single mail action pointing at the booking', function () {
+    // The invoice had to be a line, not an action: MailMessage stores one
+    // action, so a third ->action() call would have replaced this one.
+    $user    = User::factory()->create();
+    $booking = invoiceLinkBooking($user, BookingPaymentStatus::FULLY_PAID);
+    invoiceFor($booking, 'invoices/invoice_INV_2026_00012_1.pdf');
+
+    $mail = (new BookingConfirmedUserNotification($booking->fresh()))->toMail($user);
+
+    expect($mail->actionText)->toBe('View Booking')
+        ->and($mail->actionUrl)->toBe(config('app.frontend_url'));
+});
