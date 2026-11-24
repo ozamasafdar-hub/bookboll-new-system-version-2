@@ -70,7 +70,7 @@ function invoiceFor(Booking $booking, string $path): Invoice
         'booking_id'     => $booking->id,
         'status'         => 'generated',
         'path'           => $path,
-        'invoice_number' => 'INV_2026_'.substr($path, -9, 5),
+        'invoice_number' => preg_match('/(INV_\d{4}_\d{5})/', $path, $m) ? $m[1] : null,
     ]);
 }
 
@@ -208,4 +208,44 @@ it('reports false when it does not confirm, so callers regenerate themselves', f
 
     expect(autoConfirmBookingIfPaid($booking))->toBeFalse();
     Notification::assertNothingSent();
+});
+
+it('delivers the PDF as a real MIME attachment, with the payment facts in the body', function () {
+    // Through the real mail pipeline (array transport), not just the
+    // MailMessage object — what the customer's mail client actually receives.
+    Storage::fake('public');
+    $user    = User::factory()->create(['name' => 'Syazwan']);
+    $booking = invoiceLinkBooking($user, BookingPaymentStatus::FULLY_PAID);
+    $invoice = invoiceFor($booking, 'invoices/invoice_INV_2026_00030_1.pdf');
+    Storage::disk('public')->put($invoice->path, '%PDF-1.4 test');
+    Payment::create([
+        'booking_id' => $booking->id, 'user_id' => $user->id, 'type' => PaymentType::FULL,
+        'amount' => 175, 'status' => PaymentStatus::PAID, 'method' => PaymentMethod::CREDIT_CARD,
+        'date' => now()->toDateString(), 'paid_at' => now(), 'payment_id' => 'PAY_TEST_0030',
+    ]);
+    // A split-ledger row must never be counted as the customer's money.
+    Payment::create([
+        'booking_id' => $booking->id, 'user_id' => $user->id, 'type' => PaymentType::BOOKING_EARNING,
+        'amount' => 150, 'status' => PaymentStatus::PAID, 'method' => PaymentMethod::CREDIT_CARD,
+        'date' => now()->toDateString(), 'payment_id' => 'PAY_TEST_0031',
+    ]);
+
+    $user->notify(new BookingConfirmedUserNotification($booking->fresh()));
+
+    $messages = app('mail.manager')->mailer('array')->getSymfonyTransport()->messages();
+    expect($messages)->toHaveCount(1);
+    $email = $messages->first()->getOriginalMessage();
+
+    $attachments = $email->getAttachments();
+    expect($attachments)->toHaveCount(1)
+        ->and($attachments[0]->getFilename())->toBe('Invoice-'.$booking->fresh()->booking_id.'.pdf')
+        ->and($attachments[0]->getMediaType().'/'.$attachments[0]->getMediaSubtype())->toBe('application/pdf')
+        ->and($attachments[0]->getBody())->toBe('%PDF-1.4 test');
+
+    $html = $email->getHtmlBody();
+    expect($html)->toContain('Amount paid: QAR 175.00')
+        ->not->toContain('325.00')
+        ->toContain('Method: Credit Card')
+        ->toContain('Invoice number: INV_2026_00030')
+        ->toContain('Download your invoice');
 });

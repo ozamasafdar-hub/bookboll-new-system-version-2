@@ -3,9 +3,12 @@ namespace App\Notifications;
 
 use App\Models\Booking;
 use App\Models\Invoice;
+use App\Models\Payment;
 use App\Support\BookingDate;
 use BookingPaymentStatus;
 use BookingStatus;
+use PaymentStatus;
+use PaymentType;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -34,8 +37,25 @@ class BookingConfirmedUserNotification extends Notification
             ->line('Activity: ' . $this->booking->listing->name)
             ->line('Date: ' . BookingDate::labelOrUnknown($this->booking->date))
             ->line('Time: ' . BookingDate::rangeOrUnknown($this->booking->start_time, $this->booking->end_time))
-            ->line('Total: QAR ' . number_format($this->booking->total_price, 2))
+            ->line('Total: ' . bookingMoney($this->booking->total_price, $this->booking))
             ->line('Status: Confirmed');
+
+        // What was paid, the way a bank or booking platform states it on a
+        // receipt: amount, method, date and the invoice number the attached
+        // PDF carries. Only once money has actually landed.
+        if ($invoice = $this->invoice()) {
+            $paid = $this->paidPayments();
+            if ($paid->isNotEmpty()) {
+                $latest = $paid->sortByDesc(fn (Payment $p) => $p->paid_at ?? $p->date)->first();
+                $mail->line('**Payment:**')
+                    ->line('Amount paid: ' . bookingMoney($paid->sum('amount'), $this->booking))
+                    ->line('Method: ' . ucwords(str_replace('_', ' ', (string) $latest->method)))
+                    ->line('Paid on: ' . BookingDate::labelOrUnknown($latest->paid_at ?? $latest->date));
+            }
+            if ($invoice->invoice_number) {
+                $mail->line('Invoice number: ' . $invoice->invoice_number);
+            }
+        }
 
         if ($this->booking->venue->maps_url) {
             $mail->action('View Location on Google Maps', $this->booking->venue->maps_url);
@@ -72,6 +92,14 @@ class BookingConfirmedUserNotification extends Notification
      * really paid something, and a skipped/free one still has an invoice the
      * customer may want.
      */
+    /** The customer's own payments that have landed — never the internal split-ledger rows. */
+    protected function paidPayments()
+    {
+        return $this->booking->payments
+            ->whereIn('type', [PaymentType::FULL, PaymentType::DEPOSIT, PaymentType::REMAINING])
+            ->where('status', PaymentStatus::PAID);
+    }
+
     protected function invoice(): ?Invoice
     {
         if (in_array($this->booking->payment_status, [
