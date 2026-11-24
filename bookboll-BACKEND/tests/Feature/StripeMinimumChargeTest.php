@@ -49,6 +49,39 @@ it('explains the shortfall in the customer’s own currency', function () {
         ->not->toContain('$');
 });
 
+it('tells the admin to take the payment directly instead', function () {
+    $message = StripeMinimumCharge::adminMessage(50.00, 'PKR');
+
+    expect($message)->toContain('PKR 50.00')
+        ->toContain('PKR 200.00')
+        ->toContain('directly')
+        ->not->toContain('cents')
+        ->not->toContain('$');
+});
+
+it('answers the admin link request with 200 and no link, never an error status', function () {
+    // The admin app that is live treats a non-2xx from generate-link as an error:
+    // it alerts, resets its selection, asks again, and alerts again, without end.
+    // A below-floor amount is therefore a 200 carrying link => null plus
+    // online_payment_available => false, which that app shows as "no link" once.
+    $source = file_get_contents(app_path('Services/PaymentService.php'));
+
+    $check = strpos($source, 'StripeMinimumCharge::isBelowFloor((float) $totalAmount');
+    expect($check)->not->toBeFalse();
+
+    $block = substr($source, $check, 900);
+
+    expect($block)->toContain('sendSuccess(')
+        ->toContain("'link'                     => null")
+        ->toContain("'online_payment_available' => false")
+        ->not->toContain('sendError(')
+        ->not->toContain('422');
+
+    // Refused before Stripe is touched, so no customer is created for nothing.
+    $stripeCustomer = strpos($source, '$user->createOrGetStripeCustomer();');
+    expect($check)->toBeLessThan($stripeCustomer);
+});
+
 it('configures a floor for every currency the platform charges in', function () {
     foreach (['QAR', 'AED', 'PKR'] as $code) {
         expect(StripeMinimumCharge::floorFor($code))->not->toBeNull("no floor configured for {$code}");

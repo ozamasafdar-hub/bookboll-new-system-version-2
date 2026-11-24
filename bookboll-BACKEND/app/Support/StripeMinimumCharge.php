@@ -56,4 +56,25 @@ final class StripeMinimumCharge
             number_format((float) $floor, 2)
         );
     }
+
+    /**
+     * The same shortfall, told to the admin at the desk rather than the
+     * customer. There is no card link to send for this amount; the way out
+     * is to take the payment directly, which is what the admin app's button
+     * is called.
+     */
+    public static function adminMessage(float $amount, ?string $currency): string
+    {
+        $code = strtoupper(trim((string) $currency));
+        $floor = self::floorFor($currency);
+
+        return sprintf(
+            'Online card payment is not available for %s %s: the minimum is %s %s. '
+            .'Accept this payment directly instead.',
+            $code,
+            number_format($amount, 2),
+            $code,
+            number_format((float) $floor, 2)
+        );
+    }
 }
