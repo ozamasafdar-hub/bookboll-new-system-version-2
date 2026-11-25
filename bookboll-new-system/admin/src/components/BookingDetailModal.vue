@@ -45,7 +45,10 @@ const props = defineProps({
   // (used by the Payments table's Accept button — one collect flow everywhere).
   collectPaymentId: { type: String, default: null },
 })
-const emit = defineEmits(['close', 'viewBooking'])
+// `updated` carries the fresh booking row after a change made in here
+// (payment collected, edit saved, pay-link paid) so the list behind the
+// modal can patch its row instead of showing the old status until a reload.
+const emit = defineEmits(['close', 'viewBooking', 'updated'])
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 const booking    = ref(null)
@@ -293,6 +296,7 @@ async function saveEdit() {
   const crm = await fetchBookingCrm(booking.value.id)
   const d = crm.success ? (crm.data || {}) : {}
   booking.value  = d.booking || upd.data?.booking
+  if (booking.value) emit('updated', booking.value)
   customer.value = d.customer || customer.value
   listing.value  = d.listing || listing.value
   location.value = d.location || location.value
@@ -677,7 +681,7 @@ function startPayPoll() {
     const crm = await fetchBookingCrm(booking.value.id)
     if (crm.success) {
       payments.value = crm.data?.payments || payments.value
-      if (crm.data?.booking) booking.value = crm.data.booking
+      if (crm.data?.booking) { booking.value = crm.data.booking; emit('updated', booking.value) }
     }
     if (!payments.value.some(p => p.status === 'pending')) {
       clearInterval(payQrTimer)
@@ -742,7 +746,7 @@ async function markPaid(pmtId) {
   }
 
   payments.value = res.data?.payments || payments.value
-  if (res.data?.booking) booking.value = res.data.booking
+  if (res.data?.booking) { booking.value = res.data.booking; emit('updated', booking.value) }
   if (res.data?.audit_logs) auditLogs.value = res.data.audit_logs
 
   const allPaid = payments.value.every(p => p.status === 'paid')
