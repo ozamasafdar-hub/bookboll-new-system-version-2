@@ -73,9 +73,9 @@ const homes = [
 </template>
 
 <style scoped>
-.listing-homes{background:#edf7f2;padding:48px 0;scroll-margin-top:20px;color:#143e33}
+.listing-homes{background:#edf7f2;padding:34px 0;scroll-margin-top:20px;color:#143e33}
 .homes-inner{max-width:1140px;padding:0 26px;margin:auto}
-.homes-heading{margin-bottom:32px;text-align:center}
+.homes-heading{margin-bottom:26px;text-align:center}
 .homes-heading h2{font-size:36px;line-height:1.18;letter-spacing:-1px;color:#143e33;margin:0}
 .homes-heading p{font-size:16px;line-height:1.6;color:#526e60;margin:12px 0 0}
 .homes-grid{display:grid;grid-template-columns:1fr 1fr;gap:56px}
@@ -87,16 +87,16 @@ const homes = [
 .home-audience p{font-size:12px;line-height:1.5;color:#526e60;margin:6px 0 0}
 .journey-arrow{display:block;margin:10px auto;color:var(--accent)}
 .home-preview{margin:0;background:white;border:1px solid #c6d9ce;border-radius:10px;overflow:hidden;text-align:left}
-.preview-header{display:flex;align-items:center;gap:10px;padding:16px 19px;color:var(--accent);background:var(--pale);border-bottom:1px solid #d5e3d9;min-height:75px}
+.preview-header{display:flex;align-items:center;gap:10px;padding:12px 19px;color:var(--accent);background:var(--pale);border-bottom:1px solid #d5e3d9;min-height:65px}
 .preview-header>svg{flex-shrink:0}.preview-header h4{font-size:19px;line-height:1.3;margin:0;color:var(--accent)}
 .preview-header>div>span{font-size:11px;line-height:1.5;display:block;margin-top:3px;color:#526e60}
 .club-logo{display:grid;place-items:center;margin-left:auto;border-radius:50%;width:33px;height:33px;background:#075e54;color:white;font-size:12px;font-weight:750;flex-shrink:0}
-.preview-content{padding:12px 18px;background:#fff}
-.nearby-venues{display:flex;align-items:center;gap:9px;height:22px;opacity:.65}
+.preview-content{padding:8px 18px;background:#fff}
+.nearby-venues{display:flex;align-items:center;gap:9px;height:14px;opacity:.65}
 .nearby-venues>span{height:15px;width:26px;background:#dbe4e9;border-radius:3px}.nearby-venues>i{height:4px;width:20%;background:#dbe4e9;border-radius:2px}.nearby-venues>i:last-child{width:12%;margin-left:auto}
-.club-welcome,.club-footer{height:22px;display:flex;align-items:center;font-size:11px;color:#526e60}.club-welcome{font-weight:600;color:#075e54}.club-footer{justify-content:flex-end;font-size:9px}
-.preview-listing{display:grid;grid-template-columns:126px 1fr;align-items:stretch;border:2px solid var(--accent);background:var(--pale);border-radius:7px;overflow:hidden;margin:7px 0}
-.court-picture{height:102px;overflow:hidden}.court-picture svg{display:block;height:100%;width:100%}
+.club-welcome,.club-footer{height:14px;display:flex;align-items:center;font-size:11px;color:#526e60}.club-welcome{font-weight:600;color:#075e54}.club-footer{justify-content:flex-end;font-size:9px}
+.preview-listing{display:grid;grid-template-columns:126px 1fr;align-items:stretch;border:2px solid var(--accent);background:var(--pale);border-radius:7px;overflow:hidden;margin:5px 0}
+.court-picture{height:84px;overflow:hidden}.court-picture svg{display:block;height:100%;width:100%}
 .listing-caption{display:flex;flex-direction:column;justify-content:center;gap:5px;padding:11px 15px;min-width:0}
 .listing-caption>strong{font-size:20px;line-height:1.2;color:var(--accent)}.listing-caption>span{font-size:11px;line-height:1.4;color:#526e60}
 .listing-caption .booking-label{display:flex;align-items:center;gap:6px;color:var(--accent);font-size:10px;margin-top:7px}
@@ -104,7 +104,7 @@ const homes = [
 .booking-connector{position:relative;height:38px;color:#52876d}
 .booking-connector>span{position:absolute;left:25%;right:25%;height:17px;border:2px solid #9bc1ad;border-top:0;border-radius:0 0 8px 8px}
 .booking-connector>svg{position:absolute;left:calc(50% - 11px);top:16px}
-.shared-dashboard{display:flex;align-items:center;justify-content:center;gap:17px;padding:22px 26px;background:#073f36;color:white;border-radius:10px}
+.shared-dashboard{display:flex;align-items:center;justify-content:center;gap:17px;padding:18px 26px;background:#073f36;color:white;border-radius:10px}
 .shared-dashboard>svg{flex-shrink:0;color:#d8ed8c}.shared-dashboard h3{font-size:23px;line-height:1.3;color:white;margin:0;letter-spacing:-.3px}
 .shared-dashboard p{font-size:13px;line-height:1.5;color:#c9dfd4;margin:6px 0 0}
 .homes-footer{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-top:22px}
