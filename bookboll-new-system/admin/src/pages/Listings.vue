@@ -39,7 +39,7 @@ import StorefrontOrderSettings from '../components/StorefrontOrderSettings.vue'
 import MultiSelectDropdown from '../components/MultiSelectDropdown.vue'
 import CreationSteps from '../components/CreationSteps.vue'
 import ListingPayments from '../components/ListingPayments.vue'
-import { paymentExample, hasPaidWebsiteDiscount } from '../lib/listingPayments.js'
+import { paymentExample } from '../lib/listingPayments.js'
 import { LISTING_STEPS, listingStepFor, listingStepIssue } from '../lib/creationFlow.js'
 import { adminBrandVars } from '../lib/adminBrand.js'
 import { useEditorDialog } from '../lib/editorDialog.js'
@@ -1071,18 +1071,13 @@ const effectiveCommissionRate = computed(() => {
    listing's slot price when set (else a round 100) so every payment option can
    show "who gets what, where" in actual money. */
 const payCur = computed(() => currencyForLocation(form.value.location_id))
-const ownSitePaidPlan = computed(() => {
-  const venue = locations.value.find(loc => cid(loc.id) === cid(form.value.location_id))
-  // Platform staff use the selected merchant's plan, never their own exemption.
-  return hasPaidWebsiteDiscount(userRole.value === 'provider' ? planState.value : venue?.business_plan)
-})
 const ownSiteFees = computed(() => {
   const loc = locations.value.find(l => cid(l.id) === cid(form.value.location_id))
   const city = cities.value.find(c => cid(c.id) === cid(loc?.city_id))
   const country = countries.value.find(c => cid(c.id) === cid(countryIdOfLocation(form.value.location_id)))
   return city?.website_fees || country?.website_fees || {}
 })
-const payExample = computed(() => paymentExample(form.value.base_price, effectiveCommissionRate.value, ownSitePaidPlan.value, ownSiteFees.value))
+const payExample = computed(() => paymentExample(form.value.base_price, effectiveCommissionRate.value, ownSiteFees.value))
 const fmtPay = (n) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })
 
 /* ── Provider country lock ──────────────────────────────────── */
@@ -3276,10 +3271,9 @@ const flatTR = createTouchReorder({ attr: 'data-tr-flat', start: onFlatDragStart
           :form="form" :payment="pay" :example="payExample" :currency="payCur" :role="userRole"
           :channel="payChannel" :online-allowed="onlineAllowed" :bookboll-owned="locationIsBookbollOwned"
           :payout-status="payoutStatus"
-          :show-errors="listingTriedSave" :paid-plan="ownSitePaidPlan"
+          :show-errors="listingTriedSave"
           @channel="payChannel = $event" @placement="updatePaymentPlacement" @method="updatePaymentMethod"
           @commission="form.commission_rate = $event; markDirty()"
-          @upgrade="openUpgrade('website_commission')"
           @connect="connectListingPayouts" @retry="checkProviderOnline(form.location_id)"
           @choose-venue="selectListingStep('details')" />
 

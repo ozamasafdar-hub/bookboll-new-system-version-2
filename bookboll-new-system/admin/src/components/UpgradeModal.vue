@@ -141,7 +141,7 @@ function close() { clearPromo(); step.value = 'gate'; upgradeModal.value = { ope
             <div class="ug-plan-name">Free</div>
             <div class="ug-plan-price"><b>$0</b><span>forever</span></div>
             <div class="ug-plan-tag current">Your current plan</div>
-            <p class="ug-fee-note">Your venue’s Free website rate applies. See the booking fees above.</p>
+            <p class="ug-fee-note">Your website uses the same rate on both plans. No upgrade needed.</p>
             <ul class="ug-plan-list">
               <li v-for="f in FREE_FEATURES.slice(0, 5)" :key="f"><Check :size="13" /> {{ f }}</li>
             </ul>
@@ -157,7 +157,7 @@ function close() { clearPromo(); step.value = 'gate'; upgradeModal.value = { ope
               <li class="everything">Everything in Free, plus:</li>
               <li v-for="ft in PREMIUM_FEATURES.slice(0, 6)" :key="ft.key"><Check :size="13" /> {{ ft.label }}</li>
             </ul>
-            <p class="ug-fee-note">Your venue’s Premium website rate applies. Marketplace fees stay the same.</p>
+            <p class="ug-fee-note">Booking fees are the same on Free and Premium. Upgrade for the extra features below.</p>
             <button class="ug-plan-btn" @click="step = 'checkout'"><Sparkles :size="14" /> Choose Premium</button>
           </div>
         </div>

@@ -54,7 +54,7 @@ class AdminReferenceDataService
         $byOwner = $businesses->keyBy(fn ($b) => $b->legacy_owner_id ?: $b->owner_id);
         foreach ($venues as $venue) {
             $business = $venue->business_id ? $byId->get($venue->business_id) : $byOwner->get($venue->owner_user_id);
-            $venue->setAttribute('business_plan', ['own_site_commission_discount_eligible' => \App\Support\CommissionPolicy::paidPlanEligible($business)]);
+            $venue->setAttribute('business_plan', ['own_site_commission_discount_eligible' => false]);
         }
 
         $listings = Listing::query()

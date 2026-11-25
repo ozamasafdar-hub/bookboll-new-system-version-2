@@ -8,9 +8,9 @@ const props = defineProps({
   form: Object, payment: Object, example: Object, currency: String,
   channel: String, role: String, onlineAllowed: Boolean, bookbollOwned: Boolean,
   payoutStatus: String,
-  showErrors: Boolean, paidPlan: Boolean,
+  showErrors: Boolean,
 })
-const emit = defineEmits(['channel', 'placement', 'method', 'commission', 'upgrade', 'connect', 'retry', 'choose-venue'])
+const emit = defineEmits(['channel', 'placement', 'method', 'commission', 'connect', 'retry', 'choose-venue'])
 const isSite = computed(() => props.channel === 'site')
 const visible = computed(() => isSite.value ? props.form.show_on_provider_site : props.form.show_on_marketplace)
 const noMethod = computed(() => isSite.value
@@ -78,10 +78,9 @@ function methodClick(kind, e) {
       <p v-else-if="isSite && bookbollOwned" class="lp-muted">This venue is owned by Bookboll. Its website bookings use the payment methods configured under Bookboll marketplace.</p>
       <template v-else>
         <div v-if="statusUncertain" class="lp-status lp-error" role="status"><AlertCircle :size="18" /><span>{{ payoutStatus === 'idle' ? 'Choose a venue to load the available payment methods.' : payoutStatus === 'loading' ? 'Checking your payout connection…' : 'We couldn’t check your payouts. Retry before choosing or saving payment options.' }}</span><button v-if="payoutStatus === 'idle'" type="button" @click="emit('choose-venue')">Choose venue</button><button v-else-if="payoutStatus === 'error'" type="button" @click="emit('retry')">Retry</button></div>
-        <p class="lp-fee-rule" v-if="!isSite && !bookbollOwned"><strong>Bookboll platform fee: {{ example.feePct }}%.</strong> With a deposit, the deposit is this fee. With full online payment, the fee is deducted before your share reaches your wallet.</p>
+        <p class="lp-fee-rule" v-if="!isSite && !bookbollOwned"><strong>Bookboll platform fee: {{ example.feePct }}%.</strong> With a deposit, the deposit is this fee. With full online payment, the fee is deducted before Stripe sends your share to your connected account.</p>
         <aside v-else-if="isSite && !statusUncertain" class="lp-commission" aria-label="Your website commission">
-          <div><strong>Your website commission: {{ example.sitePct }}%</strong><p>{{ paidPlan ? 'Paid Premium' : 'Free' }} rate for this venue’s market. This applies with or without connected payouts. Marketplace bookings keep their separate rate.</p></div>
-          <div v-if="!paidPlan && role === 'provider' && example.premiumSitePct < example.sitePct" class="lp-commission-upgrade"><span>Pay {{ example.premiumSitePct }}% with paid Premium.</span><button type="button" @click="emit('upgrade')">Upgrade to Premium <ArrowRight :size="15" /></button></div>
+          <div><strong>Your website commission: {{ example.sitePct }}%</strong><p>One rate for this venue on Free and Premium. This applies with or without connected payouts. Marketplace bookings keep their separate rate.</p></div>
         </aside>
 
         <details v-if="role !== 'provider' && !isSite && !bookbollOwned" class="lp-admin"><summary>Platform fee override</summary><label>Fee percentage<input type="number" min="0" max="100" step="0.5" :value="form.commission_rate" :placeholder="`Default ${example.feePct}%`" @input="emit('commission', $event.target.value)" /></label><p class="lp-muted">Leave blank to use the country default.</p></details>
@@ -91,7 +90,7 @@ function methodClick(kind, e) {
           <article class="lp-method" :class="{ selected: depositOn, invalid: methodError }">
             <label class="lp-method-choice"><input type="checkbox" :checked="depositOn" :class="{ 'input-invalid': methodError }" @change="emit('method', depositKey, $event.target.checked)" /><span><strong>Deposit + on arrival</strong><small>Bookboll keeps the online deposit fee. You collect the remaining balance on arrival.</small></span></label>
             <div v-if="depositOn" class="lp-method-details">
-              <p v-if="isSite" class="lp-explanation">The online deposit covers the {{ example.sitePct }}% Bookboll commission and is included in the booking price. The rate follows your plan at the time of booking. No payout connection is needed for this method.</p>
+              <p v-if="isSite" class="lp-explanation">The online deposit covers the {{ example.sitePct }}% Bookboll commission and is included in the booking price. The rate follows your venue’s country and city settings. No payout connection is needed for this method.</p>
               <p v-else class="lp-explanation">The {{ example.feePct }}% deposit is included in the booking price. It is Bookboll’s fee, not money owed to your business. Collect only the remaining {{ +(100 - example.feePct).toFixed(2) }}% when the customer arrives.</p>
               <PaymentExample :currency="currency" :total="example.total" :rows="depositRows" />
             </div>

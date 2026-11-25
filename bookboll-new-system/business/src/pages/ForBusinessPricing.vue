@@ -18,10 +18,10 @@ import { useBookingFees } from '../lib/bookingFees.js'
 import BusinessHeader from '../components/BusinessHeader.vue'
 import { Check, X as XIcon, ArrowRight, ArrowLeft, Info } from 'lucide-vue-next'
 
-// Booking commission differs by plan; core tools are included on both.
+// Booking fees and core tools are identical on both plans.
 const { feeRates, feeLoading, feeError, loadFees, rateLabel, shareLabel } = useBookingFees()
 const CORE_ROWS = computed(() => [
-  { label: 'Your own website · booking fee', free: rateLabel('site_free'), premium: rateLabel('site_premium'), fee: true },
+  { label: 'Your own website · booking fee', free: rateLabel('site'), premium: rateLabel('site'), fee: true },
   { label: 'Bookboll marketplace · booking fee', free: rateLabel('facility'), premium: rateLabel('facility'), fee: true },
   { label: 'Free branded booking website (yourclub.bookboll.com)' },
   { label: 'Bookboll marketplace listing' },
@@ -34,7 +34,7 @@ const CORE_ROWS = computed(() => [
 
 const PRICING_FAQS = [
   { q: 'Is the Free plan really free?',
-    a: 'The Free plan has no setup or monthly subscription fee. Booking commissions apply on both your own website and the Bookboll marketplace. The table shows the current global defaults. Your venue’s country or city can set a different Free or Premium website rate. Your dashboard shows the applicable rates. Marketplace rates stay the same across plans.' },
+    a: 'The Free plan has no setup or monthly subscription fee. Booking commissions apply on both your own website and the Bookboll marketplace. The table shows the current global defaults. Your venue’s country or city can set a different website rate for all plans. Your dashboard shows the applicable rates. Marketplace rates stay the same across plans.' },
   { q: 'How is Premium billed?',
     a: 'Premium is an annual subscription with no free trial. The annual charge is due when you subscribe. You can cancel renewal from the dashboard and keep access until the end of your paid year.' },
   { q: 'Does connecting payouts remove the commission?',
@@ -59,7 +59,7 @@ const PRICING_LD = {
     { '@type': 'Offer', name: 'Free', price: '0', priceCurrency: 'USD',
       description: 'No monthly subscription fee. Booking website, venue marketplace listings and booking payments. Membership marketplace exposure is a separate monthly fee. Standard booking commissions apply on both website and marketplace.' },
     { '@type': 'Offer', name: 'Premium (annual)', price: String(PREMIUM_YEARLY_TOTAL), priceCurrency: 'USD',
-      description: 'US$588 billed annually, no free trial. Paid Premium uses the configured own-website booking rate; marketplace rates stay the same.' },
+      description: 'US$588 billed annually, no free trial. Premium adds membership listings and marketing tools. Booking rates stay the same on both plans.' },
   ],
   publisher: { '@type': 'Organization', name: 'Bookboll', url: 'https://bookboll.com/' },
 }
@@ -82,7 +82,7 @@ const open = ref(-1)
     <section class="fbp-hero">
       <router-link to="/" class="fbp-back"><ArrowLeft :size="15" /> Bookboll for Business</router-link>
       <h1>Simple pricing.<br /><span class="fbp-hl">Free forever</span>, or grow with Premium.</h1>
-      <p class="fbp-hero-sub">Create your branded booking website for free. Compare booking fees below, or choose annual Premium for more business tools.</p>
+      <p class="fbp-hero-sub">Create your branded booking website for free. The same booking fees on every plan. Choose annual Premium for more business tools.</p>
     </section>
 
     <!-- ── Plans ──────────────────────────────────────────────────────────── -->
@@ -117,7 +117,7 @@ const open = ref(-1)
 
         <!-- premium growth toolkit -->
         <div class="fbp-pt-group">Growth toolkit — Premium</div>
-        <template v-for="ft in PREMIUM_FEATURES.filter(f => f.key !== 'website_commission')" :key="ft.key">
+        <template v-for="ft in PREMIUM_FEATURES" :key="ft.key">
           <div class="fbp-pt-l">{{ ft.label }}<small>{{ ft.desc }}</small></div>
           <div class="fbp-pt-c" data-plan="Free"><XIcon :size="16" class="fbp-pt-no" aria-label="Not included" /></div>
           <div class="fbp-pt-c hot" data-plan="Premium"><Check :size="17" class="fbp-pt-yes" aria-label="Included" /></div>
@@ -128,7 +128,7 @@ const open = ref(-1)
         <Info :size="14" />
         <span><b>How the commission works:</b> the percentage is included in the booking price. The same website rate applies to deposits and full online payments. Marketplace listing-specific commissions or fixed deposits may differ. Staff-added bookings have no platform fee.</span>
       </div>
-      <div v-if="feeRates" class="fbp-fee-example"><div><strong>A website booking priced at 100</strong><p>Before discounts and payment processing fees, at the global rates above.</p></div><div><span>With Free, you keep</span><b>{{ shareLabel('site_free') }}</b></div><div><span>With Premium, you keep</span><b>{{ shareLabel('site_premium') }}</b></div></div>
+      <div v-if="feeRates" class="fbp-fee-example"><div><strong>A website booking priced at 100</strong><p>Before discounts and payment processing fees, at the global rates above.</p></div><div><span>Your business keeps · any plan</span><b>{{ shareLabel('site') }}</b></div><div><span>Bookboll’s fee</span><b>{{ rateLabel('site') }}</b></div></div>
       <div class="fbp-note">
         <Info :size="14" />
         <span>Subscription prices are in USD. Premium is ${{ PREMIUM_YEARLY_TOTAL }} once a year with no free trial. Booking commissions apply separately. *Marketplace membership listings default to USD 20 per listing each month on both plans; country/city rates may differ. Customers enrol and pay the academy directly. Your team can manage members, attendance and offline receipts in the dashboard without a payment gateway. Optional extras: a custom domain (one-time fee). <router-link to="/terms" class="fbp-link">Provider terms apply</router-link>.</span>

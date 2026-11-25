@@ -40,62 +40,54 @@ beforeEach(function () {
 function marketValues(array $overrides = []): array { return array_replace(array_fill_keys(array_keys(MarketSettings::DEFAULTS), null), $overrides); }
 function saveMarket(string $scope, int $id, array $values) { return test()->putJson("/api/admin/geography/settings/$scope/$id", ['values' => $values]); }
 
-it('starts with independent 15 marketplace 15 Free and 10 Premium fees and inherits each separately', function () {
+it('starts with two fees and inherits city country and global rates independently', function () {
     $this->getJson('/api/admin/geography/settings/global/0')->assertOk()
-        ->assertJsonPath('data.settings.effective.facility', 15)
-        ->assertJsonPath('data.settings.effective.site_free', 15)
-        ->assertJsonPath('data.settings.effective.site_premium', 10);
-    saveMarket('country', $this->country->id, marketValues(['facility' => 18, 'site_free' => 12]))->assertOk();
-    saveMarket('city', $this->city->id, marketValues(['site_premium' => 0]))->assertOk();
+        ->assertJsonPath('data.settings.effective.facility', 15)->assertJsonPath('data.settings.effective.site', 10);
+    saveMarket('country', $this->country->id, marketValues(['facility' => 18, 'site' => 12]))->assertOk();
+    saveMarket('city', $this->city->id, marketValues(['site' => 0]))->assertOk();
     $this->getJson('/api/admin/geography/settings/city/'.$this->city->id)->assertOk()
-        ->assertJsonPath('data.settings.effective.facility', 18)
-        ->assertJsonPath('data.settings.effective.site_free', 12)
-        ->assertJsonPath('data.settings.effective.site_premium', 0)
-        ->assertJsonPath('data.settings.sources.facility', 'country')
-        ->assertJsonPath('data.settings.sources.site_premium', 'city');
-    saveMarket('global', 0, array_replace(MarketSettings::DEFAULTS, ['site_free' => 17, 'site_premium' => 11]))->assertOk();
+        ->assertJsonPath('data.settings.effective.facility', 18)->assertJsonPath('data.settings.effective.site', 0)
+        ->assertJsonPath('data.settings.sources.facility', 'country')->assertJsonPath('data.settings.sources.site', 'city');
+    saveMarket('global', 0, array_replace(MarketSettings::DEFAULTS, ['site' => 17]))->assertOk();
     saveMarket('city', $this->city->id, marketValues())->assertOk();
     $this->getJson('/api/admin/geography/settings/city/'.$this->city->id)->assertOk()
-        ->assertJsonPath('data.settings.effective.site_free', 12)
-        ->assertJsonPath('data.settings.effective.site_premium', 11)
-        ->assertJsonPath('data.settings.sources.site_premium', 'global');
+        ->assertJsonPath('data.settings.effective.site', 12)->assertJsonPath('data.settings.sources.site', 'country');
     saveMarket('country', $this->country->id, marketValues())->assertOk();
     expect(CommissionPolicy::effectiveRatePct($this->listing->fresh('venue'), 'site'))->toBe(17.0);
 });
 
 it('treats legacy null website values as inheritance while preserving zero overrides', function () {
     foreach (['global' => 0, 'country' => $this->country->id, 'city' => $this->city->id] as $scope => $id) {
-        \App\Models\MarketSetting::updateOrCreate(['scope' => $scope, 'scope_id' => $id], ['values' => ['site_free' => null, 'site_premium' => null]]);
+        \App\Models\MarketSetting::updateOrCreate(['scope' => $scope, 'scope_id' => $id], ['values' => ['site' => null]]);
     }
     app(MarketSettings::class)->clear();
     $this->getJson('/api/admin/geography/settings/city/'.$this->city->id)->assertOk()
-        ->assertJsonPath('data.settings.effective.site_free', 15)
-        ->assertJsonPath('data.settings.effective.site_premium', 10)
-        ->assertJsonPath('data.settings.sources.site_free', 'global');
+        ->assertJsonPath('data.settings.effective.site', 10)
+        ->assertJsonPath('data.settings.sources.site', 'global');
 });
 
 it('rolls out the defaults once and retains overrides unrelated settings and later administrator edits', function () {
     \Illuminate\Support\Facades\DB::table('settings')->where('key', 'booking_fee_defaults_20261122')->delete();
     saveMarket('global', 0, array_replace(MarketSettings::DEFAULTS, ['facility' => 20, 'event' => 7, 'comeback_enabled' => false]))->assertOk();
-    saveMarket('country', $this->country->id, marketValues(['facility' => 21, 'site_free' => 0]))->assertOk();
+    saveMarket('country', $this->country->id, marketValues(['facility' => 21, 'site' => 0]))->assertOk();
     $migration = require database_path('migrations/2026_11_22_000002_set_independent_booking_fee_defaults.php');
     $migration->up();
     app(MarketSettings::class)->clear();
     $this->getJson('/api/admin/geography/settings/global/0')->assertOk()
-        ->assertJsonPath('data.settings.effective.facility', 15)->assertJsonPath('data.settings.effective.site_premium', 10)
+        ->assertJsonPath('data.settings.effective.facility', 15)->assertJsonPath('data.settings.effective.site', 10)
         ->assertJsonPath('data.settings.effective.event', 7)->assertJsonPath('data.settings.effective.comeback_enabled', false);
     expect(app(MarketSettings::class)->config($this->country->id)['effective']['facility'])->toBe(21.0)
-        ->and((float) app(MarketSettings::class)->config($this->country->id)['effective']['site_free'])->toBe(0.0);
-    saveMarket('global', 0, array_replace(MarketSettings::DEFAULTS, ['site_premium' => 8]))->assertOk();
+        ->and((float) app(MarketSettings::class)->config($this->country->id)['effective']['site'])->toBe(0.0);
+    saveMarket('global', 0, array_replace(MarketSettings::DEFAULTS, ['site' => 8]))->assertOk();
     $migration->up();
     app(MarketSettings::class)->clear();
-    expect((float) app(MarketSettings::class)->config()['effective']['site_premium'])->toBe(8.0);
+    expect((float) app(MarketSettings::class)->config()['effective']['site'])->toBe(8.0);
 });
 
 it('resets only the approved Qatar and Pakistan country booking overrides and does not repeat the reset', function () {
     $this->country->update(['iso2' => 'QA']);
     $this->other->update(['iso2' => 'PK']);
-    saveMarket('country', $this->country->id, marketValues(['facility' => 20, 'site_free' => 12, 'event' => 7]))->assertOk();
+    saveMarket('country', $this->country->id, marketValues(['facility' => 20, 'site' => 12, 'event' => 7]))->assertOk();
     saveMarket('country', $this->other->id, marketValues(['facility' => 50]))->assertOk();
     saveMarket('city', $this->city->id, marketValues(['facility' => 9]))->assertOk();
     \Illuminate\Support\Facades\DB::table('settings')->where('key', 'booking_fee_defaults_20261122')->delete();
@@ -107,7 +99,7 @@ it('resets only the approved Qatar and Pakistan country booking overrides and do
             ->assertJsonPath('data.settings.effective.facility', 15)->assertJsonPath('data.settings.sources.facility', 'global');
     }
     $this->getJson('/api/admin/geography/settings/country/'.$this->country->id)->assertOk()
-        ->assertJsonPath('data.settings.effective.site_free', 12)->assertJsonPath('data.settings.effective.event', 7);
+        ->assertJsonPath('data.settings.effective.site', 12)->assertJsonPath('data.settings.effective.event', 7);
     $this->getJson('/api/admin/geography/settings/city/'.$this->city->id)->assertOk()->assertJsonPath('data.settings.effective.facility', 9);
     saveMarket('country', $this->country->id, marketValues(['facility' => 17]))->assertOk();
     $migration->up(); app(MarketSettings::class)->clear();
@@ -121,7 +113,7 @@ it('filters onboarded countries and fee overrides across the full directory befo
         ->assertJsonPath('data.pagination.total', 2)->assertJsonPath('data.countries.0.id', $this->country->id);
     $this->getJson('/api/admin/geography/countries?view=onboarded&records_per_page=1&page=2')->assertOk()
         ->assertJsonPath('data.countries.0.id', $this->other->id);
-    saveMarket('country', $this->other->id, marketValues(['site_free' => 0]))->assertOk();
+    saveMarket('country', $this->other->id, marketValues(['site' => 0]))->assertOk();
     $this->getJson('/api/admin/geography/countries?view=overrides')->assertOk()
         ->assertJsonPath('data.pagination.total', 1)->assertJsonPath('data.countries.0.id', $this->other->id);
     saveMarket('country', $this->other->id, marketValues())->assertOk();
@@ -131,7 +123,7 @@ it('filters onboarded countries and fee overrides across the full directory befo
         ->assertJsonPath('data.pagination.total', 1)->assertJsonPath('data.countries.0.id', $this->country->id);
 });
 
-it('applies independent Free and Premium website fees through global country city and reset', function () {
+it('applies the same website fee on every plan through global country city and reset', function () {
     $owner = User::factory()->create();
     $business = Business::create(['name' => 'Website QA', 'username' => 'website-qa', 'owner_id' => $owner->id, 'plan' => 'premium']);
     $sub = \App\Models\BusinessSubscription::create(['business_id' => $business->id, 'plan' => 'premium', 'billing' => 'yearly',
@@ -140,21 +132,21 @@ it('applies independent Free and Premium website fees through global country cit
     $this->venue->forceFill(['business_id' => $business->id])->save();
     $this->listing->update(['commission_rate' => 24]);
     $rate = fn () => CommissionPolicy::effectiveRatePct($this->listing->fresh('venue'), 'site');
-    saveMarket('global', 0, array_replace(MarketSettings::DEFAULTS, ['site_free' => 12, 'site_premium' => 6]))->assertOk();
+    saveMarket('global', 0, array_replace(MarketSettings::DEFAULTS, ['site' => 6]))->assertOk();
     expect($rate())->toBe(6.0);
     $this->getJson('/api/admin/reference-data')->assertOk()
-        ->assertJsonPath('data.venues.0.business_plan.own_site_commission_discount_eligible', true);
-    saveMarket('country', $this->country->id, marketValues(['site_free' => 9, 'site_premium' => 3]))->assertOk();
+        ->assertJsonPath('data.venues.0.business_plan.own_site_commission_discount_eligible', false);
+    saveMarket('country', $this->country->id, marketValues(['site' => 3]))->assertOk();
     expect($rate())->toBe(3.0);
-    saveMarket('city', $this->city->id, marketValues(['site_free' => 7, 'site_premium' => 0]))->assertOk();
+    saveMarket('city', $this->city->id, marketValues(['site' => 0]))->assertOk();
     expect($rate())->toBe(0.0)
         ->and(CommissionPolicy::effectiveRatePct($this->listing->fresh('venue'), 'marketplace'))->toBe(24.0);
     $this->getJson('/api/admin/geography/settings/city/'.$this->city->id)->assertOk()
-        ->assertJsonPath('data.settings.effective.site_premium', 0)
-        ->assertJsonPath('data.settings.sources.site_premium', 'city');
+        ->assertJsonPath('data.settings.effective.site', 0)
+        ->assertJsonPath('data.settings.sources.site', 'city');
     foreach (['past_due', 'trialing', 'canceled'] as $status) {
         $sub->update(['status' => $status]);
-        expect($rate())->toBe(7.0);
+        expect($rate())->toBe(0.0);
     }
     $sub->update(['status' => 'active']);
     saveMarket('city', $this->city->id, marketValues())->assertOk();
@@ -162,13 +154,13 @@ it('applies independent Free and Premium website fees through global country cit
     saveMarket('country', $this->country->id, marketValues())->assertOk();
     expect($rate())->toBe(6.0);
     saveMarket('global', 0, MarketSettings::DEFAULTS)->assertOk();
-    expect($rate())->toBe(10.0); // Independent Premium default, even with a 24% listing commission.
+    expect($rate())->toBe(10.0); // Website default on every plan, even with a 24% listing commission.
     $business->update(['plan' => 'free']);
-    expect($rate())->toBe(15.0);
+    expect($rate())->toBe(10.0);
 });
 
 it('charges the configured website deposit and full payment split while preserving recorded bookings', function () {
-    saveMarket('global', 0, array_replace(MarketSettings::DEFAULTS, ['site_free' => 8.5]))->assertOk();
+    saveMarket('global', 0, array_replace(MarketSettings::DEFAULTS, ['site' => 8.5]))->assertOk();
     $listing = $this->listing->fresh('venue');
     $deposit = CommissionPolicy::quote($listing, 'site', 20000, 'QAR', 'deposit');
     $full = CommissionPolicy::quote($listing, 'site', 20000, 'QAR', 'online');
@@ -179,7 +171,7 @@ it('charges the configured website deposit and full payment split while preservi
         'date' => now()->toDateString(), 'start_time' => '10:00', 'end_time' => '11:00', 'subtotal' => 200, 'total_price' => 200,
         'status' => 'confirmed', 'commission_channel' => 'site', 'commission_effective_pct' => $deposit['effective_rate_pct'],
         'commission_fee_minor' => $deposit['fee_minor'], 'merchant_share_minor' => $deposit['merchant_share_minor'], 'commission_currency' => 'QAR']);
-    saveMarket('global', 0, array_replace(MarketSettings::DEFAULTS, ['site_free' => 4]))->assertOk();
+    saveMarket('global', 0, array_replace(MarketSettings::DEFAULTS, ['site' => 4]))->assertOk();
     $settleRate = new ReflectionMethod(\App\Services\StripeService::class, 'bookingCommissionPct');
     expect($settleRate->invoke(app(\App\Services\StripeService::class), $booking->fresh(), $listing))->toBe(8.5)
         ->and($booking->fresh()->commission_fee_minor)->toBe(1700)
@@ -187,16 +179,15 @@ it('charges the configured website deposit and full payment split while preservi
 });
 
 it('preserves website overrides from older editors and rejects invalid fee percentages', function () {
-    saveMarket('global', 0, array_replace(MarketSettings::DEFAULTS, ['site_free' => 8, 'site_premium' => 2]))->assertOk();
+    saveMarket('global', 0, array_replace(MarketSettings::DEFAULTS, ['site' => 8]))->assertOk();
     $oldPayload = array_diff_key(MarketSettings::DEFAULTS, array_flip(MarketSettings::SITE_KEYS));
-    saveMarket('global', 0, $oldPayload)->assertOk()->assertJsonPath('data.settings.effective.site_free', 8)
-        ->assertJsonPath('data.settings.effective.site_premium', 2);
+    saveMarket('global', 0, $oldPayload)->assertOk()->assertJsonPath('data.settings.effective.site', 8);
     foreach ([-1, 101, 'invalid'] as $value) {
-        saveMarket('global', 0, array_replace(MarketSettings::DEFAULTS, ['site_free' => $value]))->assertUnprocessable();
-        saveMarket('city', $this->city->id, marketValues(['site_premium' => $value]))->assertUnprocessable();
+        saveMarket('global', 0, array_replace(MarketSettings::DEFAULTS, ['site' => $value]))->assertUnprocessable();
+        saveMarket('city', $this->city->id, marketValues(['site' => $value]))->assertUnprocessable();
     }
     $this->getJson('/api/admin/reference-data')->assertOk()
-        ->assertJsonFragment(['website_fees' => ['site_free' => 8, 'site_premium' => 2]]);
+        ->assertJsonFragment(['website_fees' => ['site' => 8]]);
 });
 
 it('round trips global country and city settings with explicit zero and false values', function () {
@@ -354,4 +345,12 @@ it('expires only unspent rewards and keeps legacy points and lifetime tiers inta
     expect(LoyaltyCountry::balance($user->id, $this->country->id)['balance'])->toBe(50)
         ->and(LoyaltyCountry::balance($user->id, $this->country->id)['lifetime_earned'])->toBe(150);
     $this->travelBack();
+});
+
+it('rejects retired plan-specific fee fields instead of pretending to save them', function () {
+    foreach (['site_free', 'site_premium'] as $key) {
+        saveMarket('global', 0, array_replace(MarketSettings::DEFAULTS, [$key => 25]))->assertUnprocessable();
+        saveMarket('city', $this->city->id, marketValues([$key => 25]))->assertUnprocessable();
+    }
+    expect(app(MarketSettings::class)->websiteRate())->toBe(10.0);
 });

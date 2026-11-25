@@ -13,7 +13,7 @@ class BookingFeeController extends Controller
     private function rates(?int $countryId = null, ?City $city = null): array
     {
         $config = app(MarketSettings::class)->config($countryId, $city);
-        $keys = array_flip(['facility', 'site_free', 'site_premium']);
+        $keys = array_flip(['facility', 'site']);
         return ['rates' => array_intersect_key($config['effective'], $keys),
             'sources' => array_intersect_key($config['sources'], $keys)];
     }
@@ -28,7 +28,7 @@ class BookingFeeController extends Controller
     public function countries()
     {
         $customCityIds = MarketSetting::where('scope', 'city')->get()->filter(fn ($row) =>
-            collect($row->values ?? [])->only(['facility', 'site_free', 'site_premium'])->filter(fn ($v) => $v !== null)->isNotEmpty()
+            collect($row->values ?? [])->only(['facility', 'site'])->filter(fn ($v) => $v !== null)->isNotEmpty()
         )->pluck('scope_id');
         $customCounts = City::where('status', 1)->whereIn('id', $customCityIds)->selectRaw('country_id, COUNT(*) as total')->groupBy('country_id')->pluck('total', 'country_id');
         $countries = Country::where('status', 1)->orderBy('name')->get()->map(fn ($country) => [
@@ -47,7 +47,7 @@ class BookingFeeController extends Controller
         if ($search = trim($data['search'] ?? '')) $query->where('name', 'like', '%'.addcslashes($search, '%_\\').'%');
         if ($request->boolean('custom_only')) {
             $ids = MarketSetting::where('scope', 'city')->get()->filter(fn ($row) =>
-                collect($row->values ?? [])->only(['facility', 'site_free', 'site_premium'])->filter(fn ($v) => $v !== null)->isNotEmpty()
+                collect($row->values ?? [])->only(['facility', 'site'])->filter(fn ($v) => $v !== null)->isNotEmpty()
             )->pluck('scope_id');
             $query->whereIn('id', $ids);
         }

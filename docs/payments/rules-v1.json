@@ -418,8 +418,8 @@
     },
     {
       "id": "P28_INDEPENDENT_MARKET_FEES",
-      "rule": "New customer bookings use separate marketplace, Free website and eligible Premium website fees. Defaults are 15%, 15%, 10%; city overrides country overrides global. Null inherits and zero is explicit. Paid and complimentary Premium qualify. Preserve listing-specific marketplace pricing, fixed deposits, staff zero fees, promo funding and all saved historical fee snapshots. The approved QA/PK country marketplace reset is one-time only.",
-      "production_acceptance": "Run the MySQL Batch 4 migration and geography, quote, plan, promotion and snapshot suites. Verify defaults, country/city overrides/reset, country-admin jurisdiction and provider denial, deposit/full-online parity, and idempotent rollout preserving subsequent edits.",
+      "rule": "New customer bookings use two rates: marketplace (default 15%) and own website (default 10%) on ALL plans. City overrides country overrides global; null inherits and zero is explicit. Premium changes features only, never booking fees. Retire site_free and site_premium. Preserve listing-specific marketplace pricing, fixed deposits, staff zero fees, promotion funding and saved historical snapshots.",
+      "production_acceptance": "Run the MySQL unified website fee migration after previous migrations. Conflicting legacy local rates must be reviewed into an explicit site value before migration; never guess. Run migration, geography, checkout, promotion and snapshot suites. Verify plan independence, country/city inheritance, provider isolation, deposit/full-online parity and idempotent rollout. Public pricing and upgrade screens expose two current rates with geographic sources.",
       "implementation": [
         "bookboll-BACKEND/app/Support/MarketSettings.php",
         "bookboll-BACKEND/app/Support/CommissionPolicy.php",
@@ -429,7 +429,8 @@
         "bookboll-BACKEND/app/Http/Controllers/BookingFeeController.php",
         "bookboll-new-system/admin/src/components/BookingFeeComparison.vue",
         "bookboll-new-system/business/src/lib/bookingFees.js",
-        "bookboll-new-system/business/src/pages/BookingFees.vue"
+        "bookboll-new-system/business/src/pages/BookingFees.vue",
+        "bookboll-BACKEND/database/migrations/2026_11_25_000001_unify_website_booking_fees.php"
       ],
       "tests": [
         "bookboll-BACKEND/tests/Feature/GeographySettingsTest.php",
@@ -440,7 +441,8 @@
         "bookboll-new-system/admin/tests/marketSettings.test.js",
         "bookboll-BACKEND/tests/Feature/BookingFeePresentationTest.php",
         "bookboll-new-system/admin/tests/bookingFeeComparison.test.js",
-        "bookboll-new-system/business/tests/bookingFees.test.js"
+        "bookboll-new-system/business/tests/bookingFees.test.js",
+        "bookboll-BACKEND/tests/Feature/UnifiedWebsiteFeeMigrationTest.php"
       ]
     }
   ],

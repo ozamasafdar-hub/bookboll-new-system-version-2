@@ -26,7 +26,6 @@ export function billedAmount() { return PREMIUM_YEARLY_TOTAL }
 
 export const PREMIUM_FEATURES = [
   { key: 'membership_website', label: 'Membership listings on your website', desc: 'Show academy contact listings on your branded website. Marketplace exposure is a separate monthly subscription per listing, on every plan.' },
-  { key: 'website_commission', label: 'Premium own-website fee rate', desc: 'Default website fee: 10% on Premium, 15% on Free. Country/city rates can differ; your upgrade comparison shows the current rates. Marketplace fees stay the same.' },
   { key: 'blog',       label: 'Website blog',       desc: 'Publish posts on your own site — great for Google.' },
   { key: 'marketing',  label: 'Marketing emails',   desc: 'Email campaigns to your opted-in customers.' },
   { key: 'exports',    label: 'Data exports',       desc: 'Download bookings, customers, payments & more as CSV.' },

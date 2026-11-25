@@ -1,8 +1,7 @@
 export const MARKET_GROUPS = [
-  { key: 'marketplace', label: 'Booking transaction fees', short: 'Booking fees', help: 'Choose the platform fee for each booking source. Premium website fees apply to active paid Premium and complimentary Premium businesses. Marketplace fees are the same on every plan.', fields: [
+  { key: 'marketplace', label: 'Booking transaction fees', short: 'Booking fees', help: 'Two booking channels, the same rates on Free and Premium. Set global defaults here; countries and cities can override either rate. Premium unlocks extra features only.', fields: [
     { key: 'facility', label: 'Bookboll marketplace' },
-    { key: 'site_free', label: 'Free website' },
-    { key: 'site_premium', label: 'Premium website' },
+    { key: 'site', label: 'Venue’s own website' },
   ] },
   { key: 'events', label: 'Event fees', short: 'Events', help: 'Platform fee on event seats booked through Bookboll.', fields: [{ key: 'event', label: 'Event seats' }] },
   { key: 'memberships', label: 'Marketplace membership listings', short: 'Membership listings', help: 'Monthly subscription per listing in USD, on every business plan. Own-website membership listings require Premium. Existing subscriptions keep their agreed price until cancelled; new subscriptions use this rate.', fields: [{ key: 'membership_listing_monthly', label: 'Monthly listing fee', currency: true }] },
@@ -21,7 +20,7 @@ export function effectiveDraft(values, parent) { return Object.fromEntries(MARKE
 export function marketValue(effective, key) {
   if (key === 'membership_listing_monthly') return `USD ${Number(effective[key] ?? 20).toFixed(2)}`
   if (key.startsWith('module_') || key === 'comeback_enabled') return effective[key] ? 'Enabled' : 'Disabled'
-  const rate = effective[key] ?? (key === 'site_premium' ? 10 : 15)
+  const rate = effective[key] ?? (key === 'site' ? 10 : 15)
   return `${Number(Number(rate).toFixed(4))}%`
 }
 export function marketChanges(initial, draft) {

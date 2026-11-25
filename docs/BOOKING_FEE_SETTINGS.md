@@ -1,37 +1,42 @@
-# Batch 4: booking fee settings
+# Booking fees — current policy, 25 November 2026
 
-Authorized 22 November 2026. MySQL remains the database. This policy supersedes the former automatic marketplace / half-marketplace website rates.
+This supersedes the earlier Free/Premium website fee model and the half-marketplace rule. MySQL remains the database.
 
-| Booking source | Global default |
-| --- | --- |
-| Bookboll marketplace | 15% |
-| Free provider website | 15% |
-| Eligible Premium provider website | 10% |
+| Booking channel | Global default | Settings key | Plans |
+| --- | --- | --- | --- |
+| Bookboll marketplace | 15% | `facility` | All |
+| Provider’s own website | 10% | `site` | All — no upgrade required |
 
-Each fee is independent. Resolve city override, then country override, then global. An absent/null override inherits; explicit zero is valid. Premium includes active paid subscriptions and superadmin-granted complimentary Premium. Trials, expired/past-due subscriptions and Free use the Free website rate.
+Each channel resolves independently: city → country → global. Null/absent inherits; explicit zero is valid. Free, paid Premium, complimentary Premium, trial, past-due and expired plans receive the same website rate. Premium adds product features only. Annual plans and marketplace membership listing subscriptions remain separate charges.
 
-The Countries & cities page shows these three fees together with their sources. Its editor previews the platform fee and venue share on a booking worth 100, reviews changes, and lets each country/city restore inheritance. Other global settings are collapsed below booking fees. Venue/business sorting remains available.
+## Rollout and safeguards
 
-## Rollout
+Run all migrations, including `2026_11_25_000001_unify_website_booking_fees.php` after the earlier Batch 4 migration. It sets the approved global 15%/10% defaults once and removes `site_free` and `site_premium`, preserving all old market settings in the audit marker `unified_website_booking_fees_20261125`. No booking/payment snapshots are rewritten.
 
-Run `2026_11_22_000002_set_independent_booking_fee_defaults.php`. It sets the three global values once and clears the explicitly approved Qatar/Pakistan marketplace **country** overrides, identified by ISO QA/PK. It preserves other country/city settings, listing-specific commissions, fixed deposits, events, rewards, membership listing prices and all historical bookings/payments.
+Railway had no published geographic overrides at rollout. For another database:
 
-The `settings` marker `booking_fee_defaults_20261122` contains the prior global values and removed country configuration. Re-running the migration leaves subsequent admin changes untouched. Code rollback does not automatically overwrite business pricing; use the settings editor for a deliberate reversal.
+- An explicit local `site` value wins.
+- A sole old website override, or two matching old rates, becomes the shared local rate, including zero.
+- Different local Free/Premium overrides stop and roll back migration. Review the amounts and set one explicit `market_settings.values.site` for that scope before retrying. Never silently choose a rate.
+- Other settings, marketplace overrides, fixed deposits and rewards are retained.
+- The marker makes reruns leave subsequent administrator edits alone. Code rollback does not automatically restore old prices; audit data supports deliberate restoration.
 
-Marketplace listing-specific commissions/fixed deposits still take priority where configured. Website fees are independent of listing marketplace commissions. Staff-created bookings still have no platform fee. Provider promo percentage fees use the discounted price; platform-funded discounts cannot exceed Bookboll's available fee. Saved booking snapshots remain the settlement authority.
+Old editor submissions with retired keys receive validation errors. The resolver/public endpoints never expose retired keys, even after a legacy import. Historical `commission_plan_eligible` snapshots remain; new bookings use false. The compatibility API flag `own_site_commission_discount_eligible` is always false. Neither flag controls new charges.
 
-## Required release checks
+## Checkout and accounting
 
-### Pricing and upgrade presentation — 23 November 2026
+`MarketSettings` and `CommissionPolicy` are authoritative; the business plan never selects a website rate. A website booking priced at 100 at the default rate allocates 10 to Bookboll and 90 to the venue. Deposit checkout collects 10 online and leaves 90 on arrival. Full online checkout collects 100 and allocates 10/90 through the existing Stripe flow. Provider Stripe is required only for full online payment.
 
-The public `/booking-fees` information page is linked from the business header, landing page and pricing comparison. It shows current global defaults, enabled country rates and enabled city rates, each with its source. Country filters include countries whose only overrides are at city level. City search/custom-only filtering is scoped to the selected enabled country, paginated at 50 rows; zero is an explicit override, null and unrelated settings are not. Anonymous endpoints `/api/business/booking-fees/countries` and `/api/business/booking-fees/countries/{country}/cities` return only geographic names/IDs/codes and the three booking rates/sources. No internal settings, owners, contact information or business records are published. No additional migration or rate changes are required. Test these endpoints in `BookingFeePresentationTest` and asynchronous page filtering in business `tests/bookingFees.test.js`; both are mandatory in CI.
+Marketplace listing-specific fees/fixed deposits retain priority. Staff-created bookings remain fee-free. Provider promotions reduce the price before percentage fees; platform promotions cannot exceed Bookboll’s available fee. Historical fee/share snapshots remain the settlement authority.
 
-The business landing/pricing pages load current global rates from the public `GET /api/business/booking-fees` endpoint. No provider records or unrelated settings are exposed. The authenticated `GET /api/admin/plan/booking-fees` comparison returns the signed-in business's accessible venues and independently resolved rates/sources. A business without venues sees its country defaults. Never accept a client-supplied business, plan or country as checkout authority.
+## Settings and presentation
 
-The upgrade modal shows Free/Premium website fees and the marketplace rate on every step, with a venue selector, source labels and a price-100 example. The annual plan charge is separate. Failed rate requests show a retry, not invented fallback pricing. Marketplace listing overrides/fixed deposits remain explicitly distinguished from geographic defaults. Full online receipts use connected Stripe payouts; deposits require no provider gateway.
+Countries & cities exposes two booking fee controls with inherited sources, review and reset. Provider payment settings and upgrade modals show the same rates and promise no fee savings on Premium.
 
-`BookingFeePresentationTest` must pass on MySQL: published data scope, provider/venue isolation, and a 12-case Free/Premium × global/country/city × deposit/full-online matrix comparing the upgrade API, catalog, charge calculation and persisted booking/payment allocations. It also checks zero, decimals, ignored stale listing deposit values and preserved historical snapshots. `bookingFeeComparison.test.js` checks reactive venue selection, zero and missing-data handling; `annualPlan.test.js` keeps subscription billing annual. These tests run in the release workflow and are listed in policy P28. No additional migration is needed for this presentation change.
+The landing diagram shows Bookboll customers → marketplace and your customers → standalone website powered by Bookboll, with live global fees and a local-rates link. Pricing shows identical booking fees on both plans. `/booking-fees` publishes enabled country/city rates with sources, pagination and scoped search. Anonymous responses contain only geography and two booking rates. Authenticated comparisons use the business’s accessible venues. Client-supplied plan/business/geography cannot determine checkout pricing.
 
-CI runs MySQL/MariaDB integration tests in `GeographySettingsTest`, `OwnSiteCommissionPolicyTest`, `DepositFollowsSurfaceAndCommissionTest`, `CommissionSnapshotAndLedgerTest`, `BookingPromotionFundingTest`, `AccountManagementTest`, and `OwnSiteReviewTest`, alongside the full existing financial regression suite. The policy manifest requires P28. Do not omit these when copying this environment to production.
+## Required verification
 
-Validate numeric limits and explicit 0, inheritance/reset at every level, country-admin jurisdiction and provider denial, Premium eligibility, deposits and full online checkout, fixed deposits/promos, catalog quote parity, snapshot preservation, and migration idempotency. Browser verification must cover global/country/city editors, review/discard and small-screen layout. Railway preview never sends real payments or messages.
+Policy P28 and `scripts/check-payment-policy.mjs` require the new migration and its MySQL test in CI. Run `UnifiedWebsiteFeeMigrationTest`, `BookingFeePresentationTest`, `GeographySettingsTest`, `OwnSiteCommissionPolicyTest`, `DepositFollowsSurfaceAndCommissionTest`, `CommissionSnapshotAndLedgerTest`, `BookingPromotionFundingTest` and existing financial regressions.
+
+Verify migration conflict rollback/audit/rerun safety; public API privacy; inheritance/zero/fractional rates; authorization; plan lifecycle parity; deposit/full payment catalog/charge/snapshot parity; promotion funding; historical records. Frontend tests cover rate selection, settings edits, missing data and asynchronous geography filtering. Check landing, pricing, upgrade and settings on desktop/mobile. Railway preview sends no real payments or messages.

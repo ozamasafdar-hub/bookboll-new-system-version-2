@@ -140,10 +140,10 @@ class AuditReadmeAlamgir extends Command
 
         // 6. Own-site commission policy (readmeAlamgir "Requested policy")
         $this->check(
-            'Commission: independent 15% marketplace, 15% Free website, 10% Premium defaults',
+            'Commission: 15% marketplace and 10% website defaults on every plan',
             \App\Support\MarketSettings::DEFAULTS['facility'] === 15.0
-                && \App\Support\MarketSettings::DEFAULTS['site_free'] === 15.0
-                && \App\Support\MarketSettings::DEFAULTS['site_premium'] === 10.0,
+                && \App\Support\MarketSettings::DEFAULTS['site'] === 10.0
+                && \App\Support\MarketSettings::SITE_KEYS === ['site'],
             'MarketSettings; country/city overrides apply to new bookings'
         );
         $this->check(
@@ -173,10 +173,10 @@ class AuditReadmeAlamgir extends Command
             'Money::split'
         );
         $this->check(
-            'Plan: own_site_commission_discount_eligible is served',
+            'Plan: booking fees are independent of Premium',
             str_contains(
                 (string) file_get_contents(app_path('Services/ProviderPlanService.php')),
-                'own_site_commission_discount_eligible'
+                "'booking_fees_plan_independent' => true"
             ),
             'GET /admin/plan'
         );

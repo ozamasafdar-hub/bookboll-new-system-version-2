@@ -4,7 +4,7 @@
  * The commission policy readmeAlamgir specifies, as its own acceptance table.
  *
  *   Marketplace booking -> the standard rate, on every plan.
- *   Merchant's own site -> the independently configured Free or eligible Premium website rate.
+ *   Merchant's own site -> the independently configured website rate on every plan.
  *
  * Connecting payouts never changes the commission, and on the merchant's own
  * site the online deposit IS Bookboll's fee rather than the provider's no-show
@@ -69,21 +69,21 @@ it('charges the independent Free website rate on a booking, and keeps the deposi
 
     $q = Policy::quote($listing, Policy::CHANNEL_SITE, Money::toMinor(100, 'QAR'), 'QAR', 'deposit');
 
-    // Deposit 15 retained by Bookboll, 85 on arrival.
-    expect($q['effective_rate_pct'])->toBe(15.0)
+    // Deposit 10 retained by Bookboll, 90 on arrival.
+    expect($q['effective_rate_pct'])->toBe(10.0)
         ->and($q['plan_eligible'])->toBeFalse()
-        ->and(Money::toMajor($q['fee_minor'], 'QAR'))->toBe(15.0)
-        ->and(Money::toMajor($q['due_now_minor'], 'QAR'))->toBe(15.0)
-        ->and(Money::toMajor($q['arrival_balance_minor'], 'QAR'))->toBe(85.0);
+        ->and(Money::toMajor($q['fee_minor'], 'QAR'))->toBe(10.0)
+        ->and(Money::toMajor($q['due_now_minor'], 'QAR'))->toBe(10.0)
+        ->and(Money::toMajor($q['arrival_balance_minor'], 'QAR'))->toBe(90.0);
 });
 
-it('uses the Premium website rate for a paid Premium merchant', function () {
+it('uses the same website rate for a paid Premium merchant', function () {
     [$listing] = paidPremium(20);
 
     $q = Policy::quote($listing, Policy::CHANNEL_SITE, Money::toMinor(100, 'QAR'), 'QAR', 'deposit');
 
     // Deposit/fee 10, merchant share 90.
-    expect($q['plan_eligible'])->toBeTrue()
+    expect($q['plan_eligible'])->toBeFalse()
         ->and($q['effective_rate_pct'])->toBe(10.0)
         ->and(Money::toMajor($q['fee_minor'], 'QAR'))->toBe(10.0)
         ->and(Money::toMajor($q['merchant_share_minor'], 'QAR'))->toBe(90.0);
@@ -91,7 +91,7 @@ it('uses the Premium website rate for a paid Premium merchant', function () {
 
 it('preserves fractional configured website fees in minor units', function () {
     [$listing] = paidPremium(15);
-    \App\Models\MarketSetting::where('scope', 'global')->update(['values' => ['site_premium' => 7.5]]);
+    \App\Models\MarketSetting::where('scope', 'global')->update(['values' => ['site' => 7.5]]);
     app(\App\Support\MarketSettings::class)->clear();
 
     $q = Policy::quote($listing, Policy::CHANNEL_SITE, Money::toMinor(100, 'QAR'), 'QAR', 'deposit');
@@ -115,11 +115,11 @@ it('treats an unknown channel as marketplace rather than handing out the discoun
     expect(Policy::effectiveRatePct($listing, 'something-else'))->toBe(20.0);
 });
 
-it('refuses the discount to a trial, a past-due plan and a free plan', function (array $case) {
+it('uses the same website rate on trials, past-due and free plans', function (array $case) {
     [$plan, $subAttrs] = $case;
     [$listing] = listingAt(20, ['plan' => $plan], $subAttrs);
 
-    expect(Policy::effectiveRatePct($listing, Policy::CHANNEL_SITE))->toBe(15.0);
+    expect(Policy::effectiveRatePct($listing, Policy::CHANNEL_SITE))->toBe(10.0);
 })->with([
     'legacy trial'      => [['premium', ['status' => 'trialing', 'trial_ends_at' => now()->addDays(10)]]],
     'active but in trial window' => [['premium', ['status' => 'active', 'trial_ends_at' => now()->addDays(5)]]],
@@ -129,14 +129,14 @@ it('refuses the discount to a trial, a past-due plan and a free plan', function 
     'no subscription'   => [['premium', null]],
 ]);
 
-it('keeps the discount for a cancellation scheduled at period end, and drops it after', function () {
+it('keeps the website rate unchanged before and after a subscription ends', function () {
     [$stillPaid] = listingAt(20, ['plan' => 'premium'],
         ['status' => 'active', 'cancel_at_period_end' => true, 'current_period_end' => now()->addMonth()]);
     expect(Policy::effectiveRatePct($stillPaid, Policy::CHANNEL_SITE))->toBe(10.0);
 
     [$ended] = listingAt(20, ['plan' => 'premium'],
         ['status' => 'active', 'cancel_at_period_end' => true, 'current_period_end' => now()->subDay()]);
-    expect(Policy::effectiveRatePct($ended, Policy::CHANNEL_SITE))->toBe(15.0);
+    expect(Policy::effectiveRatePct($ended, Policy::CHANNEL_SITE))->toBe(10.0);
 });
 
 it('charges the whole price on full online, and credits only the merchant share', function () {
@@ -153,7 +153,7 @@ it('charges the whole price on full online, and credits only the merchant share'
 it('reconciles fee, share and arrival balance against the total, at any rate', function (array $case) {
     [$total, $pct, $method] = $case;
     [$listing] = paidPremium(20);
-    \App\Models\MarketSetting::where('scope', 'global')->update(['values' => ['site_premium' => $pct]]);
+    \App\Models\MarketSetting::where('scope', 'global')->update(['values' => ['site' => $pct]]);
     app(\App\Support\MarketSettings::class)->clear();
 
     $minor = Money::toMinor($total, 'QAR');

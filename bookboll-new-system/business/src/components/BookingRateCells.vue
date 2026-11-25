@@ -1,6 +1,6 @@
 <script setup>
 defineProps({ row: {type:Object,required:true} })
-const columns=['facility','site_free','site_premium']
+const columns=['facility','site']
 const labels={global:'Global default',country:'Country rate',city:'City rate'}
 </script>
 <template>

@@ -17,12 +17,12 @@ const venueShare = key => selected.value?.rates?.[key] == null ? '—' : (100 - 
         <select :value="selected.id" @change="emit('update:modelValue', $event.target.value)"><option v-for="v in data.venues" :key="v.id" :value="v.id">{{ v.name }}{{ v.location ? ' · ' + v.location : '' }}</option></select>
       </label>
       <p v-else>{{ selected.name }}. Your venue’s city can override these rates.</p>
-      <table><thead><tr><th>Booking source</th><th>Free</th><th>Premium</th></tr></thead><tbody>
-        <tr><th>Your own website</th><td><strong>{{ percent('site_free') }}</strong><small>{{ source('site_free') }}</small></td><td class="fee-premium"><strong>{{ percent('site_premium') }}</strong><small>{{ source('site_premium') }}</small></td></tr>
-        <tr><th>Bookboll marketplace</th><td colspan="2"><strong>{{ percent('facility') }}</strong> on both plans<small>{{ source('facility') }} · listing-specific rates or fixed deposits may differ</small></td></tr>
+      <table><thead><tr><th>Booking source</th><th>Fee · all plans</th></tr></thead><tbody>
+        <tr><th>Your own website</th><td><strong>{{ percent('site') }}</strong><small>{{ source('site') }}</small></td></tr>
+        <tr><th>Bookboll marketplace</th><td><strong>{{ percent('facility') }}</strong> on both plans<small>{{ source('facility') }} · listing-specific rates or fixed deposits may differ</small></td></tr>
       </tbody></table>
-      <details><summary>Example: a website booking priced at 100</summary><p>Free: you keep <b>{{ venueShare('site_free') }}</b>. Premium: you keep <b>{{ venueShare('site_premium') }}</b>. The rest is Bookboll’s fee, included in the booking price. Before discounts and payment processing fees.</p></details>
-      <p class="fee-help">The website rate applies to deposit and full online bookings. Premium rates require eligible Premium; staff-added bookings have no platform fee.</p>
+      <details><summary>Example: a website booking priced at 100</summary><p>You keep <b>{{ venueShare('site') }}</b> on either plan. The rest is Bookboll’s fee, included in the booking price. Before discounts and payment processing fees.</p></details>
+      <p class="fee-help">The website rate applies to deposit and full online bookings. No upgrade is needed for this rate. Staff-added bookings have no platform fee.</p>
     </template>
   </section>
 </template>

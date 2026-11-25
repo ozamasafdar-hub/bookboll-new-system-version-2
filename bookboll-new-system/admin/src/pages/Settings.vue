@@ -9,7 +9,6 @@ import { useRouter } from 'vue-router'
 import FeatureSearch from '../components/FeatureSearch.vue'
 import BusinessPhoneInput from '../components/BusinessPhoneInput.vue'
 import { askConfirm } from '../lib/confirm.js'
-import { hasPaidWebsiteDiscount } from '../lib/listingPayments.js'
 import { loadProviderSettings, saveBusinessProfile, saveAccountDetails, saveNotificationPreferences } from '../lib/providerSettings.js'
 import {
   planState, ensurePlan, openUpgrade, endPlan, keepPlan,
@@ -20,7 +19,6 @@ const router = useRouter()
 const { isSuperAdmin, isCountryAdmin, currentUser } = useCurrentUser()
 
 const isAdminView = computed(() => isSuperAdmin.value || isCountryAdmin.value)
-const websiteDiscount = computed(() => hasPaidWebsiteDiscount(planState.value))
 
 const tab = ref('platform')
 const loading = ref(false)
@@ -348,7 +346,7 @@ async function changePassword() {
           </div>
           <div v-if="tab==='commission'">
             <h3>Commission Configuration</h3>
-            <p class="muted">These are the standard booking commission rates. Bookboll keeps the online deposit fee, or deducts commission from a full online payment. Own-website bookings use separate Free and paid Premium rates set for the venue’s city, country or global defaults. Marketplace rates stay the same; connecting payouts does not waive commission.</p>
+            <p class="muted">These are the standard booking commission rates. Bookboll keeps the online deposit fee, or deducts commission from a full online payment. Own-website bookings use one rate on every plan, set for the venue’s city, country or global defaults. Connecting payouts does not waive commission.</p>
 
             <div class="info-banner" style="margin-bottom:20px;">
               <Info :size="16" />
@@ -603,7 +601,7 @@ async function changePassword() {
 
               <p v-if="planState.admin_managed" class="muted">Your {{ planState.is_premium ? 'complimentary Premium' : 'Free' }} plan is managed by Bookboll. Contact support to change it.</p>
               <p v-if="!planState.is_premium && !planState.admin_managed" class="muted" style="margin:0 0 14px;">
-                Your Free plan has no subscription fee. Premium is US$588 per year, billed annually with no free trial. Paid Premium halves your own-website booking commission and adds marketing, exports, promo codes and more.
+                Your Free plan has no subscription fee. Premium is US$588 per year, billed annually with no free trial. Premium adds marketing, exports, promo codes and more. Booking fees stay the same on both plans.
               </p>
               <template v-else>
                 <div v-if="planTrialActive" class="plan-line">
@@ -636,10 +634,10 @@ async function changePassword() {
             <section class="plan-commission" aria-labelledby="plan-commission-title">
               <h4 id="plan-commission-title">Your booking commissions</h4>
               <dl>
-                <div><dt>Your own website</dt><dd>{{ websiteDiscount ? 'Paid Premium rate' : 'Free plan rate' }}<small>Set for each venue’s market</small></dd></div>
+                <div><dt>Your own website</dt><dd>Same on Free and Premium<small>Set for each venue’s market</small></dd></div>
                 <div><dt>Bookboll marketplace</dt><dd>Standard rate<small>The same on Free and Premium</small></dd></div>
               </dl>
-              <p>Your listing’s payment settings show its rate. The Premium website rate applies during your active paid subscription.</p>
+              <p>Your listing’s payment settings show its rate. Booking rates depend on your venue’s country and city, not your plan.</p>
               <p>With <b>deposit + on arrival</b>, Bookboll keeps the online deposit fee and you collect the remaining balance. With <b>full payment online</b>, the fee is deducted before your share reaches your connected Stripe account.</p>
               <p>Commission applies with or without connected payouts. Only full online payment requires a payout connection.</p>
             </section>

@@ -234,22 +234,22 @@ it('shows only the venues this user may touch', function () {
 
 // ── What each choice would mean ─────────────────────────────────────────────
 
-it('previews the deposit from the current plan, not from a stored number', function () {
+it('previews the shared website rate and keeps it unchanged after upgrading', function () {
     $listing = legacyCashOnly($this->venue);
     $listing->payment_options = array_merge($listing->payment_options, ['site_deposit_percentage' => 99]);
     $listing->save();
 
     $free = reviewQueue($this->owner)->assertOk()->json('data.listings.0.preview');
     expect($free['plan_eligible'])->toBeFalse();
-    expect($free['effective_rate_pct'])->toBe($free['standard_rate_pct']);
+    expect($free['effective_rate_pct'])->toBe(10);
     // The stale 99 in the row is not the rate.
     expect($free['effective_rate_pct'])->not->toBe(99.0);
 
-    // Upgrading changes the preview with nothing re-saved.
+    // Upgrading changes features only, not the booking preview.
     paidPlan($this->owner);
 
     $paid = reviewQueue($this->owner)->assertOk()->json('data.listings.0.preview');
-    expect($paid['plan_eligible'])->toBeTrue();
+    expect($paid['plan_eligible'])->toBeFalse();
     expect($paid['effective_rate_pct'])->toBe(10);
     // Cast: JSON encodes 100.0 as 100, so a float sum never matches it strictly.
     expect((float) ($paid['deposit_due_now'] + $paid['arrival_balance']))->toBe((float) $paid['base_price']);

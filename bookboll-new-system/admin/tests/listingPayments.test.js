@@ -4,50 +4,28 @@ import { readFileSync } from 'node:fs'
 import { parse } from '@vue/compiler-sfc'
 import { parse as parseJs } from '@babel/parser'
 import { ref, computed, effectScope } from 'vue'
-import { paymentExample, hasPaidWebsiteDiscount, websiteCommissionRate } from '../src/lib/listingPayments.js'
+import { paymentExample, websiteCommissionRate } from '../src/lib/listingPayments.js'
 import { missingPricingSetup, pricingSetupGate } from '../src/lib/pricingSetup.js'
 import { LISTING_STEPS } from '../src/lib/creationFlow.js'
 
-test('website fee previews use resolved Free and Premium rates including zero independently of marketplace', () => {
-  const rates = {site_free: 8, site_premium: 3}
-  const free = paymentExample(200, 20, false, rates)
-  const paid = paymentExample(200, 20, true, rates)
-  assert.equal(free.siteDep, 16)
-  assert.equal(paid.siteDep, 6)
-  assert.equal(free.fee, 40)
-  assert.equal(paid.siteRest, 194)
-  assert.equal(free.premiumSitePct, 3)
-  assert.equal(paymentExample(200, 20, true, {site_premium: 0}).siteDep, 0)
-  assert.equal(websiteCommissionRate(24, true, {site_premium: null}), 10)
+test('website previews use the shared local rate including zero, independently of marketplace', () => {
+  const example = paymentExample(200,20,{site:8.25})
+  assert.equal(example.siteDep,16.5)
+  assert.equal(example.siteRest,183.5)
+  assert.equal(example.fee,40)
+  assert.equal(paymentExample(200,20,{site:0}).siteDep,0)
+  assert.equal(websiteCommissionRate(24,{site:null}),10)
+  assert.equal(websiteCommissionRate(24,{}),10)
 })
-
 test('marketplace and website examples identify the correct fee and balance', () => {
-  const example = paymentExample(450,20,false)
+  const example = paymentExample(450,20)
   assert.equal(example.fee,90)
   assert.equal(example.share,360)
-  assert.equal(example.siteDep,67.5)
-  assert.equal(example.siteRest,382.5)
+  assert.equal(example.siteDep,45)
+  assert.equal(example.siteRest,405)
   assert.equal(example.siteDep + example.siteRest,450)
-  const paid = paymentExample(450,20,true)
-  assert.equal(paid.siteDep,45)
-  assert.equal(paid.siteRest,405)
-  assert.equal(paid.fee,90)
-  assert.equal(paymentExample(100,15,true).siteDep,10)
-  assert.equal(paymentExample(125,20).fee,25)
-  assert.equal(paymentExample(100,0,true).siteDep,10)
+  assert.equal(paymentExample(100,0).siteDep,10)
   assert.equal(paymentExample('',20).isReal,false)
-})
-test('website discount follows the merchant paid subscription, never platform exemptions', () => {
-  assert.equal(hasPaidWebsiteDiscount({is_premium:true,status:'active'}),true)
-  assert.equal(hasPaidWebsiteDiscount({is_premium:true,status:'active',cancel_at_period_end:true}),true)
-  for (const status of ['trialing','past_due','canceled',null]) assert.equal(hasPaidWebsiteDiscount({is_premium:true,status}),false)
-  assert.equal(hasPaidWebsiteDiscount({is_premium:true,status:'active',is_platform:true}),false)
-  assert.equal(hasPaidWebsiteDiscount({is_premium:false,status:'active'}),false)
-  assert.equal(hasPaidWebsiteDiscount(undefined),false)
-  assert.equal(hasPaidWebsiteDiscount({is_premium:true,status:'active',own_site_commission_discount_eligible:false}),false)
-  assert.equal(hasPaidWebsiteDiscount({own_site_commission_discount_eligible:true}),true)
-  assert.equal(websiteCommissionRate(15,true),10)
-  assert.equal(websiteCommissionRate(20,false),15)
 })
 // Exercise the listing form's actual validation and save boundary with an API
 // spy. No real account, consent or payment settings are changed by these tests.
@@ -55,14 +33,14 @@ const script = parse(readFileSync(new URL('../src/pages/Listings.vue',import.met
 const ast = parseJs(script,{sourceType:'module'}).program.body
 const payErrorNode = ast.flatMap(node => node.declarations || []).find(node => node.id?.name === 'payError')
 const saveNode = ast.find(node => node.type === 'FunctionDeclaration' && node.id.name === 'save')
-test('listing save payload retires own-site cash and uses the plan fee with or without payouts', () => {
+test('listing save payload retires own-site cash and uses the shared website fee with or without payouts', () => {
   const body = saveNode.body.body.flatMap(node => node.declarations || []).find(node => node.id?.name === 'body')
   const payment = body.init.properties.find(prop => prop.key?.name === 'payment').value
   const payload = new Function('pay','payExample','onlineAllowed','depPct','return '+script.slice(payment.start,payment.end))
-  for (const paid of [false,true]) for (const connected of [false,true]) {
-    const result = payload(ref({deposit_enabled:true,site_deposit_enabled:true,site_deposit_percentage:99,site_cash_enabled:true,site_online_enabled:true}),ref(paymentExample(100,15,paid)),ref(connected),15)
+  for (const connected of [false,true]) {
+    const result = payload(ref({deposit_enabled:true,site_deposit_enabled:true,site_deposit_percentage:99,site_cash_enabled:true,site_online_enabled:true}),ref(paymentExample(100,15)),ref(connected),15)
     assert.equal(result.site_cash_enabled,false)
-    assert.equal(result.site_deposit_percentage,paid ? 10 : 15)
+    assert.equal(result.site_deposit_percentage,10)
     assert.equal(result.deposit_percentage,15)
     assert.equal(result.site_online_enabled,connected)
   }

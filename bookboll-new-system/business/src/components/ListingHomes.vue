@@ -3,9 +3,12 @@ import { ArrowDown, ArrowRight, CalendarCheck, Globe, Search, UsersRound } from 
 import { authUser } from '../lib/auth.js'
 import { adminDashboardUrl } from '../lib/crossApp.js'
 
+const props = defineProps({ rates: Object, loading: Boolean, error: String })
+const emit = defineEmits(['retry'])
+const fee = key => props.rates?.[key] == null ? '—' : `${Number(props.rates[key])}%`
 const homes = [
-  { key: 'marketplace', audience: 'Bookboll’s customers', journey: 'Looking for a place to play', title: 'Bookboll marketplace', address: 'bookboll.com', description: 'Get discovered alongside other venues.' },
-  { key: 'website', audience: 'Your customers', journey: 'Following the link you share', title: 'Your own website', address: 'yourclub.bookboll.com', description: 'Your name. Your logo. Your colours.' },
+  { key: 'marketplace', rate: 'facility', audience: 'Bookboll’s customers', journey: 'Discover you on Bookboll', title: 'Bookboll marketplace', address: 'bookboll.com', description: 'Reach Bookboll’s customer base.', note: 'On Free and Premium' },
+  { key: 'website', rate: 'site', audience: 'Your customers', journey: 'Use the link you share', title: 'Your standalone website', address: 'yourclub.bookboll.com', description: 'Your brand. Powered by Bookboll.', note: 'No upgrade needed' },
 ]
 </script>
 
@@ -14,7 +17,7 @@ const homes = [
     <div class="homes-inner">
       <header class="homes-heading">
         <h2 id="listing-homes-title">One listing. Two ways to get booked.</h2>
-        <p>Get discovered on Bookboll. Bring your own customers to your website.</p>
+        <p>Get discovered on Bookboll. Give your customers a website of your own — free.</p>
       </header>
 
       <div class="homes-grid">
@@ -53,10 +56,14 @@ const homes = [
               <div v-if="home.key==='marketplace'" class="nearby-venues" aria-hidden="true"><span></span><i></i><i></i></div>
               <div v-else class="club-footer">Powered by Bookboll</div>
             </div>
+            <div class="home-fee"><strong>{{ fee(home.rate) }}</strong><div><span>booking fee</span><small>{{ home.note }}</small></div></div>
           </figure>
           <p class="home-description">{{ home.description }}</p>
         </article>
       </div>
+
+      <p v-if="loading" class="homes-rate-state" role="status">Loading current fees…</p>
+      <p v-else-if="error" class="homes-rate-state" role="alert">{{ error }} <button @click="emit('retry')">Retry rates</button></p>
 
       <div class="booking-connector" aria-hidden="true"><span></span><ArrowDown :size="22"/></div>
       <div class="shared-dashboard">
@@ -64,7 +71,7 @@ const homes = [
         <div><h3>One dashboard. One shared calendar.</h3><p>Bookings and payment records from both, together.</p></div>
       </div>
       <div class="homes-footer">
-        <p>Example: the same court in both places.<br>Marketplace approval applies. <router-link to="/booking-fees">Check local booking fees</router-link></p>
+        <p>Global default fees · country and city rates may differ.<br>Marketplace approval and listing-specific fees may apply. <router-link to="/booking-fees">Check your local rates</router-link></p>
         <a v-if="authUser" :href="adminDashboardUrl()" class="homes-cta">Open your dashboard <ArrowRight :size="16"/></a>
         <router-link v-else to="/signup" class="homes-cta">Create your free business account <ArrowRight :size="16"/></router-link>
       </div>
@@ -73,6 +80,7 @@ const homes = [
 </template>
 
 <style scoped>
+.home-fee{display:flex;align-items:center;gap:14px;padding:16px 20px;background:var(--accent);color:#fff}.home-fee>strong{font-size:43px;line-height:1;font-weight:750;letter-spacing:-1px;font-variant-numeric:tabular-nums}.home-fee>div{display:flex;flex-direction:column;gap:4px}.home-fee span{font-size:14px;font-weight:650}.home-fee small{font-size:11px;opacity:.9}.homes-rate-state{text-align:center;font-size:13px}.homes-rate-state button{background:none;border:0;color:inherit;text-decoration:underline;cursor:pointer}@media(max-width:760px){.home-fee{padding:14px 10px;gap:7px;flex-direction:column;align-items:flex-start}.home-fee>strong{font-size:35px}.home-fee span{font-size:12px}.home-fee small{font-size:10px}}
 .listing-homes{background:#edf7f2;padding:34px 0;scroll-margin-top:20px;color:#143e33}
 .homes-inner{max-width:1140px;padding:0 26px;margin:auto}
 .homes-heading{margin-bottom:26px;text-align:center}

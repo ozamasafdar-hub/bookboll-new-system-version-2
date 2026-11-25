@@ -13,9 +13,9 @@ class MarketSettings
         'comeback_enabled' => true, 'comeback_discount_pct' => 10.0,
         'membership_listing_monthly' => 20,'facility' => 15.0, 'program' => 15.0, 'event' => 10.0,
         // Independent booking fees; website fees never derive from listing commissions.
-        'site_free' => 15.0, 'site_premium' => 10.0,
+        'site' => 10.0,
         'module_listings' => true, 'module_classes' => true, 'module_matchmaking' => true];
-    public const SITE_KEYS = ['site_free', 'site_premium'];
+    public const SITE_KEYS = ['site'];
     private ?array $rows = null;
     private ?array $rates = null;
 
@@ -30,7 +30,7 @@ class MarketSettings
         }
         // Legacy nulls mean inherit, including old automatic website settings.
         // Keep explicit zero fees and disabled services.
-        return array_filter($this->rows[$scope.':'.$id] ?? [], fn ($value) => $value !== null);
+        return array_filter(array_intersect_key($this->rows[$scope.':'.$id] ?? [], self::DEFAULTS), fn ($value) => $value !== null);
     }
 
     public function config(?int $countryId = null, ?City $city = null): array
@@ -66,10 +66,10 @@ class MarketSettings
         return (bool) $this->config($countryId, $city)['effective'][$key];
     }
 
-    public function websiteRate(float $standard, bool $premium, ?int $countryId = null, ?int $cityId = null): float
+    public function websiteRate(?int $countryId = null, ?int $cityId = null): float
     {
         $city = $cityId ? City::find($cityId) : null;
-        $rate = $this->config($countryId, $city)['effective'][$premium ? 'site_premium' : 'site_free'];
+        $rate = $this->config($countryId, $city)['effective']['site'];
         return (float) $rate;
     }
 }

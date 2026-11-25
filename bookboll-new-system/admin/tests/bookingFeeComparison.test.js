@@ -11,25 +11,24 @@ function comparison(props) {
 }
 test('comparison follows venue selection, retains zero and shows each rate source', () => {
   const props = reactive({modelValue:'1', data:{venues:[
-    {id:1,rates:{facility:15,site_free:15,site_premium:10},sources:{site_free:'global',site_premium:'global'}},
-    {id:2,rates:{facility:19,site_free:12.5,site_premium:0},sources:{site_free:'country',site_premium:'city'}},
+    {id:1,rates:{facility:15,site:10},sources:{site:'global'}},
+    {id:2,rates:{facility:19,site:0},sources:{facility:'country',site:'city'}},
   ]}})
   const view=comparison(props)
-  assert.equal(view.percent('site_free'),'15%')
+  assert.equal(view.percent('site'),'10%')
   props.modelValue='2'
-  assert.equal(view.percent('site_premium'),'0%')
+  assert.equal(view.percent('site'),'0%')
   assert.equal(view.percent('facility'),'19%')
-  assert.equal(view.venueShare('site_free'),'87.50')
-  assert.equal(view.venueShare('site_premium'),'100.00')
-  assert.equal(view.source('site_free'),'Country rate')
-  assert.equal(view.source('site_premium'),'City rate')
+  assert.equal(view.venueShare('site'),'100.00')
+  assert.equal(view.source('facility'),'Country rate')
+  assert.equal(view.source('site'),'City rate')
 })
 test('business without venues uses its country defaults, missing data never invents a fee', () => {
-  const props=reactive({data:{venues:[],base:{rates:{site_free:13,site_premium:5},sources:{site_free:'country'}}}})
+  const props=reactive({data:{venues:[],base:{rates:{site:13},sources:{site:'country'}}}})
   const view=comparison(props)
-  assert.equal(view.percent('site_free'),'13%')
-  assert.equal(view.venueShare('site_premium'),'95.00')
+  assert.equal(view.percent('site'),'13%')
+  assert.equal(view.venueShare('site'),'87.00')
   props.data=null
-  assert.equal(view.percent('site_free'),'—')
-  assert.equal(view.venueShare('site_premium'),'—')
+  assert.equal(view.percent('site'),'—')
+  assert.equal(view.venueShare('site'),'—')
 })

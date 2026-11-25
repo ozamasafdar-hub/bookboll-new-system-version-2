@@ -62,14 +62,14 @@ it('simulates reset email in the workspace and revokes sessions without changing
     expect($target->fresh()->password)->toBe($hash)->and($target->tokens()->count())->toBe(0);
 });
 
-it('grants complimentary premium including its website fee and supports reverting to free', function () {
+it('grants complimentary premium features without a fee discount and supports reverting to free', function () {
     $b=managementBusiness();$actor=managementUser();$this->actingAs($actor);
     $this->putJson("/api/admin/businesses/$b->id/plan-management",managementPlanPayload())->assertOk();
-    expect(PremiumPlan::businessEntitled($b->fresh()))->toBeTrue()->and(CommissionPolicy::paidPlanEligible($b->fresh()))->toBeTrue();
+    expect(PremiumPlan::businessEntitled($b->fresh()))->toBeTrue();
     expect(BusinessSubscription::count())->toBe(0);
-    $this->actingAs($b->owner)->getJson('/api/admin/plan')->assertOk()->assertJsonPath('data.admin_managed',true)->assertJsonPath('data.own_site_commission_discount_eligible',true);
+    $this->actingAs($b->owner)->getJson('/api/admin/plan')->assertOk()->assertJsonPath('data.admin_managed',true)->assertJsonPath('data.own_site_commission_discount_eligible',false);
     $this->actingAs($actor)->putJson("/api/admin/businesses/$b->id/plan-management",managementPlanPayload(['plan'=>'free','expected_plan'=>'premium','expected_override'=>'premium']))->assertOk();
-    expect($b->fresh()->plan)->toBe('free')->and(CommissionPolicy::paidPlanEligible($b->fresh()))->toBeFalse();
+    expect($b->fresh()->plan)->toBe('free');
     expect(AuditLog::where('action','business.plan_changed')->count())->toBe(2);
 });
 

@@ -96,9 +96,8 @@ it('does not rewrite a confirmed booking when the plan later lapses', function (
     $business->subscriptions()->update(['status' => 'canceled']);
     $business->update(['plan' => 'free']);
 
-    // A NEW booking would now be charged 20%...
-    expect(Policy::effectiveRatePct($listing->fresh('venue'), Policy::CHANNEL_SITE))->toBe(15.0);
-    // ...but the confirmed one still says what it charged.
+    // Losing Premium changes features, not the fee on new or existing bookings.
+    expect(Policy::effectiveRatePct($listing->fresh('venue'), Policy::CHANNEL_SITE))->toBe(10.0);
     expect((float) $booking->fresh()->commission_effective_pct)->toBe(10.0)
         ->and(Money::toMajor($booking->fresh()->commission_fee_minor, 'QAR'))->toBe(10.0);
 });

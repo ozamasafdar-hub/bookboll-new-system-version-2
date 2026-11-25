@@ -1,3 +1,10 @@
+## Current booking-fee policy — 25 November 2026
+
+**This supersedes all earlier Free/Premium website fee rules in this document.**
+Marketplace defaults to **15%**. Every provider website defaults to **10%**, on Free, paid Premium, complimentary Premium and expired/trial plans. Premium unlocks product features only. Countries and cities may override either channel using `facility` and `site`; there is no Premium website fee setting.
+
+Run `2026_11_25_000001_unify_website_booking_fees.php` and the required `UnifiedWebsiteFeeMigrationTest`, `BookingFeePresentationTest`, and financial regression suites. The migration preserves historical bookings/payments and audit-copies retired settings. Conflicting legacy local website rates block migration until reviewed; existing explicit `site` values take precedence. See [the current fee specification](docs/BOOKING_FEE_SETTINGS.md). CI requires this migration and test. Do not reapply old defaults manually after migration.
+
 ## Legacy owner support login and public country/city fees — 23 November 2026
 
 Support login now recognises existing `provider_admin` owner memberships and genuine pre-membership owners using the same ownership evidence as business management; revoked/inactive/wrong-business or platform access remains blocked. No roles or login permissions are rewritten. The business site now links to `/booking-fees` for global/country/city booking rates, override indicators, search and city pagination. Only enabled locations and the three public booking fees are exposed. See [support checks](docs/BUSINESS_SUPPORT_SESSIONS.md) and [fee-directory checks](docs/BOOKING_FEE_SETTINGS.md); CI includes regression tests for both. No database migration or new fee changes are required.

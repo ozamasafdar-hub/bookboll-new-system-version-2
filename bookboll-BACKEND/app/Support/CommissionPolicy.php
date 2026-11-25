@@ -3,7 +3,6 @@
 namespace App\Support;
 
 use App\Models\Business;
-use App\Models\BusinessSubscription;
 use App\Models\Listing;
 use App\Services\BookingWalletService;
 
@@ -15,8 +14,8 @@ use App\Services\BookingWalletService;
  * disagreeing is how a merchant gets quoted one fee and charged another.
  *
  *   Marketplace booking  -> the standard rate, on every plan.
- *   Merchant's own site  -> its Free / paid Premium rate, city > country >
- *                           global. Defaults are 15% Free / 10% Premium.
+ *   Merchant's own site  -> one website rate on every plan, city > country >
+ *                           global. Default is 10%; Premium only unlocks features.
  *
  * Two rules that look like details and are not:
  *
@@ -31,51 +30,6 @@ class CommissionPolicy
 {
     public const CHANNEL_MARKETPLACE = 'marketplace';
     public const CHANNEL_SITE        = 'site';
-
-    /**
-     * Whether this business's plan earns the own-site discount.
-     *
-     * Deliberately NARROWER than BusinessSubscription::ENTITLING, which also
-     * covers 'trialing' and 'past_due'. Those grant product features; they do
-     * not grant a cheaper commission:
-     *
-     *   • a legacy free trial has paid nothing, and readmeAlamgir says in as
-     *     many words that it does not receive the paid-plan discount;
-     *   • past_due means the last payment FAILED.
-     *
-     * A subscription cancelled at period end keeps the discount while the
-     * period it paid for is still running — the merchant bought that time.
-     */
-    public static function paidPlanEligible(?Business $business): bool
-    {
-        if (! $business || $business->plan !== 'premium') {
-            return false;
-        }
-
-        // A complimentary Premium grant includes the configured Premium website fee.
-        if ($business->plan_override === 'premium') return true;
-
-        $sub = $business->relationLoaded('currentSubscription')
-            ? $business->currentSubscription
-            : $business->currentSubscription()->first();
-
-        if (! $sub || $sub->status !== 'active') {
-            return false;
-        }
-
-        // Still inside a trial window, however the row is labelled: no payment
-        // has been taken yet, so there is no paid plan to discount.
-        if ($sub->trial_ends_at && $sub->trial_ends_at->isFuture()) {
-            return false;
-        }
-
-        // Cancelled but not yet ended is still paid-for time.
-        if ($sub->current_period_end && $sub->current_period_end->isPast()) {
-            return false;
-        }
-
-        return true;
-    }
 
     /**
      * The listing's standard rate: its own override, else the country's rate
@@ -103,9 +57,8 @@ class CommissionPolicy
     /**
      * The rate that actually applies for this channel.
      *
-     * Only `site` is ever discounted. Marketplace commission is never reduced
-     * by Premium, and an unknown channel is treated as marketplace rather than
-     * being given the cheaper branch by accident.
+     * Channel and venue geography select the rate. The business plan never does.
+     * An unknown channel is treated as marketplace.
      */
     public static function effectiveRatePct(?Listing $listing, string $channel, ?Business $business = null): float
     {
@@ -115,10 +68,7 @@ class CommissionPolicy
             return $standard;
         }
 
-        $business ??= self::businessFor($listing);
-
         return app(MarketSettings::class)->websiteRate(
-            $standard, self::paidPlanEligible($business),
             app(BookingWalletService::class)->countryIdForVenue($listing?->venue),
             $listing?->venue?->city_id
         );
@@ -172,10 +122,8 @@ class CommissionPolicy
         string $method,
         ?Business $business = null
     ): array {
-        $business ??= self::businessFor($listing);
-
         $standard  = self::standardRatePct($listing);
-        $eligible  = $channel === self::CHANNEL_SITE && self::paidPlanEligible($business);
+        $eligible  = false; // Retained snapshot field: no plan-based fee discount on new bookings.
         $effective = self::effectiveRatePct($listing, $channel, $business);
 
         $split = Money::split(max(0, $totalMinor), $effective);

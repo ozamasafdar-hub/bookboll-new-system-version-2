@@ -3831,7 +3831,7 @@ class BookingService
      *
      * The channel has to be recorded because `surface` otherwise dies with the
      * request, and the ledger would later fall back to the marketplace rate —
-     * overcharging a paid Premium merchant whose own-site rate is halved. The
+     * overcharging a merchant whose own-site rate differs from marketplace. The
      * rate has to be recorded because resolving it live is right for a new
      * booking and wrong for an old receipt: an upgrade, a cancellation or a
      * country rate change must not rewrite what a confirmed booking charged.
