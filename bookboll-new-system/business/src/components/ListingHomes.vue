@@ -1,25 +1,11 @@
 <script setup>
-import { ArrowRight, CalendarCheck, Check, Globe, LayoutDashboard, Search } from 'lucide-vue-next'
+import { ArrowDown, ArrowRight, CalendarCheck, Globe, Search, UsersRound } from 'lucide-vue-next'
 import { authUser } from '../lib/auth.js'
 import { adminDashboardUrl } from '../lib/crossApp.js'
 
 const homes = [
-  {
-    key: 'marketplace', icon: Search, title: 'On the Bookboll marketplace',
-    audience: 'Reach Bookboll’s customers',
-    description: 'People looking for a place to play can discover your listing alongside other venues on Bookboll.',
-    points: ['Be found by customers browsing nearby', 'Let new customers view your listing and book'],
-    address: 'bookboll.com', brand: 'Bookboll', navigation: 'Venues near you',
-    action: 'Get listed on Bookboll', destination: '/listings',
-  },
-  {
-    key: 'website', icon: Globe, title: 'On your own branded website',
-    audience: 'Welcome your own customers',
-    description: 'Give your customers a home that looks like your business, with your name, logo and colours.',
-    points: ['Share your link on WhatsApp, Instagram or anywhere', 'Let your customers book directly on your website'],
-    address: 'harbourclub.bookboll.com', brand: 'Harbour Club', navigation: 'Our courts',
-    action: 'Create your own website', destination: '/brand',
-  },
+  { key: 'marketplace', audience: 'Bookboll’s customers', journey: 'Looking for a place to play', title: 'Bookboll marketplace', address: 'bookboll.com', description: 'Get discovered alongside other venues.' },
+  { key: 'website', audience: 'Your customers', journey: 'Following the link you share', title: 'Your own website', address: 'yourclub.bookboll.com', description: 'Your name. Your logo. Your colours.' },
 ]
 </script>
 
@@ -27,100 +13,113 @@ const homes = [
   <section id="two-homes" class="listing-homes" aria-labelledby="listing-homes-title">
     <div class="homes-inner">
       <header class="homes-heading">
-        <h2 id="listing-homes-title">Your listing.<br>Two homes.</h2>
-        <p>A place on Bookboll for customers to discover you.<br class="desktop-break"> A website of your own for the customers you bring.</p>
+        <h2 id="listing-homes-title">One listing. Two ways to get booked.</h2>
+        <p>Get discovered on Bookboll. Bring your own customers to your website.</p>
       </header>
 
       <div class="homes-grid">
-        <article v-for="home in homes" :key="home.key" class="home" :class="`home-${home.key}`" :aria-labelledby="`home-${home.key}-title`">
-          <div class="home-label"><component :is="home.icon" :size="18"/><span>{{ home.audience }}</span></div>
-          <h3 :id="`home-${home.key}-title`">{{ home.title }}</h3>
-          <p class="home-description">{{ home.description }}</p>
+        <article v-for="home in homes" :key="home.key" class="home" :class="'home-'+home.key" :aria-labelledby="'audience-'+home.key">
+          <div class="home-audience">
+            <span class="audience-icon"><UsersRound :size="25"/></span>
+            <div><h3 :id="'audience-'+home.key">{{ home.audience }}</h3><p>{{ home.journey }}</p></div>
+          </div>
+          <ArrowDown class="journey-arrow" :size="24" aria-hidden="true"/>
 
-          <figure class="home-preview" :aria-label="`Example of the same Harbour Club padel court on ${home.key === 'marketplace' ? 'Bookboll’s marketplace' : 'the club’s branded website'}`">
-            <div class="preview-address"><Globe :size="12"/><span>{{ home.address }}</span><small>Example</small></div>
-            <div class="preview-brand"><strong><span class="preview-logo">{{ home.key === 'marketplace' ? 'B' : 'H' }}</span>{{ home.brand }}</strong><span>{{ home.navigation }}</span></div>
-            <div class="preview-listing">
-              <div class="court-picture" aria-hidden="true">
-                <svg viewBox="0 0 300 170" preserveAspectRatio="xMidYMid slice" focusable="false">
-                  <rect width="300" height="170" fill="#b9d6c5"/>
-                  <path d="M0 145 300 65v105H0z" fill="#a5c8b4"/>
-                  <g transform="translate(150 85) rotate(-12)">
-                    <rect x="-111" y="-62" width="222" height="124" rx="2" fill="#205c50"/>
-                    <rect x="-102" y="-53" width="204" height="106" fill="#73ae97" stroke="#eff8ee" stroke-width="2"/>
-                    <path d="M-51-53V53M51-53V53M-102 0H102" fill="none" stroke="#eff8ee" stroke-width="2"/>
-                    <path d="M0-64V64" stroke="#183f38" stroke-width="5"/>
-                    <path d="M-2-64V64" stroke="#fff" stroke-width="1.5"/>
-                    <circle cx="-65" cy="-24" r="6" fill="#fff0aa"/><circle cx="64" cy="20" r="6" fill="#fff"/>
-                  </g>
-                </svg>
-                <span>Padel</span>
+          <figure class="home-preview" :aria-labelledby="'destination-'+home.key">
+            <figcaption class="preview-header">
+              <component :is="home.key==='marketplace' ? Search : Globe" :size="20"/>
+              <div><h4 :id="'destination-'+home.key">{{ home.title }}</h4><span>{{ home.address }}</span></div>
+              <span v-if="home.key==='website'" class="club-logo" aria-hidden="true">HC</span>
+            </figcaption>
+            <div class="preview-content">
+              <div v-if="home.key==='marketplace'" class="nearby-venues" aria-hidden="true"><span></span><i></i><i></i></div>
+              <div v-else class="club-welcome">Welcome to Harbour Club</div>
+              <div class="preview-listing">
+                <div class="court-picture" aria-hidden="true">
+                  <svg viewBox="0 0 300 170" preserveAspectRatio="xMidYMid slice" focusable="false">
+                    <rect width="300" height="170" fill="#bad9c8"/>
+                    <g transform="translate(150 85) rotate(-12)">
+                      <rect x="-111" y="-62" width="222" height="124" rx="2" fill="#205c50"/>
+                      <rect x="-102" y="-53" width="204" height="106" fill="#73ae97" stroke="#eff8ee" stroke-width="2"/>
+                      <path d="M-51-53V53M51-53V53M-102 0H102" fill="none" stroke="#eff8ee" stroke-width="2"/>
+                      <path d="M0-64V64" stroke="#183f38" stroke-width="5"/>
+                      <path d="M-2-64V64" stroke="#fff" stroke-width="1.5"/>
+                      <circle cx="-65" cy="-24" r="6" fill="#fff0aa"/><circle cx="64" cy="20" r="6" fill="#fff"/>
+                    </g>
+                  </svg>
+                </div>
+                <div class="listing-caption"><strong>Your listing</strong><span>Harbour Club · Padel court</span><span class="booking-label">Book a court <ArrowRight :size="13"/></span></div>
               </div>
-              <div class="preview-caption"><span>Harbour Club</span><strong>Padel court</strong><div><CalendarCheck :size="13"/> View available times <ArrowRight :size="13"/></div></div>
+              <div v-if="home.key==='marketplace'" class="nearby-venues" aria-hidden="true"><span></span><i></i><i></i></div>
+              <div v-else class="club-footer">Powered by Bookboll</div>
             </div>
           </figure>
-
-          <ul><li v-for="point in home.points" :key="point"><Check :size="16"/><span>{{ point }}</span></li></ul>
-          <a v-if="authUser" :href="adminDashboardUrl(home.destination)" class="home-link">{{ home.key === 'marketplace' ? 'Manage your listings' : 'Manage your website' }} <ArrowRight :size="16"/></a>
-          <router-link v-else to="/signup" class="home-link">{{ home.action }} <ArrowRight :size="16"/></router-link>
+          <p class="home-description">{{ home.description }}</p>
         </article>
       </div>
 
+      <div class="booking-connector" aria-hidden="true"><span></span><ArrowDown :size="22"/></div>
       <div class="shared-dashboard">
-        <LayoutDashboard :size="27"/>
-        <div><h3>Both bring bookings to one dashboard</h3><p>Manage your listings, calendar and payment records together, whichever home your customer books from.</p></div>
-        <span>Your business stays in control</span>
+        <CalendarCheck :size="31"/>
+        <div><h3>One dashboard. One shared calendar.</h3><p>Bookings and payment records from both, together.</p></div>
       </div>
-      <p class="homes-note">Marketplace listings are reviewed before going live. Booking fees vary by country and city. <router-link to="/booking-fees">Check local fees</router-link></p>
+      <div class="homes-footer">
+        <p>Example: the same court in both places.<br>Marketplace approval applies. <router-link to="/booking-fees">Check local booking fees</router-link></p>
+        <a v-if="authUser" :href="adminDashboardUrl()" class="homes-cta">Open your dashboard <ArrowRight :size="16"/></a>
+        <router-link v-else to="/signup" class="homes-cta">Create your free business account <ArrowRight :size="16"/></router-link>
+      </div>
     </div>
   </section>
 </template>
 
 <style scoped>
-.listing-homes{background:#edf7f2;padding:60px 0;scroll-margin-top:24px;color:#143e33}
-.homes-inner{max-width:1200px;padding:0 26px;margin:auto}
-.homes-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:35px;margin-bottom:30px}
-.homes-heading h2{font-size:36px;line-height:1.12;letter-spacing:-1px;margin:0;color:#143e33}
-.homes-heading>p{max-width:470px;font-size:16px;line-height:1.65;color:#526e60;margin:0}
-.homes-grid{display:grid;grid-template-columns:1fr 1fr;gap:26px}
-.home{--home-accent:#245fce;min-width:0;padding:28px;border:1px solid #ccdfd5;border-top:3px solid var(--home-accent);border-radius:12px;background:#fff;display:flex;flex-direction:column}
-.home-website{--home-accent:#075e54}
-.home-label{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:650;color:var(--home-accent);margin-bottom:14px}
-.home h3{font-size:22px;line-height:1.3;letter-spacing:-.35px;margin:0;color:#143e33}
-.home-description{font-size:14px;line-height:1.7;color:#526e60;margin:12px 0 22px;max-width:430px}
-.home-preview{margin:0;border:1px solid #d9e4dd;border-radius:9px;overflow:hidden;background:#f4f7f5}
-.preview-address{display:flex;align-items:center;gap:6px;padding:9px 12px;border-bottom:1px solid #d9e4dd;font-size:10px;color:#526e60;background:#fff}
-.preview-address>span{overflow-wrap:anywhere;min-width:0}.preview-address svg{flex-shrink:0}
-.preview-address small{font-size:9px;margin-left:auto;color:#64766d;padding-left:6px}
-.preview-brand{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;background:#fff}
-.preview-brand>strong{display:flex;align-items:center;gap:7px;font-size:14px;color:#173c32}
-.preview-logo{display:grid;place-items:center;width:25px;height:25px;background:var(--home-accent);border-radius:7px;color:white;font-size:14px}
-.home-website .preview-logo{border-radius:50%}
-.preview-brand>span{font-size:10px;color:#526e60}
-.preview-listing{display:grid;grid-template-columns:1.05fr 1fr;align-items:stretch;background:#fff;border:1px solid #dce7e0;border-radius:7px;overflow:hidden;margin:0 16px 16px}
-.court-picture{position:relative;min-height:150px;overflow:hidden}.court-picture svg{width:100%;height:100%;position:absolute;inset:0}
-.court-picture>span{position:absolute;left:10px;top:10px;font-size:9px;border-radius:4px;padding:3px 6px;background:#143e33;color:#fff}
-.preview-listing .preview-caption{display:flex;flex-direction:column;justify-content:center;gap:5px;padding:17px 14px;min-width:0}
-.preview-listing .preview-caption>span{font-size:10px;color:#526e60}.preview-listing .preview-caption>strong{font-size:17px;line-height:1.3;color:#143e33}
-.preview-listing .preview-caption>div{display:flex;align-items:center;gap:5px;font-size:10px;line-height:1.5;color:var(--home-accent);margin-top:12px}.preview-listing .preview-caption svg{flex-shrink:0}
-.home ul{list-style:none;display:grid;gap:10px;margin:22px 0;padding:0;font-size:13px;line-height:1.6}
-.home li{display:flex;gap:8px;align-items:flex-start;color:#36594a}.home li svg{flex-shrink:0;color:var(--home-accent);margin-top:3px}
-.home-link{display:inline-flex;gap:8px;align-items:center;align-self:flex-start;margin-top:auto;color:var(--home-accent);font-size:13px;font-weight:700;text-decoration:underline;text-underline-offset:4px}
-.shared-dashboard{position:relative;display:flex;align-items:center;gap:17px;background:#fff;border:1px solid #ccdfd5;border-radius:9px;padding:24px;margin-top:30px}
-.shared-dashboard:before{content:'';position:absolute;left:25%;right:25%;top:-31px;height:16px;border:1px solid #93bba7;border-top:0;border-radius:0 0 8px 8px}
-.shared-dashboard:after{content:'';position:absolute;left:50%;top:-16px;height:15px;width:1px;background:#93bba7}
-.shared-dashboard>svg{flex-shrink:0;color:#075e54}.shared-dashboard>div{flex:1}
-.shared-dashboard h3{font-size:19px;line-height:1.4;margin:0;color:#143e33}.shared-dashboard p{font-size:13px;line-height:1.65;color:#526e60;margin:5px 0 0;max-width:620px}
-.shared-dashboard>span{font-size:11px;color:#526e60;max-width:105px;text-align:right}
-.homes-note{font-size:11px;line-height:1.7;color:#526e60;margin:17px 0 0}.homes-note a{color:#075e54;text-underline-offset:3px;white-space:nowrap}
+.listing-homes{background:#edf7f2;padding:48px 0;scroll-margin-top:20px;color:#143e33}
+.homes-inner{max-width:1140px;padding:0 26px;margin:auto}
+.homes-heading{margin-bottom:32px;text-align:center}
+.homes-heading h2{font-size:36px;line-height:1.18;letter-spacing:-1px;color:#143e33;margin:0}
+.homes-heading p{font-size:16px;line-height:1.6;color:#526e60;margin:12px 0 0}
+.homes-grid{display:grid;grid-template-columns:1fr 1fr;gap:56px}
+.home{--accent:#245fce;--pale:#edf3ff;min-width:0;text-align:center}
+.home-website{--accent:#075e54;--pale:#e7f3ed}
+.home-audience{display:flex;justify-content:center;align-items:center;gap:12px;min-height:58px}
+.audience-icon{width:46px;height:46px;display:grid;place-items:center;color:var(--accent);background:#fff;border-radius:50%;flex-shrink:0}
+.home-audience>div{text-align:left}.home-audience h3{font-size:26px;line-height:1.2;letter-spacing:-.5px;margin:0;color:var(--accent)}
+.home-audience p{font-size:12px;line-height:1.5;color:#526e60;margin:6px 0 0}
+.journey-arrow{display:block;margin:10px auto;color:var(--accent)}
+.home-preview{margin:0;background:white;border:1px solid #c6d9ce;border-radius:10px;overflow:hidden;text-align:left}
+.preview-header{display:flex;align-items:center;gap:10px;padding:16px 19px;color:var(--accent);background:var(--pale);border-bottom:1px solid #d5e3d9;min-height:75px}
+.preview-header>svg{flex-shrink:0}.preview-header h4{font-size:19px;line-height:1.3;margin:0;color:var(--accent)}
+.preview-header>div>span{font-size:11px;line-height:1.5;display:block;margin-top:3px;color:#526e60}
+.club-logo{display:grid;place-items:center;margin-left:auto;border-radius:50%;width:33px;height:33px;background:#075e54;color:white;font-size:12px;font-weight:750;flex-shrink:0}
+.preview-content{padding:12px 18px;background:#fff}
+.nearby-venues{display:flex;align-items:center;gap:9px;height:22px;opacity:.65}
+.nearby-venues>span{height:15px;width:26px;background:#dbe4e9;border-radius:3px}.nearby-venues>i{height:4px;width:20%;background:#dbe4e9;border-radius:2px}.nearby-venues>i:last-child{width:12%;margin-left:auto}
+.club-welcome,.club-footer{height:22px;display:flex;align-items:center;font-size:11px;color:#526e60}.club-welcome{font-weight:600;color:#075e54}.club-footer{justify-content:flex-end;font-size:9px}
+.preview-listing{display:grid;grid-template-columns:126px 1fr;align-items:stretch;border:2px solid var(--accent);background:var(--pale);border-radius:7px;overflow:hidden;margin:7px 0}
+.court-picture{height:102px;overflow:hidden}.court-picture svg{display:block;height:100%;width:100%}
+.listing-caption{display:flex;flex-direction:column;justify-content:center;gap:5px;padding:11px 15px;min-width:0}
+.listing-caption>strong{font-size:20px;line-height:1.2;color:var(--accent)}.listing-caption>span{font-size:11px;line-height:1.4;color:#526e60}
+.listing-caption .booking-label{display:flex;align-items:center;gap:6px;color:var(--accent);font-size:10px;margin-top:7px}
+.home-description{font-size:13px;line-height:1.5;color:#526e60;margin:13px 0 0}
+.booking-connector{position:relative;height:38px;color:#52876d}
+.booking-connector>span{position:absolute;left:25%;right:25%;height:17px;border:2px solid #9bc1ad;border-top:0;border-radius:0 0 8px 8px}
+.booking-connector>svg{position:absolute;left:calc(50% - 11px);top:16px}
+.shared-dashboard{display:flex;align-items:center;justify-content:center;gap:17px;padding:22px 26px;background:#073f36;color:white;border-radius:10px}
+.shared-dashboard>svg{flex-shrink:0;color:#d8ed8c}.shared-dashboard h3{font-size:23px;line-height:1.3;color:white;margin:0;letter-spacing:-.3px}
+.shared-dashboard p{font-size:13px;line-height:1.5;color:#c9dfd4;margin:6px 0 0}
+.homes-footer{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-top:22px}
+.homes-footer>p{font-size:11px;line-height:1.8;color:#526e60;margin:0}.homes-footer>p a{color:#075e54;text-underline-offset:3px}
+.homes-cta{display:inline-flex;align-items:center;justify-content:center;gap:10px;color:#075e54;font-size:13px;font-weight:700;text-decoration:underline;text-underline-offset:4px}
 .listing-homes a:focus-visible{outline:2px solid currentColor;outline-offset:4px}
 @media(max-width:760px){
-  .listing-homes{padding:38px 0}.homes-inner{padding:0 20px}
-  .homes-heading{display:block;margin-bottom:24px}.homes-heading h2{font-size:32px}.homes-heading>p{font-size:14px;margin-top:18px}.desktop-break{display:none}
-  .homes-grid{grid-template-columns:1fr;gap:20px}.home{padding:22px}.home h3{font-size:21px}.home-description{font-size:13px}
-  .preview-brand{padding:12px}.preview-brand>strong{font-size:12px}.preview-brand>span{font-size:9px}.preview-logo{width:23px;height:23px}
-  .preview-listing{margin:0 12px 12px;grid-template-columns:1fr 1fr}.court-picture{min-height:130px}.preview-listing .preview-caption{padding:13px 10px}.preview-listing .preview-caption>strong{font-size:15px}.preview-listing .preview-caption>div{font-size:9px;flex-wrap:wrap}
-  .shared-dashboard{padding:20px;align-items:flex-start;gap:12px;margin-top:22px}.shared-dashboard h3{font-size:17px}.shared-dashboard p{font-size:12px}.shared-dashboard>span,.shared-dashboard:before{display:none}.shared-dashboard:after{top:-23px;height:22px}
+  .listing-homes{padding:34px 0}.homes-inner{padding:0 20px}.homes-heading{margin-bottom:23px}.homes-heading h2{font-size:29px;letter-spacing:-.6px}.homes-heading p{font-size:14px}
+  .homes-grid{gap:14px}.home-audience{flex-direction:column;gap:9px;min-height:92px;justify-content:flex-start}.audience-icon{width:35px;height:35px}.audience-icon svg{width:21px}
+  .home-audience>div{text-align:center}.home-audience h3{font-size:18px;line-height:1.25;letter-spacing:-.2px;max-width:160px;min-height:45px}.home-audience p{display:none}.journey-arrow{margin:7px auto}
+  .preview-header{padding:13px 9px;min-height:79px;display:block}.preview-header>svg,.club-logo{display:none}.preview-header h4{font-size:15px;min-height:39px}.preview-header>div>span{font-size:9px;overflow-wrap:anywhere}
+  .preview-content{padding:8px}.nearby-venues,.club-welcome,.club-footer{display:none}.preview-listing{grid-template-columns:1fr;margin:0;border-width:1px}.court-picture{height:76px}.listing-caption{padding:10px 8px;gap:4px}.listing-caption>strong{font-size:16px}.listing-caption>span{font-size:10px}.listing-caption .booking-label{display:none}
+  .home-description{font-size:11px;line-height:1.6;margin-top:10px}.booking-connector{height:32px}.booking-connector>span{height:12px}.booking-connector>svg{top:10px}
+  .shared-dashboard{padding:19px 16px;gap:12px;align-items:flex-start}.shared-dashboard>svg{width:25px}.shared-dashboard h3{font-size:19px;line-height:1.3}.shared-dashboard p{font-size:12px}
+  .homes-footer{flex-direction:column-reverse;gap:16px;text-align:center}.homes-cta{min-height:44px;font-size:13px}.homes-footer>p{font-size:10px}
 }
-@media(max-width:359px){.homes-inner{padding:0 16px}.home{padding:17px}.preview-brand>span{display:none}.home h3{font-size:19px}}
+@media(max-width:359px){.homes-inner{padding:0 14px}.homes-grid{gap:10px}.homes-heading h2{font-size:27px}.home-audience h3{font-size:16px}.preview-header h4{font-size:14px}.preview-header>div>span{font-size:8px}.listing-caption>strong{font-size:14px}}
 </style>
