@@ -3107,11 +3107,6 @@ class BookingService
                 ]);
             }
 
-            if ($shouldAutoConfirm && $newPaymentStatus === BookingPaymentStatus::FULLY_PAID) {
-                autoConfirmBookingIfPaid($booking);
-                $booking->refresh();
-            }
-
             $changes = [];
 
             if ($timeChanged) {
@@ -4116,10 +4111,6 @@ class BookingService
                 $awaitingStripePayment = $isOnlinePaymentPending || $isDepositPending;
 
                 createBookingInvoiceWithNotification($booking, $user, ! $awaitingStripePayment);
-            }
-
-            if ($paymentStatus == BookingPaymentStatus::FULLY_PAID) {
-                autoConfirmBookingIfPaid($booking);
             }
 
             $booking->load(['listing:id,name', 'venue:id,name', 'user:id,name', 'invoices']);
@@ -5245,13 +5236,11 @@ class BookingService
                 'description' => 'Payment collected in admin dashboard via ' . $data['method'],
             ]);
 
-            // Bookings now start pending whenever money is owed, so collecting
-            // the last outstanding payment is what confirms them. Without this
-            // a cash-on-arrival booking would stay pending after being paid.
-            autoConfirmBookingIfPaid($booking);
-            $booking->refresh();
-
+            // Collecting the last outstanding payment is what confirms a
+            // booking — done by the PaymentStatusChanged sync at commit, which
+            // also regenerates the invoice. Re-read for the response.
             DB::commit();
+            $booking->refresh();
 
             $booking->load(['user', 'listing', 'venue', 'payments', 'promocode']);
 

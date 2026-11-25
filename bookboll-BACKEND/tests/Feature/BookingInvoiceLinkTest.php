@@ -186,9 +186,9 @@ it('regenerates the invoice BEFORE sending the confirmation, so the emailed PDF 
         'date' => now()->toDateString(), 'payment_id' => 'PAY_TEST_0001',
     ]);
 
-    $confirmed = autoConfirmBookingIfPaid($booking->fresh());
-
-    expect($confirmed)->toBeTrue();
+    // Creating the paid row is what triggers the sync now (PaymentStatusChanged);
+    // a manual second run must find nothing left to do.
+    expect(autoConfirmBookingIfPaid($booking->fresh()))->toBeFalse();
     expect(Invoice::where('booking_id', $booking->id)->count())->toBe(2);
     expect($stale->fresh()->status)->toBe('re_generated');
 
@@ -216,19 +216,21 @@ it('delivers the PDF as a real MIME attachment, with the payment facts in the bo
     Storage::fake('public');
     $user    = User::factory()->create(['name' => 'Syazwan']);
     $booking = invoiceLinkBooking($user, BookingPaymentStatus::FULLY_PAID);
+    // Payments written quietly: this test is about what the mail contains,
+    // not about the sync a paid row triggers (BookingPaymentSyncTest covers that).
+    foreach ([
+        [PaymentType::FULL, 175, 'PAY_TEST_0030'],
+        // A split-ledger row must never be counted as the customer's money.
+        [PaymentType::BOOKING_EARNING, 150, 'PAY_TEST_0031'],
+    ] as [$type, $amount, $ref]) {
+        (new Payment([
+            'booking_id' => $booking->id, 'user_id' => $user->id, 'type' => $type,
+            'amount' => $amount, 'status' => PaymentStatus::PAID, 'method' => PaymentMethod::CREDIT_CARD,
+            'date' => now()->toDateString(), 'paid_at' => now(), 'payment_id' => $ref,
+        ]))->saveQuietly();
+    }
     $invoice = invoiceFor($booking, 'invoices/invoice_INV_2026_00030_1.pdf');
     Storage::disk('public')->put($invoice->path, '%PDF-1.4 test');
-    Payment::create([
-        'booking_id' => $booking->id, 'user_id' => $user->id, 'type' => PaymentType::FULL,
-        'amount' => 175, 'status' => PaymentStatus::PAID, 'method' => PaymentMethod::CREDIT_CARD,
-        'date' => now()->toDateString(), 'paid_at' => now(), 'payment_id' => 'PAY_TEST_0030',
-    ]);
-    // A split-ledger row must never be counted as the customer's money.
-    Payment::create([
-        'booking_id' => $booking->id, 'user_id' => $user->id, 'type' => PaymentType::BOOKING_EARNING,
-        'amount' => 150, 'status' => PaymentStatus::PAID, 'method' => PaymentMethod::CREDIT_CARD,
-        'date' => now()->toDateString(), 'payment_id' => 'PAY_TEST_0031',
-    ]);
 
     $user->notify(new BookingConfirmedUserNotification($booking->fresh()));
 

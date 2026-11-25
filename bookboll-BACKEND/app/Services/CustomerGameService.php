@@ -1586,10 +1586,6 @@ class CustomerGameService
             'description' => "Hosted event payment marked as PAID via Stripe. Charge ID: {$chargeId}",
         ]);
 
-        if (! autoConfirmBookingIfPaid($booking->fresh())) {
-            regenerateBookingInvoice($booking->fresh());
-        }
-
         // Same rule as every other booking: a deposit IS Bookboll's commission, so
         // the provider is credited only when the whole court was collected.
         if ($paidInFull) {

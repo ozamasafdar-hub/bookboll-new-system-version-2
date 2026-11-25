@@ -892,18 +892,8 @@ class StripeService
             $settled[] = (int) $bookingId;
         }
 
-        foreach ($settled as $bookingId) {
-            $booking = Booking::find($bookingId);
-            if ($booking) {
-                // Confirming regenerates the invoice itself (it is emailed with
-                // the confirmation); only an already-confirmed booking still
-                // needs its invoice refreshed here.
-                if (! autoConfirmBookingIfPaid($booking)) {
-                    regenerateBookingInvoice($booking);
-                }
-            }
-        }
-
+        // Confirmation and invoice regeneration follow from the payment rows
+        // themselves (PaymentStatusChanged), once the transaction commits.
         return [$settled, $unsettled];
     }
 

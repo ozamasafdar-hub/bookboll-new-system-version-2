@@ -1063,6 +1063,7 @@ if (! function_exists('createBookingInvoiceWithNotification')) {
                 'booking_id'     => $booking->id,
                 'invoice_number' => $invoiceNumber,
             ]);
+            app(\App\Support\BookingPaymentSync::class)->markInvoiced($booking);
 
             if (! $notify) {
                 return;
@@ -1131,6 +1132,7 @@ if (! function_exists('regenerateBookingInvoice')) {
                 'booking_id'     => $booking->id,
                 'invoice_number' => $invoiceNumber,
             ]);
+            app(\App\Support\BookingPaymentSync::class)->markInvoiced($booking);
         } catch (Exception $e) {
             Log::error("Failed to regenerate invoice for booking #{$booking->id}: " . $e->getMessage(), [
                 'booking_id' => $booking->id,

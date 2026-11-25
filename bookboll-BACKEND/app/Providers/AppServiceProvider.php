@@ -29,6 +29,10 @@ class AppServiceProvider extends ServiceProvider
         // for. Must be registered before the first token is issued or read.
         Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
 
+        // One per request: the invoice registry must be shared between the
+        // helpers that write invoices and the listener that decides whether to.
+        $this->app->singleton(\App\Support\BookingPaymentSync::class);
+
         Booking::observe(BookingObserver::class);
         ClassSubscription::observe(ClassSubscriptionObserver::class);
         Payment::observe(PaymentObserver::class);

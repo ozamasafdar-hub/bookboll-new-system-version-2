@@ -1221,12 +1221,12 @@ class PaymentService
                     ]);
                 }
 
-                if ($booking->payment_status === BookingPaymentStatus::FULLY_PAID) {
-                    autoConfirmBookingIfPaid($booking);
-                }
             }
 
             DB::commit();
+            // Status, confirmation and invoice are synced by PaymentStatusChanged
+            // at commit; re-read so the response shows the result.
+            $booking->refresh();
 
             $booking = $mainBooking->load([
                 'addOns',
@@ -1373,19 +1373,9 @@ class PaymentService
                 'full_payment_received' => $allPaid,
             ]);
 
-            $autoConfirmRequested = (bool) ($validated['auto_confirm_booking'] ?? false);
-            $bookingConfirmed     = false;
-            $invoiceRegenerated   = false;
-
-            if (
-                $autoConfirmRequested
-                && $allPaid
-                && $booking->status === BookingStatus::PENDING
-            ) {
-                $invoiceRegenerated = autoConfirmBookingIfPaid($booking);
-                $booking->refresh();
-                $bookingConfirmed = $booking->status === BookingStatus::CONFIRMED;
-            }
+            // Confirmation happens in the PaymentStatusChanged sync at commit,
+            // for every caller — no longer only when a client asks for it.
+            $bookingConfirmed = $allPaid && $booking->status === BookingStatus::PENDING;
 
             $authUser    = auth()->user();
             $description = "Payment #{$payment->payment_id} marked as received via {$methodLabel} by {$authUser->name}.";
@@ -1411,11 +1401,8 @@ class PaymentService
                 'description' => $description,
             ]);
 
-            if ($allPaid && ! $invoiceRegenerated) {
-                regenerateBookingInvoice($booking);
-            }
-
             DB::commit();
+            $booking->refresh();
 
             notifyVenueStaffRefresh($booking->venue_id, [
                 'event'             => 'payment_received',
@@ -1706,13 +1693,6 @@ class PaymentService
                 }
 
                 $booking->update($bookingUpdates);
-
-                if ($booking->payment_status === BookingPaymentStatus::FULLY_PAID) {
-                    $confirmedNow = autoConfirmBookingIfPaid($booking);
-                    if ($isMain && ! $confirmedNow) {
-                        regenerateBookingInvoice($booking);
-                    }
-                }
             }
 
             if (!$hasAnyPendingPayments) {
@@ -1729,6 +1709,7 @@ class PaymentService
             }
 
             DB::commit();
+            $booking->refresh();
 
             $booking = $mainBooking->load([
                 'addOns',
