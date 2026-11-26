@@ -1,5 +1,4 @@
 <script setup>
-import CookieConsent from './components/CookieConsent.vue'
 import BusinessSupportBanner from './components/BusinessSupportBanner.vue'
 import { supportSession } from './lib/businessSupport.js'
 import { ref, computed, onMounted, onUnmounted, nextTick, watch, provide } from 'vue'
@@ -342,7 +341,6 @@ const initials = computed(() => {
     <InputDialog />
     <CustomerDetailModal />
   </div>
-  <CookieConsent scope="admin" />
 </template>
 
 <style>

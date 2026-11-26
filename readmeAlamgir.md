@@ -1,3 +1,9 @@
+## Cookie consent removal and tracking checks — 26 November 2026
+
+Cookie banners, preferences, footer controls and the cookie-choice tracking gate have been removed from the marketplace, provider sites, business landing app and admin app. Configured Google Analytics, Google Tag Manager and Meta Pixel load directly in the customer storefront; old `bb_cookie_consent_*` storage values are no longer read. No synthetic consent grant is sent. The first SPA navigation now records its page view instead of being skipped.
+
+Keep tracking scoped to the platform or the current provider's own site, preserve ID validation and preview suppression, and never mount customer tracking in the admin shell. Messaging opt-ins are separate. No database migration is needed. Release CI runs `web/tests/tracking.test.js` against all three tracking modules plus category-popularity and app-card tests, using isolated script execution without external analytics requests.
+
 ## Required checkout/reporting checks and provider allocation fix — 26 November 2026
 
 `BookingFeeReportingFlowTest` exercises all 64 combinations of channel, Free/Premium plan, geographic defaults/overrides/zero, deposit/full-online payment and provider/Bookboll ownership through the actual checkout API, settlement and reporting. It includes two-slot grouping, arrival collection, duplicate settlement, changed rates after checkout and superadmin/provider analytics parity. Stripe transport and outbound messaging are simulated; the database is MySQL.

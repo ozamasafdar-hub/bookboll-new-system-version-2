@@ -46,6 +46,9 @@ jobs:
         working-directory: bookboll-new-system/web
       - run: node --test tests/businessSignup.test.js
         working-directory: bookboll-new-system/web
+      - name: Storefront tracking and category analytics regressions
+        run: node --test tests/tracking.test.js tests/categoryPopularity.test.js tests/appDownloadCard.test.js
+        working-directory: bookboll-new-system/web
       - run: node --test tests/customerBookingPresentation.test.js tests/personalBookings.test.js tests/chatMentions.test.js
         working-directory: bookboll-new-system/web
       - run: composer install --no-interaction --prefer-dist --no-scripts

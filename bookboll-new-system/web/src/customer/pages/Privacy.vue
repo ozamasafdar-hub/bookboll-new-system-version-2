@@ -5,7 +5,7 @@
  * This is the URL submitted to the Google Play / App Store listings, so the path
  * MUST stay /privacy-policy — it is what the store console points at, and a
  * broken policy URL is itself grounds for rejection. Also linked from the
- * sign-up consent row (AuthGate), the cookie banner and the storefront footer.
+ * sign-up consent row (AuthGate) and the storefront footer.
  *
  * Content is the company policy ported from the previous frontend
  * (bookboll-FRONTEND src/components/PrivacyPolicyPage.vue), kept intact and
@@ -171,7 +171,7 @@ const SECTIONS = [
           <li>Identify returning users</li>
           <li>Track analytics for performance</li>
         </ul>
-        <p>Cookies needed to sign you in, hold your slots during checkout and keep the site secure are always on, because the service cannot work without them. Analytics cookies are set only if you accept them in the cookie banner, and you can change that choice at any time.</p>
+        <p>Cookies needed to sign you in, hold your slots during checkout and keep the site secure support the service. Configured analytics and advertising tools, including Google Analytics, Google Tag Manager and Meta Pixel, load when you visit the relevant storefront. Bookboll does not display a cookie-choice banner. You can manage cookies through your browser settings.</p>
       </section>
 
       <section id="children">

@@ -1,5 +1,4 @@
 import { toRaw } from 'vue'
-import { trackingAllowed } from '../lib/cookieConsent.js'
 import { apiFetch } from '../lib/api.js'
 
 // Keep click totals with the exact catalog response. Changing city or brand must
@@ -31,7 +30,7 @@ export function categoryClickCounts(listings) { return metadata.get(toRaw(listin
 // only after the server advertises support in its catalog response.
 export async function recordCategoryClick(listings, category, source, { preview = false } = {}) {
   const meta = metadata.get(toRaw(listings))
-  if (!trackingAllowed('analytics') || preview || !meta?.enabled || !category || category.key === 'all' || !['home', 'catalog'].includes(source)) return false
+  if (preview || !meta?.enabled || !category || category.key === 'all' || !['home', 'catalog'].includes(source)) return false
   const key = categoryKey(category)
   if (!listings.some(item => categoryKey({ category: item.category || 'sports', type: item.sport || '' }) === key)) return false
   const dedupeKey = JSON.stringify([meta.query, key])

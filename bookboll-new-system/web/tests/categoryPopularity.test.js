@@ -3,10 +3,10 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { toRaw, reactive } from 'vue'
 
-function setup(apiFetch, trackingAllowed = () => true) {
+function setup(apiFetch) {
   const source = readFileSync(new URL('../src/customer/categoryPopularity.js', import.meta.url), 'utf8')
     .replace(/^import .*$/gm, '').replace(/export /g, '')
-  return new Function('toRaw', 'apiFetch', 'trackingAllowed', source + '\nreturn {attachCategoryPopularity, categoryClickCounts, recordCategoryClick}')(toRaw, apiFetch, trackingAllowed)
+  return new Function('toRaw', 'apiFetch', source + '\nreturn {attachCategoryPopularity, categoryClickCounts, recordCategoryClick}')(toRaw, apiFetch)
 }
 const rows = () => [{ category: 'sports', sport: 'Padel' }]
 const payload = { category_popularity: [{ category: 'sports', type: 'Padel', click_count: 42 }], category_click_tracking_enabled: true }
@@ -64,10 +64,10 @@ test('old APIs and failed tracking never prevent category navigation or invent l
 })
 
 
-test('category popularity is still readable but clicks require analytics consent', async () => {
+test('category popularity stays readable and clicks follow the server tracking switch', async () => {
   let calls = 0
-  const { attachCategoryPopularity: attach, categoryClickCounts: counts, recordCategoryClick: record } = setup(async () => { calls++; return {success:true} }, () => false)
-  const catalog = attach(rows(), {}, payload)
+  const { attachCategoryPopularity: attach, categoryClickCounts: counts, recordCategoryClick: record } = setup(async () => { calls++; return {success:true} })
+  const catalog = attach(rows(), {}, {...payload, category_click_tracking_enabled:false})
   assert.equal(counts(catalog)['sports:Padel'], 42)
   assert.equal(await record(catalog, {category:'sports',type:'Padel'}, 'home'), false)
   assert.equal(calls, 0)

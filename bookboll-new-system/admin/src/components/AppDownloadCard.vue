@@ -70,7 +70,7 @@ function detectObstruction() {
   frame = 0
   // Overlays and active typing own the screen. Never cover checkout, a drawer or a keyboard.
   const editing = document.activeElement?.matches('input:not([type="radio"]):not([type="checkbox"]):not([type="button"]):not([type="submit"]), textarea, select, [contenteditable="true"]')
-  const overlays = document.querySelectorAll('[aria-modal="true"], [role="dialog"], dialog[open], .bb-cookie-banner, .bb-drawer-backdrop, .modal-overlay, .crc')
+  const overlays = document.querySelectorAll('[aria-modal="true"], [role="dialog"], dialog[open], .bb-drawer-backdrop, .modal-overlay, .crc')
   obstructed.value = !!editing || [...overlays].some(el => !el.closest('[inert], [aria-hidden="true"]') && el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden')
 }
 function inspect() { if (!frame) frame = requestAnimationFrame(detectObstruction) }
