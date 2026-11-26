@@ -1,13 +1,15 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { Cookie, X, ShieldCheck } from 'lucide-vue-next'
-import { cookieConsent, consentReady, initCookieConsent, saveCookieConsent } from '../lib/cookieConsent.js'
+import { CONSENT_REQUIRED, cookieConsent, consentReady, initCookieConsent, saveCookieConsent } from '../lib/cookieConsent.js'
 
 const props = defineProps({ scope: { type: String, default: 'site' } })
 watch(() => props.scope, initCookieConsent, { immediate: true })
 const preferences = ref(null), editing = ref(false), analytics = ref(false), marketing = ref(false)
 const notice = ref(''), banner = ref(null), bannerHeight = ref(0), appCardSpace = ref(0)
-const showBanner = computed(() => consentReady.value && !cookieConsent.value && !editing.value)
+// With consent not required there is nothing to ask: no banner, no settings
+// link. initCookieConsent still runs above so consentReady flips and tags load.
+const showBanner = computed(() => CONSENT_REQUIRED && consentReady.value && !cookieConsent.value && !editing.value)
 let resize, previousFocus, appResize, appMutations, observedCard
 function measureAppCard() {
   const card = document.querySelector('.app-download')
@@ -56,7 +58,7 @@ onBeforeUnmount(() => { resize?.disconnect(); appResize?.disconnect(); appMutati
 </script>
 
 <template>
-  <footer class="bb-cookie-footer" :style="{ '--bb-cookie-app-space': `${appCardSpace}px` }">
+  <footer v-if="CONSENT_REQUIRED" class="bb-cookie-footer" :style="{ '--bb-cookie-app-space': `${appCardSpace}px` }">
     <button type="button" @click="chooseCookies"><Cookie :size="16" />Cookie settings</button>
     <span role="status">{{ notice }}</span>
   </footer>
@@ -66,7 +68,7 @@ onBeforeUnmount(() => { resize?.disconnect(); appResize?.disconnect(); appMutati
       <div class="bb-cookie-copy"><h2><Cookie :size="20" />Your cookie choices</h2><p>Necessary cookies and similar storage keep sign-in, security and bookings working. With your permission, we also use analytics to improve the site and marketing tools to measure ads.</p></div>
       <div class="bb-cookie-actions"><button type="button" class="bb-cookie-button" @click="necessaryOnly">Only necessary</button><button type="button" class="bb-cookie-button bb-cookie-accept" @click="acceptAll">Accept all</button><button type="button" class="bb-cookie-custom" @click="chooseCookies">Choose cookies</button></div>
     </section>
-    <dialog ref="preferences" class="bb-cookie-dialog bb-cookie-surface" aria-labelledby="bb-cookie-title" @cancel.prevent="closePreferences">
+    <dialog v-if="CONSENT_REQUIRED" ref="preferences" class="bb-cookie-dialog bb-cookie-surface" aria-labelledby="bb-cookie-title" @cancel.prevent="closePreferences">
       <header><div><h2 id="bb-cookie-title">Cookie preferences</h2><p>Choose what this website can use in this browser.</p></div><button type="button" class="bb-cookie-close" aria-label="Close cookie preferences without saving" @click="closePreferences"><X :size="20" /></button></header>
       <div class="bb-cookie-options">
         <label><input type="checkbox" checked disabled /><span><strong>Necessary <small>Always on</small></strong><span>Sign-in, security, booking checkout and the settings you ask us to remember. These keep the website working.</span></span></label>
