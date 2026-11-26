@@ -108,6 +108,31 @@ it('rejects provider accounts and non-admin platform staff even with payment per
     expect($this->gateway->calls)->toBe(0);
 });
 
+it('shows and refunds a direct provider receipt with stored allocations exactly once', function () {
+    $owner = User::factory()->create(['status'=>User::ACTIVE]);
+    $owner->assignRole('provider_admin');
+    $business = Business::create(['owner_id'=>$owner->id,'name'=>'Connect refund QA','username'=>'connect-refund-qa','status'=>'active','plan'=>'free']);
+    BusinessMembership::create(['business_id'=>$business->id,'user_id'=>$owner->id,'role'=>'owner','scope'=>'all','status'=>'active']);
+    $this->venue->forceFill(['operator_type'=>'provider','business_id'=>$business->id,'owner_user_id'=>$owner->id])->save();
+    $context = array_merge($this->context, ['operator'=>'provider','business_id'=>$business->id,'business_name'=>$business->name,'connect_destination'=>'acct_refund_qa','net_fee_minor'=>2000]);
+    $this->booking->forceFill(['financial_context'=>$context])->saveQuietly();
+    $this->payment->forceFill(['financial_context'=>$context])->saveQuietly();
+    $this->payment->ownedAllocations()->update(['basis'=>'provider_booking_quote']);
+    $this->gateway->data['transfer_data'] = ['destination'=>'acct_refund_qa'];
+    $this->getJson('/api/admin/payments/'.$this->payment->id.'/details?row_id='.$this->payment->id.':venue')->assertOk()
+        ->assertJsonPath('data.payment.amount',80)->assertJsonPath('data.payment.recipient_kind','provider')
+        ->assertJsonPath('data.connected_transactions.0.amount',20)->assertJsonPath('data.payment.receipt_amount',fn($value)=>(float)$value === 100.0);
+    $fingerprint = refundPreviewForTest();
+    submitRefundForTest($fingerprint)->assertOk();
+    submitRefundForTest($fingerprint)->assertOk();
+    expect($this->gateway->calls)->toBe(1)->and(Payment::count())->toBe(1);
+    foreach ([$this->admin,$owner] as $actor) {
+        $this->actingAs($actor)->getJson('/api/admin/payments/analytics')->assertOk()
+            ->assertJsonPath('data.summary.0.refunded',100)->assertJsonPath('data.summary.0.bookboll_received',0)
+            ->assertJsonPath('data.summary.0.provider_received',0)->assertJsonPath('data.summary.0.total_sales',0);
+    }
+});
+
 it('also refuses a provider identity carrying an admin role', function () {
     $actor = User::factory()->create(['status'=>User::ACTIVE,'owner_user_id'=>$this->customer->id]); $actor->assignRole('admin');
     $this->actingAs($actor)->getJson('/api/admin/payments/'.$this->payment->id.'/refund-preview')->assertForbidden();

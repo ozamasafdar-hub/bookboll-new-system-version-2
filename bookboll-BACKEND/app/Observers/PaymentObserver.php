@@ -53,6 +53,7 @@ class PaymentObserver
     {
         if (\Illuminate\Support\Facades\Schema::hasTable('payment_allocations')) {
             $allocations = \App\Support\OwnedVenueAllocation::plan($payment->getAttributes(), $payment->financial_context ?? []);
+            $allocations ??= \App\Support\ProviderOnlineAllocation::plan($payment->getAttributes(), $payment->financial_context ?? []);
             if ($allocations) $payment->ownedAllocations()->createMany($allocations);
         }
         if ($payment->status === PaymentStatus::PAID) {

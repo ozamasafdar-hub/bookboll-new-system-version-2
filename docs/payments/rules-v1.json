@@ -430,7 +430,9 @@
         "bookboll-new-system/admin/src/components/BookingFeeComparison.vue",
         "bookboll-new-system/business/src/lib/bookingFees.js",
         "bookboll-new-system/business/src/pages/BookingFees.vue",
-        "bookboll-BACKEND/database/migrations/2026_11_25_000001_unify_website_booking_fees.php"
+        "bookboll-BACKEND/database/migrations/2026_11_25_000001_unify_website_booking_fees.php",
+        "bookboll-BACKEND/app/Support/ProviderOnlineAllocation.php",
+        "bookboll-BACKEND/database/migrations/2026_11_26_000001_record_provider_online_allocations.php"
       ],
       "tests": [
         "bookboll-BACKEND/tests/Feature/GeographySettingsTest.php",
@@ -442,7 +444,9 @@
         "bookboll-BACKEND/tests/Feature/BookingFeePresentationTest.php",
         "bookboll-new-system/admin/tests/bookingFeeComparison.test.js",
         "bookboll-new-system/business/tests/bookingFees.test.js",
-        "bookboll-BACKEND/tests/Feature/UnifiedWebsiteFeeMigrationTest.php"
+        "bookboll-BACKEND/tests/Feature/UnifiedWebsiteFeeMigrationTest.php",
+        "bookboll-BACKEND/tests/Feature/BookingFeeReportingFlowTest.php",
+        "bookboll-BACKEND/tests/Feature/ProviderOnlineAllocationTest.php"
       ]
     }
   ],

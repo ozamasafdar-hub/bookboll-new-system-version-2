@@ -156,6 +156,7 @@ final class PaymentReportRules
                 'payment_date' => $childDates[$id] ?? substr((string) ($p['paid_at'] ?? $p['date'] ?? $p['created_at'] ?? ''), 0, 10),
             ]);
         }, $payments);
+        $rows = array_merge(...array_map(fn ($row) => ProviderOnlineAllocation::expand($row), $rows));
         return PaymentBulkRules::apply(PaymentReviewRules::apply(array_merge(...array_map(fn ($row) => OwnedVenueAllocation::expand($row), $rows)), $payments, $booking), $payments);
     }
 

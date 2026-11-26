@@ -8,6 +8,14 @@ const ids = policy.rules.map(rule => rule.id)
 const feePolicy = policy.rules.find(rule => rule.id === 'P28_INDEPENDENT_MARKET_FEES')
 const unifiedMigration = 'bookboll-BACKEND/database/migrations/2026_11_25_000001_unify_website_booking_fees.php'
 const unifiedTest = 'bookboll-BACKEND/tests/Feature/UnifiedWebsiteFeeMigrationTest.php'
+const feeFlowTest = 'bookboll-BACKEND/tests/Feature/BookingFeeReportingFlowTest.php'
+const providerAllocationTest = 'bookboll-BACKEND/tests/Feature/ProviderOnlineAllocationTest.php'
+if (!feePolicy?.tests?.includes(feeFlowTest)
+  || !feePolicy?.tests?.includes(providerAllocationTest)
+  || !['tests/Feature/BookingFeeReportingFlowTest.php','tests/Feature/ProviderOnlineAllocationTest.php'].every(test =>
+    readFileSync(resolve(root, '.github/workflows/payment-release-checks.yml'), 'utf8').includes(test))) {
+  throw new Error('The checkout-to-reporting MySQL matrix is a mandatory release check.')
+}
 if (!feePolicy?.implementation?.includes(unifiedMigration) || !feePolicy?.tests?.includes(unifiedTest)
   || !readFileSync(resolve(root, '.github/workflows/payment-release-checks.yml'), 'utf8').includes('tests/Feature/UnifiedWebsiteFeeMigrationTest.php')) {
   throw new Error('The unified website fee migration and MySQL regression test are mandatory release checks.')

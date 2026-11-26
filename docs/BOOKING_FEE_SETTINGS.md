@@ -40,3 +40,15 @@ The landing diagram shows Bookboll customers → marketplace and your customers 
 Policy P28 and `scripts/check-payment-policy.mjs` require the new migration and its MySQL test in CI. Run `UnifiedWebsiteFeeMigrationTest`, `BookingFeePresentationTest`, `GeographySettingsTest`, `OwnSiteCommissionPolicyTest`, `DepositFollowsSurfaceAndCommissionTest`, `CommissionSnapshotAndLedgerTest`, `BookingPromotionFundingTest` and existing financial regressions.
 
 Verify migration conflict rollback/audit/rerun safety; public API privacy; inheritance/zero/fractional rates; authorization; plan lifecycle parity; deposit/full payment catalog/charge/snapshot parity; promotion funding; historical records. Frontend tests cover rate selection, settings edits, missing data and asynchronous geography filtering. Check landing, pricing, upgrade and settings on desktop/mobile. Railway preview sends no real payments or messages.
+
+### Checkout-to-reporting matrix
+
+`BookingFeeReportingFlowTest` is required by P28, the policy script and release CI. It calls the customer checkout API with two slots, then uses the normal Stripe fulfillment and arrival-collection paths against disposable MySQL data. It covers marketplace/own website × Free/Premium × global/country/city/explicit-zero rates × deposit/full-online × provider/Bookboll venues. Settings and plan changes after checkout must preserve the original fee snapshot.
+
+Assertions compare independent expected amounts with the captured Stripe charge and destination fee, saved booking shares, payment report and all analytics breakdowns. They check duplicate fulfillment, one checkout deposit plus one balance, provider isolation, pending-to-collected balances, separate owned-venue fee/revenue and no duplicate wallet credit. Only Stripe's HTTP transport, outbound notifications and PDF rendering are simulated; no real money is moved. These tests do not certify processor account activation or a live card charge.
+
+### Provider full-online allocation repair — 26 November 2026
+
+Direct Stripe Connect settlement correctly bypassed the old wallet, but also bypassed its reporting allocations. New provider full-online receipts now save platform and venue allocations in `payment_allocations` at creation, using the frozen **net fee** (after platform-funded discounts). These are parts of the same receipt, not additional payments, and inherit its pending/paid/refunded status. Legacy linked fee/share payment rows take precedence when present; they must never be counted alongside another split of their parent receipt.
+
+Migration `2026_11_26_000001_record_provider_online_allocations.php` restores missing allocations only where the saved provider business, channel, currency, total and net fee prove the split. It skips existing allocations and legacy fee/share rows. It never looks up current rates or changes receipt amounts, statuses or ownership. Reruns are idempotent; rollback retains financial records. `ProviderOnlineAllocationTest` covers migration safety, platform-funded discounts, legacy receipt conservation, refund status and corruption detection. Both new suites are required in release CI.

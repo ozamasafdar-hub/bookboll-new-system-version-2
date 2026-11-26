@@ -1,3 +1,9 @@
+## Required checkout/reporting checks and provider allocation fix — 26 November 2026
+
+`BookingFeeReportingFlowTest` exercises all 64 combinations of channel, Free/Premium plan, geographic defaults/overrides/zero, deposit/full-online payment and provider/Bookboll ownership through the actual checkout API, settlement and reporting. It includes two-slot grouping, arrival collection, duplicate settlement, changed rates after checkout and superadmin/provider analytics parity. Stripe transport and outbound messaging are simulated; the database is MySQL.
+
+Run `2026_11_26_000001_record_provider_online_allocations.php` with the normal migrations. Direct Stripe Connect previously skipped both wallet credits and the reporting split. New full-online provider receipts persist their platform/venue allocation without creating another receipt or wallet credit. The migration restores only mathematically proven saved net-fee snapshots, preserving existing splits and legacy children. Never recalculate history from current rates. Required `ProviderOnlineAllocationTest` covers idempotent repair, refund accounting, corrupt allocations and legacy compatibility. Both suites are enforced by release CI and the payment policy check. See [the current fee specification](docs/BOOKING_FEE_SETTINGS.md).
+
 ## Current booking-fee policy — 25 November 2026
 
 **This supersedes all earlier Free/Premium website fee rules in this document.**
