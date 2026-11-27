@@ -2,6 +2,7 @@
 
 namespace App\Observers;
 
+use App\Events\PaymentStatusChanged;
 use App\Models\Payment;
 use App\Support\AdminAlerts;
 use PaymentStatus;
@@ -58,6 +59,9 @@ class PaymentObserver
         }
         if ($payment->status === PaymentStatus::PAID) {
             $this->announce($payment);
+            // Born paid: the booking has to catch up exactly as if it had
+            // just been marked paid.
+            PaymentStatusChanged::dispatch($payment, null, (string) $payment->status);
         }
     }
 
@@ -65,11 +69,19 @@ class PaymentObserver
     {
         // Historical reconciliation records an assertion, not a new collection.
         if ($payment->wasChanged('reconciliation_batch_id')) return;
-        if ($payment->wasChanged('status')
-            && $payment->status === PaymentStatus::PAID
+
+        if (! $payment->wasChanged('status')) {
+            return;
+        }
+
+        if ($payment->status === PaymentStatus::PAID
             && $payment->getOriginal('status') !== PaymentStatus::PAID) {
             $this->announce($payment);
         }
+
+        // Every status change, not only to paid — a cancelled or refunded row
+        // changes what the booking is owed just as much.
+        PaymentStatusChanged::dispatch($payment, $payment->getOriginal('status'), (string) $payment->status);
     }
 
     protected function announce(Payment $payment): void

@@ -228,6 +228,23 @@ function queryParams() {
   }
 }
 
+// The detail modal reports changes it makes (payment collected, edit saved).
+// Patch the row at once so the list never shows a stale status, and keep the
+// list-only fields the row carries that the modal's booking does not.
+let detailDirty = false
+function onBookingUpdated(fresh) {
+  if (!fresh?.id) return
+  detailDirty = true
+  const i = bookings.value.findIndex(b => String(b.id) === String(fresh.id))
+  if (i !== -1) bookings.value[i] = { ...bookings.value[i], ...fresh }
+}
+// On close, reload only if something changed — an active status filter may
+// no longer match the booking, and the server knows that better than we do.
+function closeView() {
+  viewingId.value = null
+  if (detailDirty) { detailDirty = false; load() }
+}
+
 let loadSeq = 0
 async function load() {
   clearTimeout(searchTimer)
@@ -686,7 +703,8 @@ async function exportCSV(useFilters) {
 
     <BookingDetailModal
       :bookingId="viewingId"
-      @close="viewingId = null; load()"
+      @close="closeView"
+      @updated="onBookingUpdated"
       @viewBooking="viewingId = $event"
     />
 
@@ -695,6 +713,7 @@ async function exportCSV(useFilters) {
       :bookingId="editingId"
       :startInEdit="true"
       @close="editingId = null; load()"
+      @updated="onBookingUpdated"
       @viewBooking="editingId = $event"
     />
 
