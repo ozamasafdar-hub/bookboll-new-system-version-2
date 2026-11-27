@@ -23,6 +23,7 @@
  * default equals today's hardcoded Bookboll look.
  */
 import { ref, computed } from 'vue'
+import { apiFetch } from './api.js'
 import { appBaseUrl } from './appBase.js'
 
 // The apex the white-label subdomains live under (display + canonical links).
@@ -53,6 +54,41 @@ function isLocalHost(host) {
 // phone. The whole tunnel host is a single apex — its first label is a random tunnel id, NOT a
 // white-label subdomain — so we treat it like the apex marketplace (custom platform theme + ?b=
 // convenience), never as a provider slug.
+/**
+ * Load ONLY the platform's tracking IDs from the API.
+ *
+ * Deliberately narrower than the storefront's loadPlatformBrand(): this site
+ * themes itself from adminBrand.js, so overwriting name/logo/colours here
+ * would fight it. Tracking is the one field business.bookboll.com needs, and
+ * a failure leaves the empty defaults — no tags, never a broken page.
+ */
+export async function loadPlatformTracking() {
+  try {
+    const res = await apiFetch('/marketplace/platform-brand')
+    const m = res.success ? (res.data?.settings || {}) : {}
+    platformBrand.value = {
+      ...platformBrand.value,
+      tracking: {
+        metaPixel: m.tracking_meta_pixel || '',
+        ga4:       m.tracking_ga4 || '',
+        gtm:       m.tracking_gtm || '',
+        head:      m.tracking_head || '',
+      },
+    }
+  } catch { /* keep defaults */ }
+  return platformBrand.value
+}
+
+/**
+ * Never a provider preview here — this site has no white-label mode. Kept so
+ * lib/tracking.js is shared verbatim with the storefront, and so `?preview=1`
+ * still suppresses tags when someone frames a page for a screenshot.
+ */
+export function isBrandPreview() {
+  if (typeof window === 'undefined') return false
+  return new URLSearchParams(window.location.search).get('preview') === '1'
+}
+
 export function brandHost(slug) { return `${(slug || '').toLowerCase()}.${BRAND_APEX}` }
 
 /** A link that actually works in the CURRENT environment: the real subdomain in
