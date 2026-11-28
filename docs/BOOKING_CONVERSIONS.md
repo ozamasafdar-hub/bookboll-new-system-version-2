@@ -42,7 +42,7 @@ Use the official [Meta Ads Data Advisor](https://developers.facebook.com/documen
 5. Repeat for full payment and a provider's non-preview website with its own configured pixel. Confirm the marketplace pixel receives no provider-site conversion.
 6. Confirm reception in Meta Events Manager Test Events when account access is available. Extension detection alone proves the browser event, not attribution or downstream reporting.
 
-Railway's shared preview intentionally locks real money movement. Do not disable release protections or create real charges to test advertising. If the native browser/extension cannot be automated, install and inspect the extension manually; code, MySQL and deployment checks remain independent of it.
+Railway's shared preview locks live money movement. Its opt-in booking sandbox may use Stripe test credentials as described below; never turn off the preview/release protections or use live keys to test advertising. If the native browser/extension cannot be automated, install and inspect the extension manually; code, MySQL and deployment checks remain independent of it.
 
 ## Real Stripe / Meta verification — 28 November 2026
 
@@ -109,3 +109,11 @@ Verified payment intents: `pi_3UgqPRRNzQvTDvNU0KbcXyVZ` (deposit) and `pi_3UgqV0
 The second checkout's server contract correctly contains `value: 250`, `currency: QAR`, `content_ids: ["2"]`, `num_items: 2`, with checkout ID `bb_checkout_2832131ce550c257e3561129ffec08a74585d0da28c0880af797deba4ea94743` and Purchase ID `bb_purchase_7f8ff12f08bae44ab4cc8e190423855db565f20e443aae51b6824316dc0ce069`. Its absence from Meta is not a passing delivery test and has no confirmed cause. Do not reset deduplication or manually replay paid events to make the test appear successful. Browser dispatch alone does not acknowledge Meta receipt; server-side delivery is not implemented.
 
 Cleanup completed: the temporary credential file was removed, both local QA servers stopped, and the harness directory checked for additional copies of either test key. No additional copies were found. Existing Stripe account keys were not revoked. No test secret was added to Git or Railway. The redacted Stripe/database evidence is retained outside the repository; no public webhook or provider Connect payout was tested.
+
+### Retained Railway Stripe sandbox — subsequent user authorization, 28 November 2026
+
+The user subsequently authorized retaining Stripe sandbox keys on the Railway project, which is separate from live bookboll.com. Keep `PAYMENTS_PREVIEW=true` and `BOOKBOLL_WORKSPACE=true`; set `WORKSPACE_STRIPE_SANDBOX=true`, `STRIPE_PUBLIC_KEY=pk_test_…` and `STRIPE_SECRET_KEY=sk_test_…` as backend environment variables, never in Git or frontend build variables. Both keys must be from the same intended sandbox. The opt-in requires a Railway application hostname and the `bookboll_preview` database. Missing/test-mismatched/live keys, another database or a production hostname leave Stripe blocked.
+
+Only authenticated workspace customer booking checkout creation, loyalty checkout quotes, `cs_test_…` status and abandonment routes are exempted from the integration block. The normal auth, booking, payment-allocation and release checks still apply. Every Stripe SDK request must target HTTPS `api.stripe.com` with exactly the configured test secret; copied live or provider keys are rejected before transport. An unexpected live-mode response is rejected. Email/WhatsApp, subscription checkout, provider connections and refunds retain their existing workspace restrictions. Public webhook setup and Connect payouts require separate sandbox verification; successful return settlement alone does not prove them.
+
+`WorkspaceStripeSandboxTest`, `PaymentsPreviewAccessTest` and `PaymentReleaseGateTest` are required CI checks. The sandbox flag is not a production release approval. Going live requires disabling the preview configuration and completing the existing production release evidence, with separately configured production credentials. Test-only payments stay in the Railway copy.

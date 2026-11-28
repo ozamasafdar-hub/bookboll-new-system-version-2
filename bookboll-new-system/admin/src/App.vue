@@ -207,7 +207,7 @@ const initials = computed(() => {
 
 <template>
   <BusinessSupportBanner />
-  <div v-if="paymentsPreview" class="payments-preview-banner" role="status">{{ railwayWorkspace ? 'Railway workspace · Changes are saved to the shared database copy · Real payments and messages disabled' : 'Payments preview · Database copy from 4 Nov 2026 · Read-only · No live payments' }}</div>
+  <div v-if="paymentsPreview" class="payments-preview-banner" role="status">{{ railwayWorkspace ? 'Railway workspace · Changes are saved to the shared database copy · No live payments or outbound messages' : 'Payments preview · Database copy from 4 Nov 2026 · Read-only · No live payments' }}</div>
   <!-- Auth pages (login / callback) render bare -->
   <router-view v-if="area === 'auth'" />
 

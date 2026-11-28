@@ -58,6 +58,7 @@ jobs:
       - name: Financial rules and access regression tests
         working-directory: bookboll-BACKEND
         run: |
+          php vendor/bin/pest tests/Feature/WorkspaceStripeSandboxTest.php tests/Feature/PaymentsPreviewAccessTest.php
           php vendor/bin/pest tests/Feature/UnifiedWebsiteFeeMigrationTest.php tests/Feature/BookingFeePresentationTest.php
           php vendor/bin/pest tests/Feature/BookingFeeReportingFlowTest.php tests/Feature/ProviderOnlineAllocationTest.php tests/Feature/BookingConversionTest.php tests/Feature/MetaCatalogTest.php
           php vendor/bin/pest tests/Feature/BookingPaymentSyncTest.php

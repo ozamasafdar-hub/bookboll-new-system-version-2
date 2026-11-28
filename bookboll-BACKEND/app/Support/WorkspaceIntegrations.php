@@ -17,10 +17,6 @@ final class WorkspaceIntegrations
             }
             return $request;
         });
-        \Stripe\ApiRequestor::setHttpClient(new class implements \Stripe\HttpClient\ClientInterface {
-            public function request($method, $absUrl, $headers, $params, $hasFile, $apiMode = 'v1') {
-                throw new \Stripe\Exception\ApiConnectionException('Stripe is disabled in the Railway workspace. No charge or payout was made.');
-            }
-        });
+        \Stripe\ApiRequestor::setHttpClient(new WorkspaceStripeClient(new \Stripe\HttpClient\CurlClient()));
     }
 }

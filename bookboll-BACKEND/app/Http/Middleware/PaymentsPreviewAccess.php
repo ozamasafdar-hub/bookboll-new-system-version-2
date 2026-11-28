@@ -31,7 +31,7 @@ class PaymentsPreviewAccess
     private function workspace(Request $request, Closure $next)
     {
         // Never expose a live checkout or social login from the copied database.
-        if ($request->is('api/auth/*', 'api/customer/google-login', 'api/customer/apple-login',
+        if (!\App\Support\WorkspaceStripeSandbox::allowsBookingRoute($request) && $request->is('api/auth/*', 'api/customer/google-login', 'api/customer/apple-login',
             'api/customer/auth/exchange', 'api/*webhook*', 'api/*checkout*', 'api/*create-payment-intent',
             'api/*payment-link', 'api/*generate-link', 'api/*stripe/*', 'api/*notifications/email',
             'api/*notifications/whatsapp', 'api/*campaigns/send', 'api/*email-sender/test',
