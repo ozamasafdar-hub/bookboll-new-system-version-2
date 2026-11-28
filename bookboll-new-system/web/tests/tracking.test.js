@@ -273,6 +273,7 @@ for (const app of ['web', 'admin', 'business']) {
     assert.ok(env.urls().includes('https://connect.facebook.net/en_US/fbevents.js'))
     assert.ok(env.google().some(e => e[0] === 'config' && e[1] === config.ga4))
     assert.deepEqual(env.meta(), [['set', 'autoConfig', false, config.metaPixel], ['init', config.metaPixel], ['trackSingle', config.metaPixel, 'PageView']])
+    assert.equal(env.context.fbq.disablePushState, true, 'SDK history PageViews must be off when Vue sends explicit scoped views')
     assert.equal(env.google().filter(e => e[0] === 'consent').length, 0)
     const count = env.nodes.length
     env.reapply()

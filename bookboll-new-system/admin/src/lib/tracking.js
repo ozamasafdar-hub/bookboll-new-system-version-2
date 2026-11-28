@@ -107,7 +107,9 @@ export function injectTracking(cfg) {
   // does not disable previously saved button/URL conversion rules.
   if (isMetaPix(cfg.metaPixel)) {
     const id = cfg.metaPixel.trim()
-    const init = initializedPixels.has(id) ? '' : `fbq('set','autoConfig',false,'${id}');fbq('init','${id}');`
+    // Vue owns page views and scopes them to one pixel. Meta's default history
+    // listener would otherwise send another PageView on each pushState.
+    const init = `fbq.disablePushState=true;` + (initializedPixels.has(id) ? '' : `fbq('set','autoConfig',false,'${id}');fbq('init','${id}');`)
     head.appendChild(el('script', {}, `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');${init}fbq('trackSingle','${id}','PageView');`))
     initializedPixels.add(id)
     const ns = el('noscript')
