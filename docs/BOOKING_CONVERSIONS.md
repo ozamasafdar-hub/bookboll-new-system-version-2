@@ -10,6 +10,7 @@ Approved 28 November 2026: Purchase reports **only the amount paid online**. A Q
 - The payment-intent hash is the Purchase event ID and GA4 transaction ID. It is shared by every booking in that charge. The session hash identifies checkout. Never loop over individual booking rows to send Purchase.
 - Browser memory plus bounded local storage suppress refresh/revisit duplicates; Web Locks serialize same-origin tabs where supported. Stable IDs are also passed to the destinations. These browser protections do not promise cross-device exactly-once delivery or bypass blocked scripts. This implementation does not add Meta Conversions API.
 - No customer names, email addresses or phone numbers are added to conversion payloads.
+- Initial page views are not repeated when Vue Router finishes resolving a direct URL such as a payment return. Subsequent navigation and returning via Back still record page views.
 - No financial rows, fee calculations or historical allocations change. No migration or new tracking credentials are required.
 
 ## Mandatory regression checks

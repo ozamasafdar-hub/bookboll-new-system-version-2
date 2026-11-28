@@ -22,7 +22,7 @@ import { fmt12 } from '../../lib/slots.js'
 import { useSeo } from '../../lib/seo.js'
 import { CheckCircle2, Calendar, Clock, MapPin, Building2, CalendarCheck, Home } from 'lucide-vue-next'
 
-useSeo({ title: 'Booking confirmed', description: 'Your booking is confirmed.', path: '/thank-you' })
+useSeo({ title: 'Booking status', description: 'Check your booking and payment status.', path: '/thank-you' })
 
 const route = useRoute()
 const router = useRouter()

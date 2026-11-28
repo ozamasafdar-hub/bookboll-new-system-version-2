@@ -148,6 +148,18 @@ function environment(app, storage = null) {
 }
 
 for (const app of ['web', 'admin', 'business']) {
+  test(`${app}: router startup does not repeat the initial deep-link page view`, () => {
+    const env = environment(app)
+    env.context.location = { pathname: '/thank-you' }
+    env.mount()
+    env.navigate('/thank-you')
+    assert.equal(env.meta().filter(e => e[0] === 'track').length, 1)
+    assert.equal(env.google().filter(e => e[0] === 'event').length, 0)
+    env.navigate('/venues'); env.navigate('/thank-you')
+    assert.equal(env.meta().filter(e => e[0] === 'track').length, 3)
+    assert.equal(env.google().filter(e => e[0] === 'event').length, 2)
+  })
+
   test(`${app}: configured Google and Meta tags load without reading stored cookie choices`, () => {
     const env = environment(app)
     env.mount()

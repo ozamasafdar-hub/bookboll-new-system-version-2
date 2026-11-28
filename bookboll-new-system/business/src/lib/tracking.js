@@ -24,6 +24,7 @@ export const isMetaPix = (id) => /^\d{6,20}$/.test((id || '').trim())
 const MARK = 'data-bb-trk'   // marks every node we inject (for de-dupe + cleanup)
 let enabledConfig = {}
 let lastSig = ''             // signature of the currently-injected config
+let lastPagePath = null
 
 /** Normalize a tracking config off a brand-like object ({ tracking: {...} }). */
 export function trackingFrom(brandLike) {
@@ -60,6 +61,7 @@ export function clearTracking() {
   document.querySelectorAll(`[${MARK}]`).forEach((n) => n.remove())
   lastSig = ''
   enabledConfig = {}
+  lastPagePath = null
 }
 
 /**
@@ -74,6 +76,8 @@ export function injectTracking(cfg) {
   lastSig = sig
   enabledConfig = cfg
   if (!hasAnyTracking(cfg)) return
+  // The initial snippets already count this URL, even before Vue Router is ready.
+  lastPagePath = window.location?.pathname || null
   const head = document.head
   const body = document.body
 
@@ -127,6 +131,8 @@ export function injectTracking(cfg) {
 /** Fire a page-view on SPA navigation for GA4 + Meta (GTM users handle this via a GTM trigger). */
 export function trackPageView(path) {
   if (typeof window === 'undefined') return
+  if (path === lastPagePath) return
+  lastPagePath = path
   try { if (isGa4(enabledConfig.ga4) && typeof window.gtag === 'function') window.gtag('event', 'page_view', { page_path: path }) } catch { /* ignore */ }
   try { if (isMetaPix(enabledConfig.metaPixel) && typeof window.fbq === 'function') window.fbq('track', 'PageView') } catch { /* ignore */ }
 }
