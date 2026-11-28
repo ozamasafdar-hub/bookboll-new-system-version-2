@@ -156,13 +156,16 @@ async function dropHolds() {
 let syncing = false
 async function syncHolds() {
   if (selectMode.value) return { ok: true }   // host-game picker doesn't reserve
+  const generation = listingLoad, listing = l.value
+  const selection = { ...selectedByDate.value }
   const dates = Object.keys(selectedByDate.value).filter(d => (selectedByDate.value[d] || []).length)
   if (!dates.length) { await dropHolds(); clearCheckoutSession(); return { ok: true } }
   syncing = true
   let earliest = null, bad = null
   for (const d of dates) {
-    const held = await holdSlots(l.value, d, selectedByDate.value[d])
-    if (!held.ok) { bad = { date: d, start_time: held.start_time }; break }
+    const held = await holdSlots(listing, d, selection[d])
+    if (generation !== listingLoad) { syncing = false; return { ok: false, stale: true } }
+    if (!held.ok) { bad = { date: d, start_time: held.start_time, reason: held.reason }; break }
     if (held.expiresAt) { const t = new Date(held.expiresAt).getTime(); earliest = earliest ? Math.min(earliest, t) : t }
   }
   syncing = false
@@ -604,9 +607,14 @@ function setDay(day, arr) { selectedByDate.value = { ...selectedByDate.value, [d
 // Day/night glyph per slot — 7:00 vs 19:00 at a glance (AM/PM trips people up).
 const periodIcon = (t) => (dayPeriod(t) === 'day' ? Sun : Moon)
 
+const selectionPending = ref(false)
 async function toggleSlot(s, userAction = true) {
-  if (!s.available) return
+  if (!s.available || selectionPending.value) return
   if (bookingUnavailable.value) { err.value = unavailableMessage; return }
+  selectionPending.value = true
+  const generation = listingLoad, selectedDay = date.value
+  const item = { kind: 'listing', id: l.value.id, currency: loc.value?.currency || serverCurrency.value }
+  try {
   err.value = ''; holdExpiredMsg.value = false
   const cartBefore = fullQuote.value.total
   const arr = selected.value
@@ -616,23 +624,21 @@ async function toggleSlot(s, userAction = true) {
     await syncHolds()
   } else {
     setDay(date.value, [...arr, { start_time: s.start_time, end_time: s.end_time, price: s.price }])
+    item.value = Math.max(0, fullQuote.value.total - cartBefore)
     const res = await syncHolds()   // reserve it immediately so no one else can grab it
+    if (generation !== listingLoad || selectedDay !== date.value || res.stale) return
     if (!res.ok) {                  // someone just took it between render and tap
-      setDay(date.value, selected.value.filter(x => x.start_time !== s.start_time))
-      err.value = 'That time was just taken — please choose another.'
+      setDay(selectedDay, selected.value.filter(x => x.start_time !== s.start_time))
+      err.value = res.reason || 'That time was just taken — please choose another.'
       loadDay()
     } else if (userAction && !selectMode.value) {
-      trackStorefrontEvent('AddToCart', { kind: 'listing', id: l.value.id, value: Math.max(0, fullQuote.value.total - cartBefore), currency: loc.value?.currency || serverCurrency.value })
+      trackStorefrontEvent('AddToCart', item)
     }
   }
+  } finally { selectionPending.value = false }
 }
 async function addExtension(o) {
-  if (bookingUnavailable.value) { err.value = unavailableMessage; return }
-  const cartBefore = fullQuote.value.total
-  setDay(date.value, [...selected.value, { start_time: o.slot.start_time, end_time: o.slot.end_time, price: o.slot.price }])
-  const res = await syncHolds()
-  if (!res.ok) { setDay(date.value, selected.value.filter(x => x.start_time !== o.slot.start_time)); err.value = 'That time was just taken — please choose another.'; loadDay() }
-  else if (!selectMode.value) trackStorefrontEvent('AddToCart', { kind: 'listing', id: l.value.id, value: Math.max(0, fullQuote.value.total - cartBefore), currency: loc.value?.currency || serverCurrency.value })
+  return toggleSlot({ ...o.slot, available: true })
 }
 function clearDay(day) { const c = { ...selectedByDate.value }; delete c[day]; selectedByDate.value = c; syncHolds() }
 function removeBlock(day, block) {
@@ -839,7 +845,7 @@ onBeforeRouteLeave(() => { stopHoldTimer(); teardownRealtime() })
             <div v-if="!loadingSlots && !daySched?.closed && visibleSlots.length" class="ld-slots">
               <button v-for="s in visibleSlots" :key="s.start_time" class="ld-slot"
                 :class="[{ on: selectedSet.has(s.start_time), taken: !s.available }, s.available ? tierClass(s) : '']"
-                :disabled="!s.available" :aria-pressed="selectedSet.has(s.start_time)" @click="toggleSlot(s)">
+                :disabled="!s.available || selectionPending" :aria-pressed="selectedSet.has(s.start_time)" @click="toggleSlot(s)">
                 <span class="ld-slot-heading"><span class="ld-slot-time"><component :is="periodIcon(s.start_time)" :size="14" class="ld-slot-sun" :class="`p-${dayPeriod(s.start_time)}`" />{{ fmtTime(s.start_time) }}</span><span class="ld-slot-choice" aria-hidden="true"><Check v-if="selectedSet.has(s.start_time)" :size="13" /></span></span>
                 <span class="ld-slot-endt">to {{ fmtTime(s.end_time) }}</span>
                 <template v-if="s.available">
@@ -850,10 +856,11 @@ onBeforeRouteLeave(() => { stopHoldTimer(); teardownRealtime() })
               </button>
             </div>
 
+            <p v-if="err" class="ld-err" role="alert">{{ err }}</p>
             <!-- Booking extras (offers / players / add-ons) — not shown when a host is just picking a court -->
             <template v-if="!selectMode">
             <!-- Extension offers (one per contiguous run) -->
-            <button v-for="(o, i) in offers" :key="'o'+i" type="button" class="ld-offer" @click="addExtension(o)">
+            <button v-for="(o, i) in offers" :key="'o'+i" type="button" class="ld-offer" :disabled="selectionPending" @click="addExtension(o)">
               <div class="ld-offer-ico"><Sparkles :size="20" /></div>
               <div class="ld-offer-txt">
                 <div class="ld-offer-title">Make it longer<span v-if="o.savePct > 0"> &amp; save {{ o.savePct }}%</span></div>

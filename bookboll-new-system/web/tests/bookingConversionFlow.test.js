@@ -78,6 +78,54 @@ test('deposit and full-online checkout pass the backend amount before Stripe nav
   }
 })
 
+function slotSelection(hold = async () => ({ ok: true })) {
+  const calls = [], state = { selection: [] }
+  const context = vm.createContext({
+    ref: value => ({ value }), listingLoad: 1, date: { value: '2026-12-01' },
+    l: { value: { id: 2 } }, loc: { value: { currency: 'QAR' } }, serverCurrency: { value: 'USD' },
+    selectMode: { value: false }, bookingUnavailable: { value: false }, err: { value: '' }, holdExpiredMsg: { value: false },
+    selected: { get value() { return state.selection } },
+    fullQuote: { get value() { return { total: state.selection.reduce((n, s, i) => n + s.price * (i ? .8 : 1), 0) } } },
+    setDay: (_day, slots) => { state.selection = slots }, syncHolds: hold, loadDay: () => {},
+    trackStorefrontEvent: (event, item) => calls.push([event, JSON.parse(JSON.stringify(item))]),
+  })
+  const source = readFileSync(new URL('../src/customer/pages/ListingDetail.vue', import.meta.url), 'utf8')
+  vm.runInContext(source.slice(source.indexOf('const selectionPending ='), source.indexOf('function clearDay(')), context)
+  return { context, calls, state, slot: { available: true, start_time: '18:00', end_time: '19:00', price: 100 } }
+}
+
+test('slot holds report successful incremental prices, including discounted extensions; deselection and prefills do not', async () => {
+  const env = slotSelection()
+  await env.context.toggleSlot(env.slot)
+  await env.context.addExtension({ slot: { start_time: '19:00', end_time: '20:00', price: 100 } })
+  assert.deepEqual(env.calls.map(c => c[1].value), [100, 80])
+  assert.ok(env.calls.every(c => c[1].id === 2 && c[1].currency === 'QAR'))
+  await env.context.toggleSlot(env.slot)
+  await env.context.toggleSlot(env.slot, false)
+  assert.equal(env.calls.length, 2)
+})
+
+test('failed holds show the server reason and never report a cart event', async () => {
+  const env = slotSelection(async () => ({ ok: false, reason: 'Sign in to save a hold.' }))
+  await env.context.toggleSlot(env.slot)
+  assert.equal(env.calls.length, 0)
+  assert.equal(env.state.selection.length, 0)
+  assert.equal(env.context.err.value, 'Sign in to save a hold.')
+})
+
+test('rapid clicks and stale holds after changing listings cannot duplicate or misattribute cart events', async () => {
+  let finish
+  const env = slotSelection(() => new Promise(resolve => { finish = resolve }))
+  const pending = env.context.toggleSlot(env.slot)
+  await env.context.toggleSlot(env.slot)
+  assert.equal(env.state.selection.length, 1)
+  env.context.listingLoad++
+  env.context.l.value = { id: 9 }
+  env.context.loc.value = { currency: 'PKR' }
+  finish({ ok: true }); await pending
+  assert.deepEqual(env.calls, [])
+})
+
 test('invalid, free and cash bookings do not emit online checkout events', async () => {
   for (const [response, method] of [
     [{ success: false, message: 'Slot is unavailable' }, 'deposit'],
