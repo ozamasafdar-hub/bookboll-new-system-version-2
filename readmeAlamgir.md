@@ -6,6 +6,8 @@ No migration is required. New Stripe sessions include versioned conversion metad
 
 Integration with the shared payment-sync update also removes Stripe's unconditional `deposit_paid` overwrite: if the paid deposit covers the whole booking, the central receipt sync keeps it `fully_paid`. The existing multi-booking settlement regression enforces this case.
 
+The same required suites now cover sequential bookings across ten different listing configurations on both channels and plans, with deposit/full payment. Out-of-order payment returns, repeat purchases, differing slot prices, per-person quantities, add-ons, promos, PKR rounding and below-minimum deposits must preserve the correct listing, actual charge and currency. Browser tests also enforce provider-pixel isolation when switching businesses. These are isolated MySQL and simulated-transport tests; no real charges or advertising purchases are generated. See the conversion contract for the complete coverage.
+
 ## Cookie consent removal and tracking checks — 26 November 2026
 
 Cookie banners, preferences, footer controls and the cookie-choice tracking gate have been removed from the marketplace, provider sites, business landing app and admin app. Configured Google Analytics, Google Tag Manager and Meta Pixel load directly in the customer storefront; old `bb_cookie_consent_*` storage values are no longer read. No synthetic consent grant is sent. The first SPA navigation now records its page view instead of being skipped.

@@ -18,22 +18,18 @@ class FeeFlowStripeTransport implements \Stripe\HttpClient\ClientInterface
 {
     public array $checkout = [];
     public array $calls = [];
+    public array $sessions = [];
+    public array $unpaid = [];
     public function request($method, $url, $headers, $params, $hasFile, $apiMode = 'v1')
     {
         $path = parse_url($url, PHP_URL_PATH);
         $this->calls[] = [$method, $path];
         $body = match (true) {
             $path === '/v1/checkout/sessions' && $method === 'post' => $this->newCheckout($params),
-            $path === '/v1/checkout/sessions/cs_test_fee_flow' => $this->paidSession()->toArray(),
+            str_starts_with($path, '/v1/checkout/sessions/cs_test_fee_flow') => $this->paidSession(basename($path))->toArray(),
             $path === '/v1/customers/cus_fee_flow' => ['id'=>'cus_fee_flow','object'=>'customer'],
             $path === '/v1/accounts/acct_fee_flow' => ['id'=>'acct_fee_flow','object'=>'account','country'=>'US','charges_enabled'=>true,'payouts_enabled'=>true,'capabilities'=>['transfers'=>'active']],
-            $path === '/v1/payment_intents/pi_fee_flow' => array_merge([
-                'id'=>'pi_fee_flow','object'=>'payment_intent','status'=>'succeeded',
-                'amount_received'=>$this->checkout['line_items'][0]['price_data']['unit_amount'],
-                'currency'=>$this->checkout['line_items'][0]['price_data']['currency'],
-                'transfer_data'=>null,
-                'latest_charge'=>['id'=>'ch_fee_flow','object'=>'charge','receipt_url'=>'https://pay.stripe.com/receipts/test_fee_flow'],
-            ], $this->checkout['payment_intent_data'] ?? []),
+            str_starts_with($path, '/v1/payment_intents/pi_fee_flow') => $this->intent(basename($path)),
             default => throw new RuntimeException("Unexpected Stripe request: $method $path"),
         };
         return [json_encode($body), 200, []];
@@ -41,16 +37,32 @@ class FeeFlowStripeTransport implements \Stripe\HttpClient\ClientInterface
     private function newCheckout(array $params): array
     {
         $this->checkout = $params;
-        return ['id'=>'cs_test_fee_flow','object'=>'checkout.session','url'=>'https://checkout.stripe.com/test_fee_flow'];
+        $id = 'cs_test_fee_flow'.(count($this->sessions) ? '_'.(count($this->sessions)+1) : '');
+        $this->sessions[$id] = $params;
+        return ['id'=>$id,'object'=>'checkout.session','url'=>'https://checkout.stripe.com/'.$id];
     }
-    public function paidSession(): \Stripe\Checkout\Session
+    private function intent(string $id): array
     {
+        $checkout = $this->sessions[str_replace('pi_', 'cs_test_', $id)];
+        return array_merge([
+            'id'=>$id,'object'=>'payment_intent','status'=>'succeeded',
+            'amount_received'=>$checkout['line_items'][0]['price_data']['unit_amount'],
+            'currency'=>$checkout['line_items'][0]['price_data']['currency'],
+            'transfer_data'=>null,
+            'latest_charge'=>['id'=>str_replace('pi_', 'ch_', $id),'object'=>'charge','receipt_url'=>'https://pay.stripe.com/receipts/test_fee_flow'],
+        ], $checkout['payment_intent_data'] ?? []);
+    }
+    public function paidSession(?string $id = null): \Stripe\Checkout\Session
+    {
+        $id ??= array_key_last($this->sessions);
+        $checkout = $this->sessions[$id];
+        $paid = !in_array($id, $this->unpaid, true);
         return \Stripe\Checkout\Session::constructFrom([
-            'id'=>'cs_test_fee_flow','object'=>'checkout.session','payment_status'=>'paid',
-            'payment_intent'=>'pi_fee_flow','metadata'=>$this->checkout['metadata'],
-            'status'=>'complete',
-            'amount_total'=>$this->checkout['line_items'][0]['price_data']['unit_amount'],
-            'currency'=>$this->checkout['line_items'][0]['price_data']['currency'],
+            'id'=>$id,'object'=>'checkout.session','payment_status'=>$paid?'paid':'unpaid',
+            'payment_intent'=>$paid?str_replace('cs_test_', 'pi_', $id):null,'metadata'=>$checkout['metadata'],
+            'status'=>$paid?'complete':'expired',
+            'amount_total'=>$checkout['line_items'][0]['price_data']['unit_amount'],
+            'currency'=>$checkout['line_items'][0]['price_data']['currency'],
         ]);
     }
 }
@@ -259,3 +271,130 @@ it('keeps real checkout, Stripe allocation, receipts and analytics consistent', 
     }
 })->with(['free','premium'])->with(['marketplace','site'])->with(['global','country','city','zero'])
   ->with(['deposit_remaining_on_arrival','online_payment'])->with(['provider','bookboll']);
+
+it('keeps sequential different-listing checkouts distinct even when payment returns arrive out of order', function ($plan, $surface, $method) {
+    config(['payments.minimum_charge.PKR'=>200]);
+    if ($plan === 'premium') {
+        $this->business->update(['plan'=>'premium']);
+        BusinessSubscription::create(['business_id'=>$this->business->id,'plan'=>'premium','status'=>'active','billing'=>'yearly','amount'=>588,'currency'=>'USD','current_period_end'=>now()->addYear()]);
+    }
+    BusinessPaymentConnection::create(['business_id'=>$this->business->id,'stripe_account_id'=>'acct_fee_flow',
+        'connected_by'=>$this->owner->id,'livemode'=>false,'status'=>'active','charges_enabled'=>true,'payouts_enabled'=>true,'transfers_enabled'=>true]);
+    MarketSetting::updateOrCreate(['scope'=>'country','scope_id'=>$this->country->id],['values'=>['facility'=>18.5,'site'=>8.25]]);
+    MarketSetting::updateOrCreate(['scope'=>'city','scope_id'=>$this->city->id],['values'=>['facility'=>12.5,'site'=>6.5]]);
+    app(MarketSettings::class)->clear();
+    $deposit = $method === 'deposit_remaining_on_arrival';
+    // Representative Railway listing configurations, copied into disposable fixtures.
+    // Prices must come from the selected slot, not the cheaper listing-card price.
+    $cases = [
+        ['name'=>'Badminton', 'base'=>45, 'minutes'=>60, 'prices'=>[50,60], 'rate'=>20],
+        ['name'=>'Indoor padel', 'base'=>100, 'minutes'=>120, 'prices'=>[125], 'rate'=>20],
+        ['name'=>'Cricket nets', 'base'=>75, 'minutes'=>120, 'prices'=>[100], 'rate'=>null, 'city'=>false],
+        ['name'=>'Shared safari', 'base'=>99, 'minutes'=>180, 'prices'=>[99], 'quantity'=>3, 'rate'=>15],
+        ['name'=>'Lahore court', 'base'=>100, 'minutes'=>60, 'prices'=>[2299,2299], 'currency'=>'PKR', 'rate'=>15],
+        ['name'=>'Low deposit Lahore court', 'base'=>100, 'minutes'=>60, 'prices'=>[555], 'currency'=>'PKR', 'rate'=>15],
+        ['name'=>'Fixed deposit court', 'base'=>250, 'minutes'=>60, 'prices'=>[250], 'fixed'=>25, 'rate'=>15],
+        ['name'=>'Court with equipment', 'base'=>125, 'minutes'=>60, 'prices'=>[125], 'addon'=>9.5, 'rate'=>15],
+        ['name'=>'Provider promo court', 'base'=>125, 'minutes'=>60, 'prices'=>[125], 'promo'=>'provider', 'rate'=>15],
+        ['name'=>'Bookboll promo court', 'base'=>125, 'minutes'=>60, 'prices'=>[125], 'promo'=>'bookboll', 'rate'=>15],
+    ];
+    $runs = [];
+    $firstPayload = null;
+    $this->listing->resources()->first()->update(['name'=>'Fee flow initial court']);
+    $this->actingAs($this->customer);
+    foreach ($cases as $case) {
+        ['venue'=>$venue,'resource'=>$resource,'listings'=>$listings,'date'=>$date] = courtPool(12, ['court'=>['max'=>8]]);
+        $resource->update(['name'=>'Fee flow court '.$venue->id]);
+        $currency = $case['currency'] ?? 'QAR';
+        $hasCity = $case['city'] ?? true;
+        $venue->forceFill(['owner_user_id'=>$this->owner->id,'business_id'=>$this->business->id,'operator_type'=>'provider',
+            'country_id'=>$this->country->id,'city_id'=>$hasCity?$this->city->id:null,'currency_override'=>$currency,'min_advance_booking'=>0])->save();
+        $listing = $listings['court'];
+        $listing->update(['name'=>$case['name'],'base_price'=>$case['base'],'slot_duration'=>$case['minutes'],
+            'listing_type'=>isset($case['quantity'])?'per_person':'court','commission_rate'=>$case['rate'],
+            'min_advance_minutes'=>0,'show_on_customer'=>true,'show_on_admin'=>true,
+            'payment_options'=>['deposit_enabled'=>true,'deposit'=>['enabled'=>true,'amount'=>$case['fixed']??0],
+                'online_payment_enabled'=>true,'site_deposit_enabled'=>true,'site_online_enabled'=>true]]);
+        $payload = ['venue_id'=>$venue->id,'listing_id'=>$listing->id,'surface'=>$surface,'payment_method'=>$method,'slots'=>[],'add_ons'=>[]];
+        $time = \Carbon\Carbon::parse($date.' 20:00');
+        foreach ($case['prices'] as $price) {
+            $start = $time->format('H:i');
+            $end = $time->addMinutes($case['minutes'])->format('H:i');
+            $listing->pricingGroups()->create(['name'=>'QA selected-slot price','days'=>[strtolower(\Carbon\Carbon::parse($date)->format('l'))],
+                'start_time'=>$start,'end_time'=>$end,'price_per_hour'=>$price,'currency'=>$currency]);
+            $payload['slots'][] = ['date'=>$date,'start_time'=>$start,'end_time'=>$end,'quantity'=>$case['quantity']??1];
+        }
+        if (isset($case['addon'])) {
+            $addon = \App\Models\AddOn::create(['name'=>'QA equipment','price'=>$case['addon'],'status'=>'active','currency'=>$currency]);
+            $listing->addOns()->attach($addon->id);
+            $payload['add_ons'] = [$addon->id];
+        }
+        if (isset($case['promo'])) {
+            $promo = \App\Models\Promocode::create(['description'=>'QA conversion discount','code'=>'QACONV'.$listing->id,
+                'status'=>'active','discount_type'=>'percentage','discount_value'=>10,'recipient'=>$case['promo'],
+                'owner_user_id'=>$case['promo']==='provider'?$this->owner->id:null,'payment_methods'=>'all']);
+            $payload['promocode'] = $promo->code;
+        }
+        $gross = array_sum($case['prices']) * ($case['quantity']??1) + ($case['addon']??0);
+        $rate = $surface === 'site' ? ($hasCity?6.5:8.25) : ($case['rate']??18.5);
+        // Each booking's receipt is rounded first, then the checkout sums them.
+        $fee = 0;
+        foreach ($case['prices'] as $index=>$price) {
+            $slotGross = $price * ($case['quantity']??1) + ($index===0?($case['addon']??0):0);
+            $fee += $deposit && $surface === 'marketplace' && isset($case['fixed']) ? $case['fixed'] : round($slotGross*$rate/100,2);
+        }
+        $fee = round($fee,2);
+        $discount = isset($case['promo']) ? round($gross*0.1,2) : 0;
+        if (($case['promo']??'') === 'bookboll') $discount = min($discount,$fee);
+        $total = round($gross-$discount,2);
+        $fee = ($case['promo']??'') === 'bookboll' ? round($fee-$discount,2)
+            : (isset($case['promo']) ? round($total*$rate/100,2) : $fee);
+        $amount = $deposit?$fee:$total;
+        $before = count($this->stripeTransport->sessions);
+        $response = $this->postJson('/api/customer/payments/create-checkout-session',$payload);
+        if ($currency === 'PKR' && $amount < 200) {
+            $response->assertUnprocessable()->assertJsonPath('success',false);
+            expect($response->json('data.checkout_conversion'))->toBeNull()
+                ->and(count($this->stripeTransport->sessions))->toBe($before);
+            continue;
+        }
+        $result = $response->assertOk()->assertJsonPath('success',true)->json('data');
+        if ($amount == 0) {
+            expect($result['free_booking'])->toBeTrue()->and($result['checkout_conversion']??null)->toBeNull()
+                ->and(count($this->stripeTransport->sessions))->toBe($before);
+            continue;
+        }
+        expect($result['checkout_conversion']['value'])->toEqual($amount)
+            ->and($result['checkout_conversion']['currency'])->toBe($currency)
+            ->and($result['checkout_conversion']['content_ids'])->toBe([(string)$listing->id])
+            ->and($result['checkout_conversion']['num_items'])->toBe(count($case['prices']));
+        $runs[] = ['id'=>$result['session_id'],'conversion'=>$result['checkout_conversion']];
+        $firstPayload ??= $payload;
+    }
+    // Buying the SAME listing again is a new payment, not a duplicate event.
+    $repeat = $this->postJson('/api/customer/payments/create-checkout-session',$firstPayload)->assertOk()->json('data');
+    expect($repeat['checkout_conversion']['event_id'])->not->toBe($runs[0]['conversion']['event_id']);
+    $runs[] = ['id'=>$repeat['session_id'],'conversion'=>$repeat['checkout_conversion']];
+    $expired = $this->postJson('/api/customer/payments/create-checkout-session',$firstPayload)->assertOk()->json('data.session_id');
+    $this->stripeTransport->unpaid[] = $expired;
+    $this->getJson('/api/customer/payments/checkout-session/'.$expired)->assertOk()->assertJsonPath('data.conversion',null);
+
+    $events = [];
+    foreach (array_reverse($runs) as $run) {
+        $data = $this->getJson('/api/customer/payments/checkout-session/'.$run['id'])->assertOk()->json('data');
+        $event = $data['conversion'];
+        expect($event)->not->toBeNull();
+        foreach (['value','currency','content_ids','num_items','surface','business_id'] as $field) expect($event[$field])->toBe($run['conversion'][$field]);
+        expect($event['content_ids'])->toBe(Booking::whereIn('id',$data['booking_ids'])->pluck('listing_id')->unique()->map(fn($id)=>(string)$id)->values()->all());
+        expect((float)Payment::whereIn('booking_id',$data['booking_ids'])->where('status','paid')->where('method','online')->sum('amount'))->toEqual($event['value']);
+        $this->getJson('/api/customer/payments/checkout-session/'.$run['id'])->assertOk()->assertJsonPath('data.conversion',$event);
+        $events[] = $event['event_id'];
+    }
+    expect(array_unique($events))->toHaveCount(count($runs));
+    // A rejected booking cannot accidentally reuse the previous successful payload.
+    $firstPayload['slots'][0]['quantity'] = 999;
+    $count = count($this->stripeTransport->sessions);
+    $failed = $this->postJson('/api/customer/payments/create-checkout-session',$firstPayload);
+    expect($failed->json('success'))->toBeFalse()->and($failed->json('data.checkout_conversion'))->toBeNull()
+        ->and(count($this->stripeTransport->sessions))->toBe($count);
+})->with(['free','premium'])->with(['marketplace','site'])->with(['deposit_remaining_on_arrival','online_payment']);

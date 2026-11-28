@@ -89,6 +89,59 @@ test('two tabs serialize delivery for the same verified payment', async () => {
   assert.deepEqual(sent, [true, false])
 })
 
+test('different listings and a repeat booking each emit once with their own value, currency and item id', async () => {
+  const storage = memoryStorage()
+  const env = environment('web', storage)
+  env.mount()
+  const purchases = [
+    receipt('Purchase', {event_id:`bb_purchase_${'a'.repeat(64)}`,content_ids:['8'],value:22,num_items:2}),
+    receipt('Purchase', {event_id:`bb_purchase_${'b'.repeat(64)}`,content_ids:['16'],value:125,num_items:1}),
+    receipt('Purchase', {event_id:`bb_purchase_${'c'.repeat(64)}`,content_ids:['53'],value:344.85,currency:'PKR',num_items:1}),
+    receipt('Purchase', {event_id:`bb_purchase_${'d'.repeat(64)}`,content_ids:['8'],value:22,num_items:2}),
+  ]
+  for (const purchase of purchases) assert.equal(await env.api.trackBookingConversion('Purchase', purchase), true)
+  const events = env.meta().filter(e => e[0] === 'trackSingle')
+  assert.deepEqual(events.map(e => [e[3].content_ids[0], e[3].value, e[3].currency, e[3].num_items]),
+    purchases.map(p => [p.content_ids[0],p.value,p.currency,p.num_items]))
+  const google = env.google().filter(e => e[1] === 'purchase')
+  assert.deepEqual(google.map(e => [e[2].items[0].item_id,e[2].value,e[2].currency]),
+    purchases.map(p => [p.content_ids[0],p.value,p.currency]))
+  const refreshed = environment('web', storage)
+  refreshed.mount()
+  for (const purchase of [...purchases].reverse()) assert.equal(await refreshed.api.trackBookingConversion('Purchase', purchase), false)
+  assert.equal(refreshed.meta().filter(e => e[0] === 'trackSingle').length, 0)
+})
+
+test('switching between businesses cannot attribute a different listing to the wrong business pixel', async () => {
+  const env = environment('web', memoryStorage())
+  env.mount()
+  const first = receipt('Purchase', {surface:'site',business_id:7,content_ids:['8']})
+  const second = receipt('Purchase', {surface:'site',business_id:8,content_ids:['16'],event_id:`bb_purchase_${'b'.repeat(64)}`,value:125})
+  env.activeBrand.value = { businessId:7, tracking:{...config,metaPixel:'7777777',ga4:'G-FIRST123'} }
+  env.reapply()
+  assert.equal(await env.api.trackBookingConversion('Purchase', second), false)
+  assert.equal(await env.api.trackBookingConversion('Purchase', first), true)
+  env.activeBrand.value = { businessId:8, tracking:{...config,metaPixel:'8888888',ga4:'G-SECOND123'} }
+  env.reapply()
+  assert.equal(await env.api.trackBookingConversion('Purchase', first), false)
+  assert.equal(await env.api.trackBookingConversion('Purchase', second), true)
+  const events = env.meta().filter(e => e[0] === 'trackSingle')
+  assert.deepEqual(events.map(e => [e[1],e[3].content_ids[0]]), [['7777777','8'],['8888888','16']])
+  assert.deepEqual(env.google().filter(e => e[1] === 'purchase').map(e => e[2].send_to), ['G-FIRST123','G-SECOND123'])
+})
+
+test('a listing without tracking does not consume the next listing payment or reuse its previous configuration', async () => {
+  const env = environment('web', memoryStorage())
+  env.activeBrand.value = { businessId:7, tracking:{} }
+  env.mount()
+  assert.equal(await env.api.trackBookingConversion('Purchase', receipt('Purchase',{surface:'site'})), false)
+  env.activeBrand.value = { businessId:8, tracking:{...config,metaPixel:'8888888'} }
+  env.reapply()
+  assert.equal(await env.api.trackBookingConversion('Purchase', receipt('Purchase',{surface:'site'})), false)
+  assert.equal(await env.api.trackBookingConversion('Purchase', receipt('Purchase',{surface:'site',business_id:8,content_ids:['16'],event_id:`bb_purchase_${'b'.repeat(64)}`})), true)
+  assert.equal(env.meta().filter(e => e[0] === 'trackSingle').length, 1)
+})
+
 // Execute the real generated snippets in an isolated browser substitute. External
 // scripts are recorded, never fetched: these tests send no analytics traffic.
 function environment(app, storage = null) {
