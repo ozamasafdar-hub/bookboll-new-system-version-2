@@ -37,6 +37,10 @@ it('confirms paid deposits consistently in calendar, details, filters and charts
         'amount'=>20, 'currency'=>'QAR', 'status'=>'paid', 'method'=>'online', 'type'=>'deposit']);
     $balance = Payment::create(['user_id'=>$booking->user_id, 'payment_id'=>'QA-'.Str::uuid(), 'booking_id'=>$booking->id,
         'amount'=>80, 'currency'=>'QAR', 'status'=>'pending', 'method'=>'cash', 'type'=>'remaining']);
+    expect($booking->fresh()->status)->toBe('confirmed');
+    // New payment writes now confirm immediately. Recreate the stale imported
+    // status explicitly so this still tests read-only historical presentation.
+    Booking::whereKey($booking->id)->update(['status'=>'pending', 'payment_status'=>'pending']);
     $this->getJson('/api/admin/bookings/'.$booking->id.'/crm')->assertOk()
         ->assertJsonPath('data.booking.booking_status', 'confirmed')->assertJsonPath('data.booking.amount_paid', 20);
     $this->getJson('/api/admin/bookings/calendar-dashboard?from=2026-11-10&to=2026-11-10')->assertOk()

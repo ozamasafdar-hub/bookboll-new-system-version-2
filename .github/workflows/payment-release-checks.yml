@@ -60,6 +60,7 @@ jobs:
         run: |
           php vendor/bin/pest tests/Feature/UnifiedWebsiteFeeMigrationTest.php tests/Feature/BookingFeePresentationTest.php
           php vendor/bin/pest tests/Feature/BookingFeeReportingFlowTest.php tests/Feature/ProviderOnlineAllocationTest.php tests/Feature/BookingConversionTest.php
+          php vendor/bin/pest tests/Feature/BookingPaymentSyncTest.php
           php vendor/bin/pest tests/Feature/MultipleBusinessOwnersTest.php
           php vendor/bin/pest tests/Feature/BusinessSupportSessionTest.php
           php vendor/bin/pest tests/Feature/BusinessPhoneTest.php tests/Feature/ProviderSettingsTest.php
