@@ -55,6 +55,16 @@ import MarketplaceSearch from './customer/pages/Search.vue'
 
 const customer = (path, component) => ({ path, component, alias: path === '/' ? '/ar' : `/ar${path}`, meta: { area: 'customer' } })
 
+// Test builds expose tag failures in the browser console without logging URL
+// parameters, customer fields or credentials. No network diagnostics are sent.
+if (import.meta.env.VITE_TRACKING_ENV === 'test') {
+  window.addEventListener('error', event => {
+    if (!/facebook\.(?:net|com)\//.test(event.filename || '')) return
+    const clean = text => String(text || '').replace(/(https?:\/\/[^\s?#]+)[?#][^\s)]+/g, '$1')
+    console.warn('[Tracking QA]', clean(event.filename), event.lineno, event.colno, clean(event.message), clean(event.error?.stack))
+  })
+}
+
 function goBusiness(path = '/') {
   window.location.replace(businessHomeUrl(path))
 }

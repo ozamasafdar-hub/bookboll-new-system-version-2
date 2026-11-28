@@ -799,9 +799,12 @@ class StripeService
 
     public function checkoutReturnUrls(): array
     {
+        // A same-origin /api proxy retains the storefront's Host header. Stripe
+        // must return to the backend handler, not that storefront's SPA fallback.
+        $backend = rtrim((string) config('app.url'), '/');
         return [
-            'success_url' => url('/payment/success/{CHECKOUT_SESSION_ID}'),
-            'cancel_url'  => url('/payment/cancel?session_id={CHECKOUT_SESSION_ID}'),
+            'success_url' => $backend . '/payment/success/{CHECKOUT_SESSION_ID}',
+            'cancel_url'  => $backend . '/payment/cancel?session_id={CHECKOUT_SESSION_ID}',
         ];
     }
 
