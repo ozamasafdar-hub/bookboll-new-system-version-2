@@ -4,6 +4,7 @@
  * quoting / payment-plan math stay in booking.js.
  */
 import { apiFetch, getCustomerToken, setCustomerToken } from '../lib/api.js'
+import { trackBookingConversion } from '../lib/bookingConversions.js'
 import { redemptionFields } from '../lib/checkoutRewards.js'
 import { createdBookingCurrency } from '../lib/bookingCurrency.js'
 import { mapCustomerBooking } from '../lib/customerBookingPresentation.js'
@@ -243,6 +244,9 @@ export async function createCustomerBookingsMulti({
       return { bookings: (res.data.bookings || []).map(b => b.id || b), currency: createdBookingCurrency(res.data.bookings, location) }
     }
     if (res.data?.url) {
+      const tracked = await trackBookingConversion('InitiateCheckout', res.data.checkout_conversion)
+      // Give the browser's tag transports a turn before leaving for Stripe.
+      if (tracked) await new Promise(resolve => setTimeout(resolve, 200))
       window.location.href = res.data.url
       return { redirect: true, bookings: [], currency: createdBookingCurrency(null, location) }
     }

@@ -1,3 +1,9 @@
+## Verified booking conversions — 28 November 2026
+
+Marketplace and provider websites now send Meta `InitiateCheckout` / `Purchase` and GA4 `begin_checkout` / `purchase`. Values are the amount charged online, not booking GMV or Bookboll's fee: a QAR 100 booking with a QAR 15 deposit reports QAR 15. One multi-slot checkout is one conversion. Purchase is based on the authenticated Stripe-session return endpoint after settlement; it never trusts thank-you URL amounts or the currently selected country's currency. Provider returns preserve their business website and target that provider's tags only.
+
+No migration is required. New Stripe sessions include versioned conversion metadata; old payment URLs do not create retrospective purchases. Keep the [conversion contract and verification steps](docs/BOOKING_CONVERSIONS.md) and the mandatory browser/MySQL tests when copying this environment. Real Meta/Google delivery still needs a browser with unblocked tags and a genuine test checkout; simulated tests never contact advertising endpoints.
+
 ## Cookie consent removal and tracking checks — 26 November 2026
 
 Cookie banners, preferences, footer controls and the cookie-choice tracking gate have been removed from the marketplace, provider sites, business landing app and admin app. Configured Google Analytics, Google Tag Manager and Meta Pixel load directly in the customer storefront; old `bb_cookie_consent_*` storage values are no longer read. No synthetic consent grant is sent. The first SPA navigation now records its page view instead of being skipped.

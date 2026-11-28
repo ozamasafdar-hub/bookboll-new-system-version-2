@@ -24,6 +24,7 @@ class FeeFlowStripeTransport implements \Stripe\HttpClient\ClientInterface
         $this->calls[] = [$method, $path];
         $body = match (true) {
             $path === '/v1/checkout/sessions' && $method === 'post' => $this->newCheckout($params),
+            $path === '/v1/checkout/sessions/cs_test_fee_flow' => $this->paidSession()->toArray(),
             $path === '/v1/customers/cus_fee_flow' => ['id'=>'cus_fee_flow','object'=>'customer'],
             $path === '/v1/accounts/acct_fee_flow' => ['id'=>'acct_fee_flow','object'=>'account','country'=>'US','charges_enabled'=>true,'payouts_enabled'=>true,'capabilities'=>['transfers'=>'active']],
             $path === '/v1/payment_intents/pi_fee_flow' => array_merge([
@@ -47,6 +48,9 @@ class FeeFlowStripeTransport implements \Stripe\HttpClient\ClientInterface
         return \Stripe\Checkout\Session::constructFrom([
             'id'=>'cs_test_fee_flow','object'=>'checkout.session','payment_status'=>'paid',
             'payment_intent'=>'pi_fee_flow','metadata'=>$this->checkout['metadata'],
+            'status'=>'complete',
+            'amount_total'=>$this->checkout['line_items'][0]['price_data']['unit_amount'],
+            'currency'=>$this->checkout['line_items'][0]['price_data']['currency'],
         ]);
     }
 }
@@ -173,6 +177,12 @@ it('keeps real checkout, Stripe allocation, receipts and analytics consistent', 
     } else {
         $checkout = $this->stripeTransport->checkout;
         expect($checkout['line_items'][0]['price_data']['unit_amount'])->toBe((int)round(($deposit?$fee:200)*100));
+        $conversion = $response->json('data.checkout_conversion');
+        expect($conversion['value'])->toEqual($deposit?$fee:200)
+            ->and($conversion['currency'])->toBe('QAR')
+            ->and($conversion['surface'])->toBe($surface)
+            ->and($conversion['num_items'])->toBe(2)
+            ->and($conversion['content_ids'])->toBe([(string)$this->listing->id]);
         if (!$deposit && $operator === 'provider') {
             expect($checkout['payment_intent_data']['application_fee_amount'])->toBe((int)round($fee*100))
                 ->and($checkout['payment_intent_data']['transfer_data']['destination'])->toBe('acct_fee_flow');
@@ -183,6 +193,22 @@ it('keeps real checkout, Stripe allocation, receipts and analytics consistent', 
         $again = app(StripeService::class)->fulfillPaidCheckoutSession('cs_test_fee_flow', $this->stripeTransport->paidSession());
         expect($again['already_processed'])->toBeTrue();
         expect(StripeSession::sole()->processed)->toBeTrue();
+        // The return endpoint exposes one verified conversion for the entire charge.
+        $return = $this->actingAs($this->customer)->getJson('/api/customer/payments/checkout-session/cs_test_fee_flow')->assertOk()->json('data');
+        expect($return['conversion']['value'])->toEqual($deposit?$fee:200)
+            ->and($return['conversion']['currency'])->toBe('QAR')
+            ->and($return['conversion']['num_items'])->toBe(2)
+            ->and($return['conversion']['event_id'])->toBe('bb_purchase_'.hash('sha256','pi_fee_flow'));
+        $this->getJson('/api/customer/payments/checkout-session/cs_test_fee_flow')->assertJsonPath('data.conversion', $return['conversion']);
+        $redirect = $this->get('/payment/success/cs_test_fee_flow')->assertRedirect()->headers->get('Location');
+        parse_str(parse_url($redirect, PHP_URL_QUERY), $returnQuery);
+        expect($returnQuery['checkout_session'])->toBe('cs_test_fee_flow')
+            ->and($returnQuery['booking_ids'])->toBe($bookings->pluck('id')->implode(','));
+        if ($surface === 'site' && $operator === 'provider') expect($returnQuery['b'])->toBe('qa-fee-flow');
+        $other = User::factory()->create(['status'=>'active']);
+        $other->assignRole('customer');
+        $this->actingAs($other)->getJson('/api/customer/payments/checkout-session/cs_test_fee_flow')->assertNotFound();
+        $this->actingAs($this->customer);
         foreach (Payment::where('status','paid')->get() as $p) expect($p->charge_id)->toBe('ch_fee_flow');
     }
     expect(ProviderWallet::count())->toBe(0); // Direct split must not also credit a wallet.

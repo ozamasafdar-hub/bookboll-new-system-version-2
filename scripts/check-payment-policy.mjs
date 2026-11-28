@@ -10,6 +10,11 @@ const unifiedMigration = 'bookboll-BACKEND/database/migrations/2026_11_25_000001
 const unifiedTest = 'bookboll-BACKEND/tests/Feature/UnifiedWebsiteFeeMigrationTest.php'
 const feeFlowTest = 'bookboll-BACKEND/tests/Feature/BookingFeeReportingFlowTest.php'
 const providerAllocationTest = 'bookboll-BACKEND/tests/Feature/ProviderOnlineAllocationTest.php'
+const conversionChecks = ['bookboll-BACKEND/tests/Feature/BookingConversionTest.php', 'bookboll-new-system/web/tests/bookingConversionFlow.test.js', 'bookboll-new-system/web/tests/tracking.test.js']
+const releaseWorkflow = readFileSync(resolve(root, '.github/workflows/payment-release-checks.yml'), 'utf8')
+if (!conversionChecks.every(file => existsSync(resolve(root, file)) && releaseWorkflow.includes(file.slice(file.indexOf('tests/'))))) {
+  throw new Error('Verified checkout/Purchase conversion and browser deduplication tests are mandatory release checks.')
+}
 if (!feePolicy?.tests?.includes(feeFlowTest)
   || !feePolicy?.tests?.includes(providerAllocationTest)
   || !['tests/Feature/BookingFeeReportingFlowTest.php','tests/Feature/ProviderOnlineAllocationTest.php'].every(test =>

@@ -2003,6 +2003,10 @@ class PaymentService
                     'quantity' => (string) $totalSlots,
                     'promocode' => $validated['promocode'] ?? '',
                     'source' => 'customer',
+                    'conversion_version' => '1',
+                    'conversion_surface' => $mainBooking?->financial_context['channel'] ?? '',
+                    'conversion_business_id' => (string)($mainBooking?->financial_context['business_id'] ?? ''),
+                    'conversion_site_slug' => (string)(\App\Models\Business::find($mainBooking?->financial_context['business_id'] ?? null)?->username ?? ''),
                     // The storefront this booking was made on, so Stripe's return lands
                     // the customer back on the merchant's own site and not the marketplace.
                     'return_origin' => (string) TenantOrigins::storefrontOriginFromRequest(request()),
@@ -2051,6 +2055,10 @@ class PaymentService
             return sendSuccess('Checkout session created successfully', [
                 'url' => $session->url,
                 'session_id' => $session->id,
+                'checkout_conversion' => \App\Support\BookingConversion::checkout(
+                    $session->id, $sessionData['metadata'],
+                    $sessionData['line_items'][0]['price_data']['unit_amount'], $checkoutCurrency
+                ),
             ]);
         } catch (Exception $e) {
             DB::rollBack();

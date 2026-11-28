@@ -410,7 +410,18 @@ class PaymentController extends Controller
             return view('payment-success', compact('bookings'));
         }
 
-        return redirect($this->storefrontUrl($state, '/thank-you?booking_ids=' . implode(',', $bookingIds)));
+        return redirect($this->bookingThankYouUrl($state));
+    }
+
+    protected function bookingThankYouUrl(array $state): string
+    {
+        $meta = $state['session']->metadata ?? null;
+        return $this->storefrontUrl($state, '/thank-you?'.http_build_query(array_filter([
+            'booking_ids' => implode(',', $state['booking_ids'] ?? []),
+            'checkout_session' => $state['session']->id ?? null,
+            // Preserve tenant routing on Railway's shared-origin provider websites.
+            'b' => ($meta['conversion_surface'] ?? '') === 'site' ? ($meta['conversion_site_slug'] ?? null) : null,
+        ])));
     }
 
     protected function renderPaymentReturnCancelled(array $state)
@@ -491,9 +502,7 @@ class PaymentController extends Controller
             ? $this->hostReturnUrl($state, $status === 'success'
                 ? ['published' => $query['published'] ?? '', 'type' => $query['type'] ?? 'game']
                 : ['payment' => 'cancelled'])
-            : $this->storefrontUrl($state, $status === 'success'
-                ? '/thank-you?booking_ids='.$query['booking_ids']
-                : '/payment/cancel');
+            : ($status === 'success' ? $this->bookingThankYouUrl($state) : $this->storefrontUrl($state, '/payment/cancel'));
 
         return response()->view('payment-app-return', [
             'status'     => $status,
@@ -677,6 +686,7 @@ class PaymentController extends Controller
             'payment_type'    => $meta['payment_type'] ?? null,
             'url'             => $checkoutStatus === 'open' && $state['status'] !== 'completed' ? ($session->url ?? null) : null,
             'bookings'        => $bookings,
+            'conversion'      => \App\Support\BookingConversion::purchase($state, $bookings, (int)$user->id),
         ];
     }
 

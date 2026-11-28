@@ -5,9 +5,93 @@ import vm from 'node:vm'
 
 const config = { ga4: 'G-ABC123', gtm: 'GTM-ABC123', metaPixel: '123456789', head: '' }
 
+const receipt = (event = 'Purchase', extra = {}) => ({
+  event_id: `bb_${event === 'Purchase' ? 'purchase' : 'checkout'}_${'a'.repeat(64)}`,
+  value: 15, currency: 'QAR', surface: 'marketplace', business_id: 7,
+  content_ids: ['9'], num_items: 2, ...extra,
+})
+const memoryStorage = () => {
+  const values = new Map()
+  return { getItem: key => values.get(key) || null, setItem: (key, value) => values.set(key, value) }
+}
+
+test('deposit checkout and purchase send only QAR 15 once for two slots; refresh cannot repeat', async () => {
+  const storage = memoryStorage()
+  const env = environment('web', storage)
+  env.mount()
+  assert.equal(await env.api.trackBookingConversion('InitiateCheckout', receipt('InitiateCheckout')), true)
+  assert.equal(await env.api.trackBookingConversion('Purchase', receipt()), true)
+  assert.equal(await env.api.trackBookingConversion('Purchase', receipt()), false)
+  const calls = env.meta().filter(e => e[0] === 'trackSingle')
+  assert.deepEqual(calls.map(e => [e[1], e[2], e[3].value, e[3].currency, e[3].num_items]), [
+    ['123456789', 'InitiateCheckout', 15, 'QAR', 2], ['123456789', 'Purchase', 15, 'QAR', 2],
+  ])
+  assert.equal(calls[1][4].eventID, receipt().event_id)
+  const google = env.google().filter(e => e[1] === 'purchase')
+  assert.equal(google.length, 1)
+  assert.equal(google[0][2].value, 15)
+  assert.equal(google[0][2].transaction_id, receipt().event_id)
+  const refreshed = environment('web', storage)
+  refreshed.mount()
+  assert.equal(await refreshed.api.trackBookingConversion('Purchase', receipt()), false)
+  assert.equal(refreshed.meta().filter(e => e[0] === 'trackSingle').length, 0)
+})
+
+test('full payment uses the verified amount and currency, not the selected country', async () => {
+  const env = environment('web')
+  env.mount()
+  await env.api.trackBookingConversion('Purchase', receipt('Purchase', { value: 1234.56, currency: 'PKR' }))
+  const event = env.meta().find(e => e[0] === 'trackSingle')
+  assert.equal(event[3].value, 1234.56)
+  assert.equal(event[3].currency, 'PKR')
+  // Even when storage is unavailable, rerendering cannot send a second event.
+  assert.equal(await env.api.trackBookingConversion('Purchase', receipt()), false)
+})
+
+test('conversions target only the matching provider pixel and never the marketplace', async () => {
+  const env = environment('web')
+  env.mount()
+  assert.equal(await env.api.trackBookingConversion('Purchase', receipt('Purchase', { surface: 'site' })), false)
+  env.activeBrand.value = { businessId: 7, tracking: { ...config, metaPixel: '987654321' } }
+  env.reapply()
+  assert.equal(await env.api.trackBookingConversion('Purchase', receipt()), false)
+  assert.equal(await env.api.trackBookingConversion('Purchase', receipt('Purchase', { surface: 'site', business_id: 8 })), false)
+  assert.equal(await env.api.trackBookingConversion('Purchase', receipt('Purchase', { surface: 'site' })), true)
+  const events = env.meta().filter(e => e[0] === 'trackSingle')
+  assert.equal(events.length, 1)
+  assert.equal(events[0][1], '987654321')
+})
+
+test('preview, invalid payloads and absent configuration cannot generate purchases', async () => {
+  const env = environment('web')
+  env.mount(); env.setPreview(true)
+  assert.equal(await env.api.trackBookingConversion('Purchase', receipt()), false)
+  env.setPreview(false)
+  for (const change of [{value:0}, {value:-1}, {value:NaN}, {value:'15'}, {currency:''}, {currency:'qar'}, {event_id:'url-only'}, {num_items:0}, {content_ids:[]}]) {
+    assert.equal(await env.api.trackBookingConversion('Purchase', receipt('Purchase', change)), false)
+  }
+  assert.equal(await env.api.trackBookingConversion('Purchase', null), false)
+  env.platformBrand.value = { tracking: {} }; env.reapply()
+  assert.equal(await env.api.trackBookingConversion('Purchase', receipt()), false)
+  // Config arriving later should still deliver; no false dedup marker was stored.
+  env.platformBrand.value = { tracking: config }; env.reapply()
+  assert.equal(await env.api.trackBookingConversion('Purchase', receipt()), true)
+})
+
+test('two tabs serialize delivery for the same verified payment', async () => {
+  const storage = memoryStorage()
+  let pending = Promise.resolve()
+  const locks = { request: (_, cb) => { const result = pending.then(cb); pending = result; return result } }
+  const a = environment('web', storage), b = environment('web', storage)
+  a.context.navigator = b.context.navigator = { locks }
+  a.mount(); b.mount()
+  const sent = await Promise.all([a.api.trackBookingConversion('Purchase', receipt()), b.api.trackBookingConversion('Purchase', receipt())])
+  assert.deepEqual(sent, [true, false])
+})
+
 // Execute the real generated snippets in an isolated browser substitute. External
 // scripts are recorded, never fetched: these tests send no analytics traffic.
-function environment(app) {
+function environment(app, storage = null) {
   const nodes = [], watchers = [], mounted = [], unmounted = []
   let preview = false, storageReads = 0, context
   const makeNode = tag => ({
@@ -41,10 +125,15 @@ function environment(app) {
     onMounted: cb => mounted.push(cb), onBeforeUnmount: cb => unmounted.push(cb),
   })
   context.window = context
-  Object.defineProperty(context, 'localStorage', { get() { storageReads++; throw Error('Storage unavailable') } })
+  Object.defineProperty(context, 'localStorage', { get() { storageReads++; if (storage) return storage; throw Error('Storage unavailable') } })
   const source = readFileSync(new URL(`../../${app}/src/lib/tracking.js`, import.meta.url), 'utf8')
     .replace(/^import .*$/gm, '').replace(/export /g, '')
   vm.runInContext(source + '\nthis.api = {injectTracking, clearTracking, trackPageView, useStorefrontTracking, activeTrackingConfig}', context)
+  if (app === 'web') {
+    const conversions = readFileSync(new URL('../src/lib/bookingConversions.js', import.meta.url), 'utf8')
+      .replace(/^import .*$/gm, '').replace(/export /g, '')
+    vm.runInContext(conversions + '\nthis.api.trackBookingConversion = trackBookingConversion', context)
+  }
   return {
     api: context.api, context, nodes, activeBrand, platformBrand, watchers, unmounted,
     get storageReads() { return storageReads },
