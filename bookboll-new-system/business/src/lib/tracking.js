@@ -98,9 +98,12 @@ export function injectTracking(cfg) {
   }
 
   // Meta (Facebook) Pixel
+  // Disable automatic configuration before init; send explicit app events.
+  // Existing Event Setup Tool rules must also be removed in Meta: this flag
+  // does not disable previously saved button/URL conversion rules.
   if (isMetaPix(cfg.metaPixel)) {
     const id = cfg.metaPixel.trim()
-    head.appendChild(el('script', {}, `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','${id}');fbq('track','PageView');`))
+    head.appendChild(el('script', {}, `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('set','autoConfig',false,'${id}');fbq('init','${id}');fbq('track','PageView');`))
     const ns = el('noscript')
     ns.innerHTML = `<img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=${id}&ev=PageView&noscript=1" alt="" />`
     head.appendChild(ns)

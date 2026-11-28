@@ -40,3 +40,24 @@ Use the official [Meta Ads Data Advisor](https://developers.facebook.com/documen
 6. Confirm reception in Meta Events Manager Test Events when account access is available. Extension detection alone proves the browser event, not attribution or downstream reporting.
 
 Railway's shared preview intentionally locks real money movement. Do not disable release protections or create real charges to test advertising. If the native browser/extension cannot be automated, install and inspect the extension manually; code, MySQL and deployment checks remain independent of it.
+
+## Real Stripe / Meta verification — 28 November 2026
+
+Actual browser checkouts used Stripe's Bookboll sandbox (`acct_1UOIFBRNzQvTDvNU`, `livemode: false`) and Meta pixel `1556219351378271`. The application ran locally against isolated MySQL because the shared Railway workspace deliberately blocks Stripe calls. Stripe transport and Meta browser delivery were real; email and WhatsApp were disabled. These checks do not prove a public webhook, ad attribution, provider Connect payouts, or every geographic/plan combination.
+
+| Checkout | Booking total | Stripe paid | Meta InitiateCheckout | Meta Purchase |
+| --- | ---: | ---: | --- | --- |
+| Listing 1, deposit | QAR 100 | QAR 15 | Processed, 15 QAR at 19:35:06 | Processed, 15 QAR at 19:38:59 |
+| Listing 2, full | QAR 125 | QAR 125 | Not observed in Test Events | Processed, 125 QAR at 19:45:42 |
+| Listing 1, two deposits | QAR 200 | QAR 30 | Processed, 30 QAR at 19:52:13 | Not observed in Test Events |
+| Listing 2, two full payments | QAR 250 | QAR 250 | Processed, 250 QAR at 20:02:44 | Processed, 250 QAR, `num_items: 2`, `content_ids: ["2"]` at 20:04:08 |
+
+Times are Asia/Qatar. Refreshing the single-deposit and two-slot full-payment confirmations did not add a Purchase. A cancelled QAR 30 deposit checkout was verified expired/unpaid in Stripe, with cancelled bookings and no paid receipts. Unobserved events are not recorded as passing delivery tests.
+
+Verified Stripe payment intents: `pi_3Ugoe1RNzQvTDvNU1HvJ7j88` (15), `pi_3UgokcRNzQvTDvNU1oozsOiJ` (125), `pi_3UgorZRNzQvTDvNU1VFQoJ0s` (30). The two-slot full checkout was `cs_test_a0evHW74MjDFwXTuUeZNc7uXowIyRMlOYYknhc7QfMbk2xbEdYc2zjOtRG`. Its Meta Purchase ID was `bb_purchase_ccfb837b44e12622d830b8469396ab84ea1221016007b3196f1750faac9a8802`; its checkout ID was `bb_checkout_3693d6f6e7bd8fd616a22c8bd634b6cb5aa0464dd9d98f38ceb8597fe5cdbe4b`.
+
+### Unresolved external configuration: duplicate checkout rule
+
+Meta also received a separate legacy `InitiateCheckout` with an `ob3_plugin-set_` ID, including **100 QAR** on the 15-QAR deposit test. The pixel's public configuration contains saved Event Setup Tool rules: `1632329111919607` matches “pay qar confirm”; `893114753102488` matches “proceed to checkout”; and `1110442281523541` derives Purchase from a `bookboll.com/thank-you?booking_ids=` URL. Existing extractors read page prices and contain fixed QAR currencies. These must be reviewed before claiming clean conversion counts across currencies or channels. Do not work around them by removing verified application events or changing checkout prices.
+
+The pixel's Automatic events setup and Track events automatically without code settings were switched off. The application now sets Meta's documented `autoConfig: false` before initializing each pixel; regressions enforce ordering for all portal copies and provider pixels. **Those controls did not remove saved Event Setup Tool rules**: the duplicate checkout remained in the actual retest. No legacy rules have yet been deleted. The user approved the local setup session, but Meta requires HTTPS; the user then approved the Railway marketplace session, which Meta could not launch because of browser popup blocking. Manual opening of that setup window is required. After reviewing/removing the conflicting rules, repeat actual deposit/full tests and check both values and event counts in Test Events.

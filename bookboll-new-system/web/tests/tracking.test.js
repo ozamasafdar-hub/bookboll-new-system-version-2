@@ -221,7 +221,7 @@ for (const app of ['web', 'admin', 'business']) {
     assert.ok(env.urls().includes('https://www.googletagmanager.com/gtag/js?id=G-ABC123'))
     assert.ok(env.urls().includes('https://connect.facebook.net/en_US/fbevents.js'))
     assert.ok(env.google().some(e => e[0] === 'config' && e[1] === config.ga4))
-    assert.deepEqual(env.meta(), [['init', config.metaPixel], ['track', 'PageView']])
+    assert.deepEqual(env.meta(), [['set', 'autoConfig', false, config.metaPixel], ['init', config.metaPixel], ['track', 'PageView']])
     assert.equal(env.google().filter(e => e[0] === 'consent').length, 0)
     const count = env.nodes.length
     env.reapply()
@@ -254,6 +254,7 @@ for (const app of ['web', 'admin', 'business']) {
     env.mount()
     assert.deepEqual(env.google().filter(e => e[0] === 'config').map(e => e[1]), ['G-PROVIDER'])
     assert.deepEqual(env.meta().filter(e => e[0] === 'init').map(e => e[1]), ['987654321'])
+    assert.deepEqual(env.meta().slice(0, 2), [['set', 'autoConfig', false, '987654321'], ['init', '987654321']])
     assert.equal(env.urls().some(url => url.includes('gtm.js')), false)
     const emptyProvider = environment(app)
     emptyProvider.activeBrand.value = { tracking: {} }
