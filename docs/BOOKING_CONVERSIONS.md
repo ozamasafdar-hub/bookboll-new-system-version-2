@@ -123,3 +123,36 @@ The API deployment must route `/payment/` to Laravel, alongside `/api/`; otherwi
 The Railway browser check also exposed IP-derived reservation identities changing across proxy requests. Customer requests now send a persistent random `X-Bookboll-Hold-Token`; lock, availability and checkout share that identity. Older clients retain their previous fallback. Run migration `2026_11_28_000001_preserve_slot_lock_expiry_on_refresh` to remove MySQL's implicit timestamp update behavior, which can expire a refreshed hold. `SlotLockPoolTest` verifies refresh across IP changes and rejection of a different browser; `holdSession.test.js` verifies reload and storage-unavailable behavior. Neither change modifies the live pixel.
 
 Stripe checkout return URLs must use the configured backend `APP_URL`, including behind the Railway storefront's same-origin `/api` proxy. Deriving them from the request Host sent successful payment returns into the marketplace SPA fallback. `StripeReturnOriginTest` enforces the backend origin. Test builds also report sanitized Meta SDK errors to the browser console for reception troubleshooting; they send no diagnostic telemetry.
+
+### Completed Railway browser payments — 28 November 2026
+
+Both requested flows completed on the deployed Railway marketplace, with real Stripe sandbox transport and real browser delivery to dedicated test dataset **1174577295029069**. Meta marked the following events **Processed / Browser / Manual Setup**. Times below are Asia/Qatar. The live dataset was not opened or changed during these runs.
+
+| Flow | Railway bookings | Booking value | Stripe paid | Meta InitiateCheckout | Meta Purchase | Remaining |
+| --- | --- | ---: | ---: | --- | --- | ---: |
+| Badminton listing 8, one-slot deposit | 20831 | 45 QAR | 9 QAR | 9 QAR, 22:58:29 | 9 QAR, 22:59:39 | 36 QAR pending |
+| Listing 2, two-slot full payment | 20829 + 20830 | 100 + 80 = 180 QAR | 180 QAR | 180 QAR, 22:52:31 | 180 QAR, 22:53:27 | 0 QAR |
+
+The second slot's 80 QAR includes the configured adjacent-slot discount. The deposit listing retains its saved 20% listing deposit; this test did not change rates. Stripe's read-only Checkout Session retrieval confirmed `livemode: false`, `payment_status: paid`, and amounts of 900 / 18000 minor units respectively. The authenticated application endpoint confirmed both checkouts `completed` / `complete`:
+
+- Deposit: booking 20831 is `confirmed` / `deposit_paid`; payment 24025 is paid 9 QAR and payment 24026 remains pending 36 QAR. Its conversion has `content_ids: ["8"]`, `num_items: 1`, `value: 9`, `currency: QAR`.
+- Full payment: bookings 20829 and 20830 are `confirmed` / `fully_paid`; payments 24023 and 24024 are paid 100 and 80 QAR. One checkout conversion contains `content_ids: ["2"]`, `contents: [{"id":"2","quantity":2}]`, `num_items: 2`, `value: 180`, `currency: QAR`.
+- Reloading the full receipt at 22:53:44 and deposit receipt at 22:59:59 produced a PageView only; their original Purchase IDs and times remained unchanged in Meta Test Events. Neither generated a second Purchase.
+
+Deposit evidence:
+
+- Checkout session: `cs_test_a0wlApAhZL2U1PRmZtpfN3lcVYRekaqNSM4nqSA7vhtRyKqmpxwbWWTIWx`
+- Stripe payment: `pi_3UgrmQRNzQvTDvNU0ENpF6dK`
+- Meta checkout: `bb_checkout_cc00dd9b9b49a6684d9a38493b5256b9583985d3a33b3c3a77fd0f56ae96bf7e`
+- Meta Purchase: `bb_purchase_c5ed01055a1ca5a6fd23ffabc4f1e8bc4b09f34067b3a1f5d062487ac33672a8`
+
+Two-slot full-payment evidence:
+
+- Checkout session: `cs_test_a0TB5aPBnIFYch74LVa4VcVH1FTwslclXMvXQVTGXnEIMq68b26MZuTFBq`
+- Stripe payment: `pi_3UgrgQRNzQvTDvNU1StD2Y8x`
+- Meta checkout: `bb_checkout_97f8d42c2bce2f76098268b8d93a189e62ddd8db84a80ca8e0a46e144c21f0d9`
+- Meta Purchase: `bb_purchase_c7b243949d84c2f145bb6ea867b2f9dd52ffe14e08ff7481c828dd11ea6dce61`
+
+An earlier Railway deposit (booking 20828, 20 QAR paid / 80 QAR pending, Stripe `pi_3UgrUKRNzQvTDvNU154EkAPk`) exposed the incorrect return host. Its payment settled, but its Meta conversion was not observed; it is not counted as a passing reception test. The fresh tests above completed after the fixes, without resetting browser deduplication or manually replaying conversions.
+
+Deployed revision `bd10e7586b5978fb370ddcfa4c286d2fb5272d26` succeeded on Railway marketplace and admin/API; [required GitHub checks passed](https://github.com/ozamasafdar-hub/bookboll-new-system-version-2/actions/runs/46183012035). The reservation migration and return-origin regression are required alongside the existing conversion suites. Sandbox credentials remain only in Railway environment variables as authorized. These successful marketplace returns do not certify provider Connect payouts, public webhook delivery, Google reception, catalog ingestion or ad attribution.

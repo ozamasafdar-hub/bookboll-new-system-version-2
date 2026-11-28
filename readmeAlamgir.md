@@ -1,3 +1,9 @@
+## Completed Railway Stripe and Meta tests — 28 November 2026
+
+The requested Railway bookings now have verified Stripe sandbox settlement **and** processed checkout/Purchase events in test pixel **1174577295029069**: booking **20831** paid a **9 QAR deposit** on a 45-QAR booking, leaving 36 QAR pending; bookings **20829 + 20830** paid **180 QAR** in one two-slot checkout. Meta received 9 QAR and 180 QAR respectively for both InitiateCheckout and Purchase. Receipt refreshes did not duplicate Purchase. See [exact payment/event IDs and limits](docs/BOOKING_CONVERSIONS.md#completed-railway-browser-payments--28-november-2026). These are Railway results, separate from the earlier local tests below.
+
+Revision `bd10e75` is deployed successfully to marketplace and admin/API, with required CI passing. Keep the new persistent browser reservation identity, apply MySQL migration `2026_11_28_000001_preserve_slot_lock_expiry_on_refresh`, and preserve canonical backend `APP_URL` for Stripe return URLs behind the storefront proxy. Their regression tests are required in CI. Live pixel settings remain unchanged; authorized Stripe sandbox keys stay in Railway variables, with preview protections and outbound-message restrictions enabled.
+
 ## Test pixel isolation and catalog support — 28 November 2026
 
 **Subsequent instruction:** Stripe sandbox keys may remain in Railway's backend variables. `WORKSPACE_STRIPE_SANDBOX=true` permits customer booking test checkouts only when both preview flags, the Railway host, `bookboll_preview` database and test-key pair match. Live-key requests remain blocked before Stripe transport, and outbound messages remain disabled. Keep the [sandbox setup and required checks](docs/BOOKING_CONVERSIONS.md#retained-railway-stripe-sandbox--subsequent-user-authorization-28-november-2026) when deploying; do not disable preview or production release protections to enable testing.
