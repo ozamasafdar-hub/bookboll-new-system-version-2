@@ -14,6 +14,11 @@ beforeEach(function () {
     DB::shouldReceive('connection')->andReturn($this->sandboxDb);
 });
 
+it('routes Stripe payment returns through Laravel on Railway', function () {
+    $nginx=file_get_contents(base_path('../deploy/payments-preview/nginx.conf'));
+    expect($nginx)->toMatch('/location\s+\/payment\/\s*\{\s*try_files\s+\/nonexistent\s+@api;\s*\}/');
+});
+
 it('requires the preview flags, Railway host, preview database and a matching test key pair', function () {
     expect(WorkspaceStripeSandbox::enabled())->toBeTrue();
     foreach (['preview.enabled'=>false, 'preview.workspace'=>false, 'preview.stripe_sandbox'=>false,
