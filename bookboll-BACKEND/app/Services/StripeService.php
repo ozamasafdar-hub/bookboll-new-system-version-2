@@ -960,7 +960,8 @@ class StripeService
                 ]);
 
                 $booking->update([
-                    'payment_status' => BookingPaymentStatus::DEPOSIT_PAID,
+                    // PaymentStatusChanged derives this from receipts. A deposit
+                    // can cover the whole booking; don't overwrite FULLY_PAID.
                     'payment_method' => BookingPaymentMethod::DEPOSIT_REMAINING_ON_ARRIVAL,
                 ]);
 

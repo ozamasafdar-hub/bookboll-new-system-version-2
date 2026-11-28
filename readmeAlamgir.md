@@ -4,6 +4,8 @@ Marketplace and provider websites now send Meta `InitiateCheckout` / `Purchase` 
 
 No migration is required. New Stripe sessions include versioned conversion metadata; old payment URLs do not create retrospective purchases. Keep the [conversion contract and verification steps](docs/BOOKING_CONVERSIONS.md) and the mandatory browser/MySQL tests when copying this environment. Real Meta/Google delivery still needs a browser with unblocked tags and a genuine test checkout; simulated tests never contact advertising endpoints.
 
+Integration with the shared payment-sync update also removes Stripe's unconditional `deposit_paid` overwrite: if the paid deposit covers the whole booking, the central receipt sync keeps it `fully_paid`. The existing multi-booking settlement regression enforces this case.
+
 ## Cookie consent removal and tracking checks — 26 November 2026
 
 Cookie banners, preferences, footer controls and the cookie-choice tracking gate have been removed from the marketplace, provider sites, business landing app and admin app. Configured Google Analytics, Google Tag Manager and Meta Pixel load directly in the customer storefront; old `bb_cookie_consent_*` storage values are no longer read. No synthetic consent grant is sent. The first SPA navigation now records its page view instead of being skipped.
