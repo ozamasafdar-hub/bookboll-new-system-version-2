@@ -3,7 +3,8 @@ export function isTrackingTestHost(host, mode = '', previewHosts = '') {
   if (mode === 'test' || mode === 'off') return true
   if (mode === 'production') return false
   host = String(host || '').toLowerCase()
-  return ['localhost', '127.0.0.1', '[::1]'].includes(host)
+  return host === 'localhost' || host.endsWith('.localhost') || host === '[::1]'
+    || /^\d+\.\d+\.\d+\.\d+$/.test(host)
     || host.endsWith('.up.railway.app')
     || previewHosts.split(',').map(v => v.trim().toLowerCase()).filter(Boolean).includes(host)
 }

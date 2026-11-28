@@ -124,7 +124,7 @@ export function setFavicon(url) {
 }
 
 function isLocalHost(host) {
-  return host === 'localhost' || host.endsWith('.localhost') || host === '127.0.0.1' || /^\d+\.\d+\.\d+\.\d+$/.test(host)
+  return host === 'localhost' || host.endsWith('.localhost') || host === '[::1]' || /^\d+\.\d+\.\d+\.\d+$/.test(host)
 }
 
 /*
@@ -194,6 +194,8 @@ export function detectBrandSlug() {
   // marketplace traffic into a provider's tracking and expose the apex origin to a provider's
   // scripts). In production, white-label sites resolve by SUBDOMAIN only (needs wildcard DNS).
   if (q && isPreviewEnvironment(host)) return q
+  // IP address labels are not provider subdomains. Keep explicit local ?b= testing above.
+  if (host === '[::1]' || /^\d+\.\d+\.\d+\.\d+$/.test(host)) return ''
   // A dev tunnel or a configured preview host is the apex itself — its first label is a
   // tunnel id or a staging name such as "new", never a provider slug.
   if (isDevTunnel(host) || isPreviewHost(host)) return ''

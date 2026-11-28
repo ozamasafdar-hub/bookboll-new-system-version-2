@@ -92,3 +92,20 @@ With QA customer 40091 signed in, Meta processed listing 2 AddToCart for **125 Q
 The same browser check exposed duplicate navigation PageViews from Meta's SDK history listener alongside Vue's explicit page views. Set `fbq.disablePushState = true` before init in all tracking copies; Vue remains responsible for one scoped page view per path. This is independent of `autoConfig` and does not change Events Manager settings. See Meta's [official tag template](https://github.com/meta/GoogleTagManager-WebTemplate-For-FacebookPixel/blob/main/template.tpl), which exposes the same history-tracking control. Keep the explicit Vue event; removing it would lose provider targeting.
 
 After deploying `8bd7f04` to all three Railway services, a fresh browser load at **21:10:18 Asia/Qatar** sent one PageView and one ViewContent. Navigating through the listing link to listing 8 sent **one** PageView at **21:10:31**, then one ViewContent at **21:10:33** with `value: 45`, `currency: QAR`, `content_ids: ["8"]`. Meta marked them processed; the earlier duplicate did not recur. All 48 frontend tracking checks, all three builds and GitHub payment regressions passed for this revision.
+
+### Actual Stripe payments against the dedicated pixel — 28 November 2026
+
+The authorized temporary Stripe test keys were connected only to the loopback QA harness and disposable MySQL database. No Railway payment lock was disabled. The live dataset was not edited or used for these new tests. A local-host bug initially interpreted `127.0.0.1` as provider slug `127`; IP hosts now resolve as marketplace unless an explicit local provider is selected. Local IPs, IPv6 loopback and `*.localhost` also suppress copied production tracking IDs by default. Regression coverage checks both web and admin brand resolvers.
+
+| Actual checkout | Stripe result | Dedicated pixel InitiateCheckout | Dedicated pixel Purchase |
+| --- | --- | --- | --- |
+| Listing 1: QAR 100 booking, QAR 15 deposit | Complete / paid / `livemode: false`; QAR 85 remains pending | Processed **15 QAR**, 21:29:43 | Processed **15 QAR**, 21:32:00 |
+| Listing 2: two QAR 125 slots, full payment | Complete / paid / `livemode: false`; one QAR 250 charge, two paid booking allocations | Not observed; delivery remains unverified | Not observed; delivery remains unverified |
+
+Times are Asia/Qatar; destination is **1174577295029069**. The first Purchase has `content_ids: ["1"]`; refreshing its confirmation at 21:32:26 produced a PageView without another Purchase. Meta's expanded event details confirmed both the checkout and Purchase values. Stripe's own payment detail also showed QAR 15.00 Succeeded.
+
+Verified payment intents: `pi_3UgqPRRNzQvTDvNU0KbcXyVZ` (deposit) and `pi_3UgqV0RNzQvTDvNU05WFg7Th` (two-slot full payment). Deposit event IDs are `bb_checkout_86e47dc293150e8474219a856d7836796970b8476e1d31511e821ed88b013a78` and `bb_purchase_17aa1269f40b65290fbb25711b343ffa85167f93bd757bd3ce885328e9d16b44`.
+
+The second checkout's server contract correctly contains `value: 250`, `currency: QAR`, `content_ids: ["2"]`, `num_items: 2`, with checkout ID `bb_checkout_2832131ce550c257e3561129ffec08a74585d0da28c0880af797deba4ea94743` and Purchase ID `bb_purchase_7f8ff12f08bae44ab4cc8e190423855db565f20e443aae51b6824316dc0ce069`. Its absence from Meta is not a passing delivery test and has no confirmed cause. Do not reset deduplication or manually replay paid events to make the test appear successful. Browser dispatch alone does not acknowledge Meta receipt; server-side delivery is not implemented.
+
+Cleanup completed: the temporary credential file was removed, both local QA servers stopped, and the harness directory checked for additional copies of either test key. No additional copies were found. Existing Stripe account keys were not revoked. No test secret was added to Git or Railway. The redacted Stripe/database evidence is retained outside the repository; no public webhook or provider Connect payout was tested.
