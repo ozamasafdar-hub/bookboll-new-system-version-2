@@ -704,7 +704,7 @@ class MarketplaceCatalogService
         return $query;
     }
 
-    protected function listingQuery(array $scope)
+    protected function listingQuery(array $scope, bool $customerOnly = false)
     {
         // Who may BOOK it, before any question of where it is placed. The
         // catalogue feeds the apex marketplace, white-label provider sites
@@ -714,7 +714,8 @@ class MarketplaceCatalogService
         // header at all (crawlers, the sitemap). `status` cannot stand in for
         // it: Listing::booted() derives status as active when EITHER flag is
         // set, so a staff-only listing is still 'active'.
-        $query = Listing::where('status', 'active')->visibleToRequestSurface();
+        $query = Listing::where('status', 'active');
+        $customerOnly ? $query->where('show_on_customer', true) : $query->visibleToRequestSurface();
 
         if ($scope['whiteLabel']) {
             $query->where(function ($q) {

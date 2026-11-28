@@ -55,3 +55,23 @@ it('does not report unpaid, free, historical, staff, partial or foreign-customer
     };
     expect(BookingConversion::purchase($state,$bookings,$customerId))->toBeNull();
 })->with(['unpaid','open','processing','free','missing_currency','historical','staff','pay_link','unprocessed','unsettled','refunded','partial','other_customer','wrong_booking_owner','admin_booking','no_intent']);
+
+it('reports confirmed cash and free bookings as Schedule without revenue', function () {
+    [, $bookings] = conversionFixture();
+    foreach ($bookings as $booking) $booking->forceFill(['status'=>'confirmed','listing_id'=>9,'payment_status'=>'pending']);
+    $event = BookingConversion::schedule($bookings, 42);
+    expect($event['contents'])->toBe([['id'=>'9','quantity'=>2]])->and($event['num_items'])->toBe(2)
+        ->and($event)->not->toHaveKey('value')->and($event)->not->toHaveKey('currency')
+        ->and(BookingConversion::schedule($bookings->reverse(),42)['event_id'])->toBe($event['event_id']);
+    $bookings[0]->status = 'pending';
+    expect(BookingConversion::schedule($bookings,42))->toBeNull();
+});
+
+it('rejects malformed catalog identifiers and includes quantities on payment events', function () {
+    [$state] = conversionFixture();
+    $meta = $state['session']->metadata->toArray();
+    expect(BookingConversion::checkout('cs_test', $meta,1500,'qar')['contents'])->toBe([['id'=>'9','quantity'=>2]]);
+    foreach (['listing_id', 'quantity'] as $field) {
+        expect(BookingConversion::checkout('cs_test', array_merge($meta,[$field=>'']),1500,'qar'))->toBeNull();
+    }
+});

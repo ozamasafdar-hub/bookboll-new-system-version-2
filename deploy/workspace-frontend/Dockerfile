@@ -1,5 +1,7 @@
 FROM node:22-bookworm-slim AS frontend
 ARG APP_DIR=web
+ARG VITE_TEST_META_PIXEL
+ENV VITE_TEST_META_PIXEL=${VITE_TEST_META_PIXEL} VITE_TRACKING_ENV=test
 WORKDIR /build
 COPY bookboll-new-system/${APP_DIR}/package*.json ./
 RUN npm ci

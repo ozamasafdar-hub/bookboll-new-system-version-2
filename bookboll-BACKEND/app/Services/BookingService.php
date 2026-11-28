@@ -2478,7 +2478,8 @@ class BookingService
                 $this->sendBookingNotification($booking, 'created');
             }
 
-            return sendSuccess('Booking confirmed successfully', ['bookings' => $createdBookings]);
+            return sendSuccess('Booking confirmed successfully', ['bookings' => $createdBookings,
+                'booking_conversion' => \App\Support\BookingConversion::schedule($createdBookings, (int)$request->user()->id)]);
         } catch (Exception $e) {
             DB::rollBack();
             Log::error('Customer slot bookings failed: ' . $e->getMessage(), ['Exception' => $e]);

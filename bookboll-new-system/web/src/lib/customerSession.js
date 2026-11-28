@@ -253,7 +253,9 @@ export async function customerRegister({ name, email, phone, password, passwordC
     },
   })
   if (!res.success || !res.data?.token) return { error: formatApiError(res, 'Could not create your account.') }
-  return applyLaravelAuth(res.data.user, res.data.token, { marketing })
+  const result = await applyLaravelAuth(res.data.user, res.data.token, { marketing })
+  if (!result?.error) { const { trackStorefrontEvent } = await import('./storefrontEvents.js'); trackStorefrontEvent('CompleteRegistration') }
+  return result
 }
 
 export async function customerForgotPassword(email) {

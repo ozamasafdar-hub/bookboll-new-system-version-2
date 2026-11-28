@@ -6,6 +6,7 @@ import { activeBrand, brandSectionEnabled } from '../../lib/brand.js'
 import { useSeo } from '../../lib/seo.js'
 import { Phone, Mail, MapPin, Clock, MessageCircle, Navigation } from 'lucide-vue-next'
 import VisitUs from '../components/VisitUs.vue'
+import { trackStorefrontEvent } from '../../lib/storefrontEvents.js'
 
 useSeo(() => ({ title: `Contact ${activeBrand.value?.name || ''}`, noindex: true, path: '/contact' }))
 const brand = computed(() => activeBrand.value || {})
@@ -25,15 +26,15 @@ const waLink = computed(() => `https://wa.me/${String(c.value.whatsapp || '').re
 
     <!-- Reach us: big tap-to-act method cards -->
     <div class="ct-methods">
-      <a v-if="c.phone" :href="`tel:${c.phone}`" class="ct-m">
+      <a v-if="c.phone" :href="`tel:${c.phone}`" class="ct-m" @click="trackStorefrontEvent('Contact', { method: 'phone' })">
         <span class="ct-m-ico"><Phone :size="20" /></span>
         <b>Call Us</b><small data-no-translate>{{ c.phone }}</small>
       </a>
-      <a v-if="c.whatsapp" :href="waLink" target="_blank" rel="noopener" class="ct-m wa">
+      <a v-if="c.whatsapp" :href="waLink" target="_blank" rel="noopener" class="ct-m wa" @click="trackStorefrontEvent('Contact', { method: 'whatsapp' })">
         <span class="ct-m-ico"><MessageCircle :size="20" /></span>
         <b>WhatsApp</b><small>Fastest reply</small>
       </a>
-      <a v-if="c.email" :href="`mailto:${c.email}`" class="ct-m">
+      <a v-if="c.email" :href="`mailto:${c.email}`" class="ct-m" @click="trackStorefrontEvent('Contact', { method: 'email' })">
         <span class="ct-m-ico"><Mail :size="20" /></span>
         <b>Email Us</b><small data-no-translate>{{ c.email }}</small>
       </a>
@@ -46,7 +47,7 @@ const waLink = computed(() => `https://wa.me/${String(c.value.whatsapp || '').re
         <div class="ct-card-body">
           <b>Find Us</b>
           <p v-if="c.address">{{ c.address }}</p>
-          <a v-if="c.maps_url" :href="c.maps_url" target="_blank" rel="noopener" class="ct-dir"><Navigation :size="14" /> Get Directions</a>
+          <a v-if="c.maps_url" :href="c.maps_url" target="_blank" rel="noopener" class="ct-dir" @click="trackStorefrontEvent('FindLocation', { kind: 'venue' })"><Navigation :size="14" /> Get Directions</a>
         </div>
       </div>
       <div v-if="c.hours" class="ct-card">

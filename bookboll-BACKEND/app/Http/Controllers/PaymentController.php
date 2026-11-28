@@ -687,6 +687,7 @@ class PaymentController extends Controller
             'url'             => $checkoutStatus === 'open' && $state['status'] !== 'completed' ? ($session->url ?? null) : null,
             'bookings'        => $bookings,
             'conversion'      => \App\Support\BookingConversion::purchase($state, $bookings, (int)$user->id),
+            'booking_conversion' => $state['status'] === 'completed' ? \App\Support\BookingConversion::schedule($bookings, (int)$user->id) : null,
         ];
     }
 

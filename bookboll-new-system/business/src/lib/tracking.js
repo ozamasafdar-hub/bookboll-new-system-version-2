@@ -14,7 +14,8 @@
  */
 import { watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
-import { activeBrand, isWhiteLabel, platformBrand, isBrandPreview } from './brand.js'
+import { activeBrand, isWhiteLabel, platformBrand, isBrandPreview, detectBrandSlug } from './brand.js'
+import { runtimeTrackingConfig } from './trackingEnvironment.js'
 
 // ── Validators — only well-formed IDs are ever turned into snippets ────────────
 export const isGa4     = (id) => /^G-[A-Z0-9]{4,}$/i.test((id || '').trim())
@@ -25,6 +26,9 @@ const MARK = 'data-bb-trk'   // marks every node we inject (for de-dupe + cleanu
 let enabledConfig = {}
 let lastSig = ''             // signature of the currently-injected config
 let lastPagePath = null
+const initializedPixels = new Set()
+let storefrontMounted = false
+export function isStorefrontTrackingActive() { return storefrontMounted }
 
 /** Normalize a tracking config off a brand-like object ({ tracking: {...} }). */
 export function trackingFrom(brandLike) {
@@ -103,7 +107,9 @@ export function injectTracking(cfg) {
   // does not disable previously saved button/URL conversion rules.
   if (isMetaPix(cfg.metaPixel)) {
     const id = cfg.metaPixel.trim()
-    head.appendChild(el('script', {}, `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('set','autoConfig',false,'${id}');fbq('init','${id}');fbq('track','PageView');`))
+    const init = initializedPixels.has(id) ? '' : `fbq('set','autoConfig',false,'${id}');fbq('init','${id}');`
+    head.appendChild(el('script', {}, `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');${init}fbq('trackSingle','${id}','PageView');`))
+    initializedPixels.add(id)
     const ns = el('noscript')
     ns.innerHTML = `<img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=${id}&ev=PageView&noscript=1" alt="" />`
     head.appendChild(ns)
@@ -136,13 +142,15 @@ export function trackPageView(path) {
   if (typeof window === 'undefined') return
   if (path === lastPagePath) return
   lastPagePath = path
-  try { if (isGa4(enabledConfig.ga4) && typeof window.gtag === 'function') window.gtag('event', 'page_view', { page_path: path }) } catch { /* ignore */ }
-  try { if (isMetaPix(enabledConfig.metaPixel) && typeof window.fbq === 'function') window.fbq('track', 'PageView') } catch { /* ignore */ }
+  try { if (isGa4(enabledConfig.ga4) && typeof window.gtag === 'function') window.gtag('event', 'page_view', { send_to: enabledConfig.ga4, page_path: path }) } catch { /* ignore */ }
+  try { if (isMetaPix(enabledConfig.metaPixel) && typeof window.fbq === 'function') window.fbq('trackSingle', enabledConfig.metaPixel, 'PageView') } catch { /* ignore */ }
 }
 
 /** The config that applies RIGHT NOW: the provider's on their own site, else the platform's. */
 export function activeTrackingConfig() {
-  return isWhiteLabel.value ? trackingFrom(activeBrand.value) : trackingFrom(platformBrand.value)
+  // Unknown/unresolved provider URLs must not send their visits to the marketplace.
+  if (detectBrandSlug() && !activeBrand.value) return trackingFrom(null)
+  return runtimeTrackingConfig(isWhiteLabel.value ? trackingFrom(activeBrand.value) : trackingFrom(platformBrand.value))
 }
 
 /**
@@ -158,7 +166,7 @@ export function useStorefrontTracking() {
   // with detectBrandSlug) it keeps a provider's custom scripts off the apex origin during preview.
   const apply = () => { if (isBrandPreview()) { clearTracking(); return } injectTracking(activeTrackingConfig()) }
 
-  onMounted(apply)
+  onMounted(() => { storefrontMounted = true; apply() })
   // Watch BOTH refs so tags re-apply on either transition (apex platform config vs a resolved
   // provider brand). The idempotent signature check in injectTracking makes redundant fires no-ops.
   watch([activeBrand, platformBrand], apply, { deep: true })
@@ -167,5 +175,5 @@ export function useStorefrontTracking() {
   // The snippets send the initial page-view; every subsequent route must also be counted.
   watch(() => route.path, (p) => { if (!isBrandPreview()) trackPageView(p) })
 
-  onBeforeUnmount(clearTracking)
+  onBeforeUnmount(() => { storefrontMounted = false; clearTracking() })
 }

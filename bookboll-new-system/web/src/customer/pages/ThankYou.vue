@@ -64,6 +64,7 @@ onMounted(async () => {
           bookingIds = state.booking_ids
           verifiedPayment.value = !!state.conversion
           await trackBookingConversion('Purchase', state.conversion)
+          if (state.booking_conversion) await trackBookingConversion('Schedule', state.booking_conversion)
           break
         }
         if (state?.status !== 'processing') break

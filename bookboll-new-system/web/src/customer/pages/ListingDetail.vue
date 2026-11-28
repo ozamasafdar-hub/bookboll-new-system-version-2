@@ -28,6 +28,7 @@ import AppDownloadCard from '../../components/AppDownloadCard.vue'
 import { appPromptContext } from '../../lib/mobileApps.js'
 import { isEmbedded } from '../../lib/embed.js'
 import { browseReturnPath } from '../../lib/browseCatalog.js'
+import { trackStorefrontEvent } from '../../lib/storefrontEvents.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -447,6 +448,8 @@ async function load() {
   const detail = await loadListing(route.params.id)
   if (generation !== listingLoad) return
   data.value = detail
+  if (detail?.listing?.id) trackStorefrontEvent('ViewContent', { kind: 'listing', id: detail.listing.id,
+    value: Number(detail.startPrice), currency: detail.location?.currency || detail.listing.currency })
   activePhoto.value = 0
   loading.value = false
   if (isCustomer.value) guest.value = { name: customer.value.full_name || '', email: customer.value.email || '', phone: '' }
@@ -479,7 +482,7 @@ async function load() {
   suppressDateWatch = false
   if (preT) {
     const slot = (slots.value || []).find(s => String(s.start_time).slice(0, 5) === preT.t && s.available)
-    if (slot) await toggleSlot(slot)                   // selects + places the hold
+    if (slot) await toggleSlot(slot, false)            // selects + places the hold
   }
   ensureMonthPrices(new Date(date.value + 'T00:00:00'))   // prefetch the current month's "from" prices
 }
@@ -601,10 +604,11 @@ function setDay(day, arr) { selectedByDate.value = { ...selectedByDate.value, [d
 // Day/night glyph per slot — 7:00 vs 19:00 at a glance (AM/PM trips people up).
 const periodIcon = (t) => (dayPeriod(t) === 'day' ? Sun : Moon)
 
-async function toggleSlot(s) {
+async function toggleSlot(s, userAction = true) {
   if (!s.available) return
   if (bookingUnavailable.value) { err.value = unavailableMessage; return }
   err.value = ''; holdExpiredMsg.value = false
+  const cartBefore = fullQuote.value.total
   const arr = selected.value
   const i = arr.findIndex(x => x.start_time === s.start_time)
   if (i >= 0) {
@@ -617,14 +621,18 @@ async function toggleSlot(s) {
       setDay(date.value, selected.value.filter(x => x.start_time !== s.start_time))
       err.value = 'That time was just taken — please choose another.'
       loadDay()
+    } else if (userAction && !selectMode.value) {
+      trackStorefrontEvent('AddToCart', { kind: 'listing', id: l.value.id, value: Math.max(0, fullQuote.value.total - cartBefore), currency: loc.value?.currency || serverCurrency.value })
     }
   }
 }
 async function addExtension(o) {
   if (bookingUnavailable.value) { err.value = unavailableMessage; return }
+  const cartBefore = fullQuote.value.total
   setDay(date.value, [...selected.value, { start_time: o.slot.start_time, end_time: o.slot.end_time, price: o.slot.price }])
   const res = await syncHolds()
   if (!res.ok) { setDay(date.value, selected.value.filter(x => x.start_time !== o.slot.start_time)); err.value = 'That time was just taken — please choose another.'; loadDay() }
+  else if (!selectMode.value) trackStorefrontEvent('AddToCart', { kind: 'listing', id: l.value.id, value: Math.max(0, fullQuote.value.total - cartBefore), currency: loc.value?.currency || serverCurrency.value })
 }
 function clearDay(day) { const c = { ...selectedByDate.value }; delete c[day]; selectedByDate.value = c; syncHolds() }
 function removeBlock(day, block) {
@@ -639,7 +647,7 @@ function stepAddon(a, d) {
   const next = Math.max(0, Math.min(a.stock != null && a.stock > 0 ? a.stock : 99, (addonQty.value[a.id] || 0) + d))
   addonQty.value = { ...addonQty.value, [a.id]: next }
 }
-function openMaps() { if (data.value?.mapsUrl) window.open(data.value.mapsUrl, '_blank', 'noopener') }
+function openMaps() { if (data.value?.mapsUrl) { trackStorefrontEvent('FindLocation', { kind: 'venue' }); window.open(data.value.mapsUrl, '_blank', 'noopener') } }
 
 async function confirm() {
   if (saving.value) return

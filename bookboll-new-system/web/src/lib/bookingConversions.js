@@ -8,10 +8,9 @@ const conversionStoreKey = 'bb_booking_conversions_v1'
 export async function trackBookingConversion(event, receipt) {
   try {
     if (typeof window === 'undefined' || isBrandPreview()
-      || !['InitiateCheckout', 'Purchase'].includes(event) || !receipt
-      || typeof receipt.value !== 'number' || !Number.isFinite(receipt.value) || receipt.value <= 0
-      || !/^[A-Z]{3}$/.test(receipt.currency || '')
-      || !new RegExp(`^bb_${event === 'Purchase' ? 'purchase' : 'checkout'}_[a-f0-9]{64}$`).test(receipt.event_id || '')
+      || !['InitiateCheckout', 'Purchase', 'Schedule'].includes(event) || !receipt
+      || (event !== 'Schedule' && (typeof receipt.value !== 'number' || !Number.isFinite(receipt.value) || receipt.value <= 0 || !/^[A-Z]{3}$/.test(receipt.currency || '')))
+      || !new RegExp(`^bb_${{ Purchase: 'purchase', InitiateCheckout: 'checkout', Schedule: 'schedule' }[event]}_[a-f0-9]{64}$`).test(receipt.event_id || '')
       || !Number.isInteger(receipt.num_items) || receipt.num_items < 1
       || !Array.isArray(receipt.content_ids) || !receipt.content_ids.length) return false
 
@@ -24,8 +23,9 @@ export async function trackBookingConversion(event, receipt) {
     const cfg = activeTrackingConfig()
     injectTracking(cfg)
     const parameters = {
-      value: receipt.value, currency: receipt.currency,
+      ...(event !== 'Schedule' ? { value: receipt.value, currency: receipt.currency } : {}),
       content_ids: receipt.content_ids.map(String), content_type: 'product', num_items: receipt.num_items,
+      ...(Array.isArray(receipt.contents) ? { contents: receipt.contents } : {}),
     }
     const send = () => {
       let history = {}
@@ -45,10 +45,10 @@ export async function trackBookingConversion(event, receipt) {
         once(`meta:${cfg.metaPixel}`, () => window.fbq('trackSingle', cfg.metaPixel, event, parameters, { eventID: receipt.event_id }))
       }
       if (isGa4(cfg.ga4) && typeof window.gtag === 'function') {
-        once(`ga4:${cfg.ga4}`, () => window.gtag('event', event === 'Purchase' ? 'purchase' : 'begin_checkout', {
-          send_to: cfg.ga4, value: receipt.value, currency: receipt.currency,
+        once(`ga4:${cfg.ga4}`, () => window.gtag('event', { Purchase: 'purchase', InitiateCheckout: 'begin_checkout', Schedule: 'booking_confirmed' }[event], {
+          send_to: cfg.ga4, ...(event !== 'Schedule' ? { value: receipt.value, currency: receipt.currency } : {}),
           ...(event === 'Purchase' ? { transaction_id: receipt.event_id } : {}),
-          items: receipt.content_ids.map(id => ({ item_id: String(id) })),
+          items: (receipt.contents || receipt.content_ids.map(id => ({ id, quantity: 1 }))).map(i => ({ item_id: String(i.id), quantity: i.quantity })),
         }))
       }
       try {

@@ -1902,7 +1902,9 @@ class PaymentService
                     $booking->history()->create(['user_id'=>$user->id,'action'=>'payment_received','description'=>'Deposit covered by Bookboll discount; arrival balance remains pending.']);
                 }
                 DB::commit();
-                return sendSuccess('Booking confirmed; the discounted deposit is covered. Pay the remaining balance at the venue.', ['bookings' => Booking::whereIn('id', $allBookingIds)->get(), 'free_booking' => true, 'remaining_on_arrival' => true]);
+                $confirmedBookings = Booking::whereIn('id', $allBookingIds)->get();
+                return sendSuccess('Booking confirmed; the discounted deposit is covered. Pay the remaining balance at the venue.', ['bookings' => $confirmedBookings, 'free_booking' => true, 'remaining_on_arrival' => true,
+                    'booking_conversion' => \App\Support\BookingConversion::schedule($confirmedBookings, (int)$user->id)]);
             }
             if ($paymentAmount <= 0) {
                 $this->markBookingsAsFullyPaidFree($createdBookings, $totalPrice, $totalDiscount);
@@ -1910,6 +1912,7 @@ class PaymentService
                 return sendSuccess('Booking confirmed successfully', [
                     'free_booking' => true,
                     'bookings' => $createdBookings,
+                    'booking_conversion' => \App\Support\BookingConversion::schedule(Booking::whereIn('id', $allBookingIds)->get(), (int)$user->id),
                     'url' => null,
                 ]);
             }

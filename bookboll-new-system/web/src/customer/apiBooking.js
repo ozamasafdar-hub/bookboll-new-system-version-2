@@ -240,6 +240,7 @@ export async function createCustomerBookingsMulti({
     const res = await apiFetch('/customer/payments/create-checkout-session', { method: 'POST', body: payload })
     if (!res.success) return { error: res.message || 'Could not start payment.' }
     if (res.data?.free_booking && res.data?.bookings) {
+      if (res.data.booking_conversion) await trackBookingConversion('Schedule', res.data.booking_conversion)
       await releaseHolds(listing)
       return { bookings: (res.data.bookings || []).map(b => b.id || b), currency: createdBookingCurrency(res.data.bookings, location) }
     }
@@ -255,6 +256,7 @@ export async function createCustomerBookingsMulti({
 
   const res = await apiFetch('/customer/bookings/create', { method: 'POST', body: payload })
   if (!res.success) return { error: res.message || 'Could not create the booking.' }
+  if (res.data?.booking_conversion) await trackBookingConversion('Schedule', res.data.booking_conversion)
   await releaseHolds(listing)
   const bookings = (res.data?.bookings || []).map(b => b.id || b)
   return { bookings, currency: createdBookingCurrency(res.data?.bookings, location) }

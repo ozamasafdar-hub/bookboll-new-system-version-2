@@ -34,6 +34,9 @@ export const DEFAULT_ACCENT  = '#14b8a6'
 
 export const activeBrand = ref(null)
 export const isWhiteLabel = computed(() => !!activeBrand.value)
+// This landing app never resolves provider storefronts; shared tracking still
+// uses the same brand interface as the marketplace and dashboard bundles.
+export function detectBrandSlug() { return '' }
 
 // The PLATFORM brand — the main Bookboll marketplace (apex site, no white-label).
 // Editable by the super admin in My Website; stored as platform_settings keys.

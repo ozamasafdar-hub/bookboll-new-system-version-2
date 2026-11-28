@@ -6,6 +6,7 @@ import { selectedCity, selectedCountry } from '../../lib/customerSession.js'
 import { brandShows } from '../../lib/brand.js'
 import { apiFetch } from '../../lib/api.js'
 import { useSeo } from '../../lib/seo.js'
+import { trackStorefrontEvent } from '../../lib/storefrontEvents.js'
 import { emptySearchCatalog, fetchSearchCatalog, readSearchQuery, searchCatalog } from '../../lib/marketplaceSearch.js'
 import { PEOPLE_PAGE_SIZE, fetchPeople, peopleSummary } from '../../lib/peopleSearch.js'
 import FacilityCard from '../components/FacilityCard.vue'
@@ -115,6 +116,7 @@ watch([() => selectedCity.value?.id, () => selectedCity.value?.name, () => selec
 function commit(type = activeType.value, replace = false) {
   clearTimeout(searchTimer)
   const q = draft.value.trim().slice(0, 120)
+  if (!replace && q.length >= 2 && type !== 'people') trackStorefrontEvent('Search')
   if (q === selection.value.q && type === selection.value.type) return
   router[replace ? 'replace' : 'push']({ path: route.path, query: { ...(q ? { q } : {}), ...(type !== 'all' ? { type } : {}) } })
 }

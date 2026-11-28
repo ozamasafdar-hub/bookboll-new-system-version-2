@@ -23,6 +23,8 @@ import { markDirty, clearDirty } from '../lib/unsavedGuard.js'
 import { logAudit, AUDIT } from '../lib/audit.js'
 import { providerSlug, brandPreviewUrl, marketplaceUrl, BRAND_APEX } from '../lib/brand.js'
 import { isGa4, isGtm, isMetaPix } from '../lib/tracking.js'
+import { apiFetch, apiBaseUrl } from '../lib/api.js'
+import { isTrackingTestHost } from '../lib/trackingEnvironment.js'
 import {
   LineChart, Check, Loader, ExternalLink, Info, ShieldCheck, Code2, AlertTriangle, Globe2, Store,
 } from 'lucide-vue-next'
@@ -39,6 +41,43 @@ const isPlatformMode = computed(() => (isSuperAdmin.value || actorRole.value ===
 const loading = ref(true)
 const saving = ref(false)
 const ownerSlug = ref('')
+const catalog = ref(null), catalogError = ref(''), catalogLoading = ref(false), catalogCurrency = ref('')
+let catalogRequest = 0, settingsRequest = 0
+const testWorkspace = isTrackingTestHost(window.location.hostname, import.meta.env.VITE_TRACKING_ENV, import.meta.env.VITE_PREVIEW_HOSTS)
+const testPixel = import.meta.env.VITE_TEST_META_PIXEL || ''
+const feedUrl = computed(() => {
+  if (!isPlatformMode.value && !ownerSlug.value) return ''
+  const url = new URL(`${apiBaseUrl()}/marketplace/meta-catalog.csv`, window.location.origin)
+  if (!isPlatformMode.value) url.searchParams.set('brand_slug', ownerSlug.value)
+  if (catalogCurrency.value) url.searchParams.set('currency', catalogCurrency.value)
+  return url.href
+})
+async function checkCatalog() {
+  const request = ++catalogRequest
+  if (!isPlatformMode.value && !ownerSlug.value) return
+  catalogLoading.value = true; catalogError.value = ''
+  try {
+    const result = await apiFetch('/marketplace/meta-catalog', { query: isPlatformMode.value ? {} : { brand_slug: ownerSlug.value } })
+    if (request !== catalogRequest) return
+    if (!result.success) throw Error(result.message || 'Could not check the catalog. Try again.')
+    catalog.value = result.data
+  } catch (error) { if (request === catalogRequest) catalogError.value = error.message }
+  finally { if (request === catalogRequest) catalogLoading.value = false }
+}
+async function copyFeed() {
+  try { await navigator.clipboard.writeText(feedUrl.value); toast.success('Catalog feed link copied.') }
+  catch { toast.error('Select the feed link below and copy it.') }
+}
+const eventGuide = [
+  ['PageView', 'A customer opens a page or navigates to another page.'],
+  ['ViewContent', 'A listing or membership detail loads successfully. Only bookable listings carry catalog item IDs.'],
+  ['AddToCart', 'A customer selects an available booking slot and the hold succeeds.'],
+  ['InitiateCheckout', 'Stripe checkout is created. Value is the amount due online, in its payment currency.'],
+  ['Purchase', 'Stripe confirms payment and Bookboll verifies the receipt. Deposits report only the amount paid online.'],
+  ['Schedule', 'Bookboll confirms the booking, including cash-on-arrival and covered deposits. No payment value is reported.'],
+  ['Contact / FindLocation', 'The customer chooses a contact method or opens directions. This does not confirm an enrollment.'],
+  ['Search / CompleteRegistration', 'The customer submits a search or successfully creates an account.'],
+]
 
 const f = reactive({ meta_pixel: '', ga4: '', gtm: '', head: '' })
 
@@ -68,10 +107,15 @@ const fireLabel = computed(() => isPlatformMode.value
   : (ownerSlug.value ? `${ownerSlug.value}.${BRAND_APEX}` : 'your storefront'))
 
 async function load() {
+  const request = ++settingsRequest
+  ++catalogRequest
+  catalog.value = null; catalogError.value = ''; catalogCurrency.value = ''; catalogLoading.value = false
+  ownerSlug.value = ''
   loading.value = true
   // The API returns the marketplace's tracking for a platform admin, or the
   // provider's own — the caller doesn't choose.
   const { mode, settings, username } = await loadSiteSettings()
+  if (request !== settingsRequest) return
   f.meta_pixel = settings.tracking_meta_pixel || ''
   f.ga4  = settings.tracking_ga4 || ''
   f.gtm  = settings.tracking_gtm || ''
@@ -79,6 +123,7 @@ async function load() {
   if (mode === 'provider') ownerSlug.value = settings.brand_subdomain || username || ''
   loading.value = false
   clearDirty()
+  checkCatalog()
 }
 onMounted(load)
 // Reload when the acting context changes (e.g. an owner is resolved, or the demo role switch
@@ -121,6 +166,7 @@ async function save() {
       </div>
     </div>
 
+    <p v-if="testWorkspace" class="trk-scope plat" role="status">Test workspace: saved live pixels, Google tags and custom code are inactive here. {{ testPixel ? `Test events use pixel ${testPixel}.` : 'Connect a separate test pixel in the deployment settings to verify delivery.' }}</p>
     <!-- Scope callout — makes the data-isolation guarantee explicit -->
     <div class="trk-scope" :class="isPlatformMode ? 'plat' : 'prov'">
       <ShieldCheck :size="20" />
@@ -145,6 +191,7 @@ async function save() {
         </div>
         <input id="tracking-meta" v-model="f.meta_pixel" class="trk-input" :class="{ bad: metaState==='bad' }" placeholder="e.g. 1234567890123456" inputmode="numeric" autocomplete="off" spellcheck="false" />
         <p class="trk-hint">Meta Events Manager → Data sources → your pixel → <b>Settings</b>. A 15–16 digit number.</p>
+        <p class="trk-hint">Enter the ID once here. Do not also paste its base code below or install the same pixel through Tag Manager.</p>
       </div>
 
       <!-- GA4 -->
@@ -181,7 +228,7 @@ async function save() {
 
       <!-- Live summary of what fires -->
       <div class="trk-summary">
-        <div class="trk-summary-h"><LineChart :size="15" /> What's live</div>
+        <div class="trk-summary-h"><LineChart :size="15" /> Configured services</div>
         <div v-if="active.length" class="trk-tags">
           <span v-for="a in active" :key="a" class="trk-tag"><Check :size="12" /> {{ a }}</span>
         </div>
@@ -200,10 +247,33 @@ async function save() {
         </button>
       </div>
     </div>
+
+    <section class="card trk-catalog" aria-labelledby="catalog-title">
+      <div class="trk-section-head"><div><h2 id="catalog-title">Meta catalog</h2><p>Advertise your bookable listings with the same item IDs used by your pixel.</p></div><button class="btn btn-secondary" :disabled="catalogLoading" @click="checkCatalog">{{ catalogLoading ? 'Checking…' : 'Check listings' }}</button></div>
+      <p v-if="catalogError" role="alert">{{ catalogError }}</p>
+      <template v-if="catalog">
+        <p><b>{{ catalog.items.length }} ready listings</b><span v-if="catalog.omitted.length"> · {{ catalog.omitted.length }} need a price or photo</span></p>
+        <p class="trk-hint">{{ isPlatformMode ? 'Only listings visible on the marketplace are included.' : 'Only listings visible on your published business website are included.' }} Private listings, staff-only listings and suspended businesses are excluded. Membership information and community events are not catalog products.</p>
+        <label class="trk-label" for="catalog-currency">Feed currency</label>
+        <select id="catalog-currency" v-model="catalogCurrency" class="trk-input"><option value="">All listed currencies</option><option v-for="currency in catalog.currencies" :key="currency">{{ currency }}</option></select>
+        <div v-if="feedUrl" class="trk-feed"><input aria-label="Catalog feed URL" readonly :value="feedUrl" class="trk-input" @focus="$event.target.select()"/><button class="btn btn-secondary" @click="copyFeed">Copy link</button><a :href="feedUrl" class="btn btn-secondary" target="_blank" rel="noopener">Open feed</a></div>
+        <ol class="trk-steps"><li>In Meta Commerce Manager, create or select your catalog and add this URL as a scheduled data feed.</li><li>Connect this website’s pixel as the catalog event source. Connecting a pixel here does not create a Meta catalog automatically.</li><li>Review Meta’s import results and event match rate. Catalog prices are advertised starting prices; Purchase values are actual online payments.</li></ol>
+        <details v-if="catalog.omitted.length"><summary>Listings to fix ({{ catalog.omitted.length }})</summary><ul><li v-for="item in catalog.omitted" :key="item.id"><b>{{ item.name || `Listing ${item.id}` }}</b> — {{ item.reason }}</li></ul></details>
+      </template>
+    </section>
+
+    <section class="card trk-catalog" aria-labelledby="events-title">
+      <h2 id="events-title">Events Bookboll sends</h2>
+      <dl class="trk-events"><div v-for="[event, description] in eventGuide" :key="event"><dt>{{ event }}</dt><dd>{{ description }}</dd></div></dl>
+      <p class="trk-hint">Failed payments, cancelled checkout and opening a thank-you link do not create a Purchase. Refreshing a verified receipt does not send it again.</p>
+      <p class="trk-hint">The app sends explicit events and disables automatic configuration for its pixel instance. Existing Meta Event Setup Tool rules and Tag Manager triggers can still duplicate events. Review those with the pixel owner before a production rollout. This page does not change settings in Meta Events Manager.</p>
+      <p class="trk-hint">Payment card entry happens on Stripe, so Bookboll does not guess an AddPaymentInfo event. Offline membership enquiries are never reported as paid subscriptions or trials. Browser blockers can prevent event delivery.</p>
+    </section>
   </div>
 </template>
 
 <style scoped>
+.trk-catalog{max-width:980px;padding:24px;margin-top:24px;display:grid;gap:16px}.trk-catalog h2{font-size:20px;margin:0}.trk-catalog p{margin:0;line-height:1.6}.trk-section-head{display:flex;justify-content:space-between;align-items:start;gap:20px}.trk-section-head p{color:var(--text-muted);font-size:13px;margin-top:6px}.trk-feed{display:flex;gap:8px;align-items:center}.trk-feed input{min-width:0;flex:1}.trk-feed .btn{white-space:nowrap}.trk-steps{padding-left:22px;margin:0;display:grid;gap:12px;font-size:13px;line-height:1.6}.trk-events{margin:0}.trk-events>div{display:grid;grid-template-columns:190px 1fr;gap:20px;padding:14px 0;border-bottom:1px solid var(--border)}.trk-events dt{font-weight:700;font-size:13px}.trk-events dd{margin:0;color:var(--text-muted);font-size:13px;line-height:1.55}.trk-catalog select{max-width:240px}.trk-catalog summary{cursor:pointer;font-weight:600}.trk-catalog li{font-size:13px;line-height:1.8}@media(max-width:650px){.trk-feed{flex-wrap:wrap}.trk-feed input{flex-basis:100%}.trk-events>div{grid-template-columns:1fr;gap:5px}.trk-section-head{flex-direction:column}}
 .trk-scope { display: flex; align-items: flex-start; gap: 11px; border-radius: 14px; padding: 14px 16px; font-size: 13.5px; line-height: 1.55; margin-bottom: 16px; }
 .trk-scope svg { flex-shrink: 0; margin-top: 1px; }
 .trk-scope.prov { background: var(--positive-bg, #ecfdf5); border: 1px solid var(--positive-border, #a7f3d0); color: var(--positive-ink, #065f46); }

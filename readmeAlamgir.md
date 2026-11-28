@@ -1,3 +1,9 @@
+## Test pixel isolation and catalog support — 28 November 2026
+
+Live pixel **1556219351378271** was restored: both automatic-event settings and all 17 event controls are **On**, with existing saved rules, advanced matching and CAPI unchanged. Do not alter that live dataset during QA. The user provided separate test pixel **1174577295029069**. Railway preview builds use only that test ID and suppress copied live Meta/GA4/GTM/custom tracking. Production needs production build configuration and each storefront's own saved IDs.
+
+Explicit storefront events, server-confirmed Schedule, target-specific PageView and per-provider catalog feeds are covered by required browser/MySQL checks. My Website → Tracking explains supported events, catalog setup and missing listing fields. Follow the updated [conversion and catalog contract](docs/BOOKING_CONVERSIONS.md); no database migration is required. A pixel connection alone does not create or approve a Meta catalog. The live pixel's legacy duplicate checkout rule remains deliberately untouched.
+
 ## Verified booking conversions — 28 November 2026
 
 Marketplace and provider websites now send Meta `InitiateCheckout` / `Purchase` and GA4 `begin_checkout` / `purchase`. Values are the amount charged online, not booking GMV or Bookboll's fee: a QAR 100 booking with a QAR 15 deposit reports QAR 15. One multi-slot checkout is one conversion. Purchase is based on the authenticated Stripe-session return endpoint after settlement; it never trusts thank-you URL amounts or the currently selected country's currency. Provider returns preserve their business website and target that provider's tags only.

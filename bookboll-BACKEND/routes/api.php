@@ -918,6 +918,8 @@ Route::get('fetch-venues', [VenueController::class, 'fetchVenues'])->name('custo
 Route::get('fetch-listings', [ListingController::class, 'fetchListings'])->name('fetch-listings');
 
 Route::prefix('marketplace')->name('marketplace.')->group(function () {
+    Route::get('meta-catalog.csv', [\App\Services\MetaCatalogService::class, 'feed'])->middleware('throttle:30,1')->name('meta-catalog.feed');
+    Route::get('meta-catalog', [\App\Services\MetaCatalogService::class, 'overview'])->middleware('throttle:30,1')->name('meta-catalog.overview');
     Route::get('listings', [MarketplaceCatalogController::class, 'listings'])->name('listings');
     // One explicit category selection. Throttled per address because it is
     // public and unauthenticated; the service also dedupes and caps.
