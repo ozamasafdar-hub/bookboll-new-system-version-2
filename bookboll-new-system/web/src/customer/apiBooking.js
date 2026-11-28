@@ -17,16 +17,7 @@ export const PAY_MAP = {
   online: 'online_payment',
 }
 
-export function holdToken() {
-  try {
-    let t = localStorage.getItem('bb_hold_token')
-    if (!t) {
-      t = (window.crypto?.randomUUID?.() || ('h' + Date.now() + Math.random().toString(36).slice(2)))
-      localStorage.setItem('bb_hold_token', t)
-    }
-    return t
-  } catch { return 'anon-device' }
-}
+export { holdToken } from '../lib/holdSession.js'
 
 let _holdMinutes = null
 export async function holdMinutes() {

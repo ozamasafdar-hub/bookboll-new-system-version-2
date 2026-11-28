@@ -44,7 +44,7 @@ jobs:
       - run: node scripts/check-payment-policy.mjs
       - run: npm ci
         working-directory: bookboll-new-system/web
-      - run: node --test tests/businessSignup.test.js
+      - run: node --test tests/businessSignup.test.js tests/holdSession.test.js
         working-directory: bookboll-new-system/web
       - name: Storefront tracking and category analytics regressions
         run: node --test tests/tracking.test.js tests/trackingEnvironment.test.js tests/bookingConversionFlow.test.js tests/portalTracking.test.js tests/categoryPopularity.test.js tests/appDownloadCard.test.js
@@ -58,7 +58,7 @@ jobs:
       - name: Financial rules and access regression tests
         working-directory: bookboll-BACKEND
         run: |
-          php vendor/bin/pest tests/Feature/WorkspaceStripeSandboxTest.php tests/Feature/PaymentsPreviewAccessTest.php
+          php vendor/bin/pest tests/Feature/WorkspaceStripeSandboxTest.php tests/Feature/PaymentsPreviewAccessTest.php tests/Feature/SlotLockPoolTest.php
           php vendor/bin/pest tests/Feature/UnifiedWebsiteFeeMigrationTest.php tests/Feature/BookingFeePresentationTest.php
           php vendor/bin/pest tests/Feature/BookingFeeReportingFlowTest.php tests/Feature/ProviderOnlineAllocationTest.php tests/Feature/BookingConversionTest.php tests/Feature/MetaCatalogTest.php
           php vendor/bin/pest tests/Feature/BookingPaymentSyncTest.php

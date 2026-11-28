@@ -595,7 +595,7 @@ async function goCheckout() {
   saving.value = true
   const res = await syncHolds()
   saving.value = false
-  if (!res.ok) { err.value = 'One of your times was just taken — please pick another slot.'; loadDay(); return }
+  if (!res.ok) { err.value = res.reason || 'One of your times was just taken — please pick another slot.'; loadDay(); return }
   step.value = 2
   if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
 }

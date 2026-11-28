@@ -5,6 +5,7 @@
  */
 import axios from 'axios'
 import { endExpiredSession, isSessionExpired } from './sessionExpiry.js'
+import { holdToken } from './holdSession.js'
 
 export const CUSTOMER_TOKEN_KEY = 'bb_customer_token'
 
@@ -39,7 +40,7 @@ export function clearCustomerToken() {
  * @returns {Promise<{ success: boolean, message?: string, data?: any, errors?: any, code?: number, status: number }>}
  */
 export async function apiFetch(path, { method = 'GET', body = null, token = null, query = null } = {}) {
-  const headers = {}
+  const headers = { 'X-Bookboll-Hold-Token': holdToken() }
   const bearer = token !== null && token !== undefined ? token : getCustomerToken()
   if (bearer) headers.Authorization = `Bearer ${bearer}`
   const isForm = typeof FormData !== 'undefined' && body instanceof FormData

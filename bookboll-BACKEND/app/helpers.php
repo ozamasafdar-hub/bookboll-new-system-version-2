@@ -1004,6 +1004,14 @@ if (! function_exists('generateAndStoreInvoicePdf')) {
 if (! function_exists('getSessionId')) {
     function getSessionId()
     {
+        // Reverse proxies can use a different internal IP on each request. The
+        // browser sends its random reservation token for lock, availability and
+        // checkout requests, so refreshing a hold never competes with itself.
+        $token = request()->header('X-Bookboll-Hold-Token');
+        if (is_string($token) && preg_match('/^[a-zA-Z0-9_-]{16,128}$/D', $token)) {
+            return 'slot_locked_from_' . hash('sha256', $token);
+        }
+        // Keep older mobile clients working until they send reservation tokens.
         return "slot_locked_from_" . md5(request()->ip() . request()->userAgent());
     }
 }

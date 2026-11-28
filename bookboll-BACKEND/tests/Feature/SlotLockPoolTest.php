@@ -45,6 +45,21 @@ function checkCourt(\App\Models\Listing $listing, string $date, string $start, s
 
 describe('lock-slot honours the shared pool', function () {
 
+    it('preserves a browser hold across proxy IP changes and isolates other browsers', function () {
+        ['listings' => $l, 'date' => $date] = courtPool(1, ['court' => ['max' => 1]]);
+        $slot = ['listing_id' => $l['court']->id, 'date' => $date, 'start_time' => '20:00', 'end_time' => '21:00'];
+        $this->withHeaders(['X-Bookboll-Hold-Token' => 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'])
+            ->withServerVariables(['REMOTE_ADDR' => '10.0.0.1'])
+            ->postJson('/api/lock-slot', $slot)->assertJson(['success' => true]);
+        $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.2'])
+            ->postJson('/api/lock-slot', $slot)->assertJson(['success' => true]);
+        expect(\App\Models\SlotLock::count())->toBe(1);
+        expect(\App\Models\SlotLock::active()->count())->toBe(1);
+        expect(\App\Models\SlotLock::where(function ($q) use ($date) { applyBookingOverlapWhere($q, $date, '20:00', '21:00'); })->count())->toBe(1);
+        $this->withHeaders(['X-Bookboll-Hold-Token' => 'ffffffff-bbbb-cccc-dddd-eeeeeeeeeeee'])
+            ->postJson('/api/lock-slot', $slot)->assertJson(['success' => false]);
+    });
+
     it('refuses a lock the pool cannot back even when the listing has room', function () {
         ['listings' => $l, 'date' => $date] = alSaddPair();
 

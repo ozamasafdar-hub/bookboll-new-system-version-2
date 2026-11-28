@@ -267,6 +267,8 @@ Release work still required:
 
 ## Railway reference only
 
+Railway Stripe sandbox verification: browser reservation identity now uses a random `X-Bookboll-Hold-Token` instead of changing proxy IPs. Apply `2026_11_28_000001_preserve_slot_lock_expiry_on_refresh`; it prevents MySQL from expiring a refreshed hold through an implicit timestamp update. Required CI covers browser persistence, proxy changes, competing browsers and test-only Stripe isolation. See [conversion evidence](docs/BOOKING_CONVERSIONS.md) for the dedicated test pixel and actual payment results.
+
 ### Team, notifications and venue transfer update — 13 November 2026
 
 - Transfer destinations must resolve active `owner` / `provider_admin` memberships as well as `businesses.owner_id`. Legacy admin-created businesses with an owner membership are not ownerless. The moved venue retains that owner's compatibility link, and any owner-membership change invalidates a prior transfer review. Covered by MySQL `VenueTransferTest`.
